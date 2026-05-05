@@ -36,6 +36,10 @@ type keyMap struct {
 	Forward  key.Binding
 	FocusTog key.Binding
 	Quit     key.Binding
+
+	NextLink  key.Binding
+	PrevLink  key.Binding
+	ClearLink key.Binding
 }
 
 func defaultKeys() keyMap {
@@ -47,6 +51,10 @@ func defaultKeys() keyMap {
 		Forward:  key.NewBinding(key.WithKeys("l", "right"), key.WithHelp("l/→", "forward")),
 		FocusTog: key.NewBinding(key.WithKeys("tab"), key.WithHelp("tab", "switch pane")),
 		Quit:     key.NewBinding(key.WithKeys("q", "ctrl+c"), key.WithHelp("q", "quit")),
+
+		NextLink:  key.NewBinding(key.WithKeys("n"), key.WithHelp("n", "next link")),
+		PrevLink:  key.NewBinding(key.WithKeys("p"), key.WithHelp("p", "prev link")),
+		ClearLink: key.NewBinding(key.WithKeys("esc"), key.WithHelp("esc", "clear link")),
 	}
 }
 
@@ -184,10 +192,82 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if m.focus == focusTree {
 		return m.handleTreeKey(msg)
 	}
+	return m.handleContentKey(msg)
+}
 
+// handleContentKey routes keystrokes received while the content pane has
+// focus. Link-cycling bindings (n/p/Esc) and Enter (when a link is
+// selected) are intercepted; everything else falls through to the
+// viewport so its scrolling bindings keep working.
+func (m Model) handleContentKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch {
+	case key.Matches(msg, m.keys.NextLink):
+		m.cycleLink(+1)
+		return m, nil
+	case key.Matches(msg, m.keys.PrevLink):
+		m.cycleLink(-1)
+		return m, nil
+	case key.Matches(msg, m.keys.ClearLink):
+		m.linkCursor = -1
+		return m, nil
+	case key.Matches(msg, m.keys.Open):
+		if sel := m.selectedLink(); sel != nil {
+			m.followLink(*sel)
+			return m, nil
+		}
+	}
 	var cmd tea.Cmd
 	m.viewport, cmd = m.viewport.Update(msg)
 	return m, cmd
+}
+
+// cycleLink moves the link cursor by step, wrapping at both ends. From
+// the unselected state (-1), +1 selects the first link and -1 selects
+// the last. No-op when there are no links on the page.
+func (m *Model) cycleLink(step int) {
+	if len(m.links) == 0 {
+		return
+	}
+	switch {
+	case m.linkCursor < 0 && step > 0:
+		m.linkCursor = 0
+	case m.linkCursor < 0 && step < 0:
+		m.linkCursor = len(m.links) - 1
+	default:
+		m.linkCursor = (m.linkCursor + step + len(m.links)) % len(m.links)
+	}
+	m.scrollToLink(m.links[m.linkCursor])
+}
+
+// followLink performs whatever navigation a link's kind warrants.
+// Phase 1: local files navigate (recording history); external URLs
+// surface the URL in the status bar; anchors are no-ops with a status
+// message.
+func (m *Model) followLink(l markdown.Link) {
+	switch l.Resolved.Kind {
+	case markdown.LinkLocalFile:
+		m.openFile(l.Resolved.Target)
+		m.selectInTree(l.Resolved.Target)
+	case markdown.LinkExternal:
+		m.status = "external link not opened: " + l.Href
+	case markdown.LinkAnchor:
+		m.status = "anchor navigation not implemented: #" + l.Resolved.Anchor
+	default:
+		m.status = "unrecognized link: " + l.Href
+	}
+}
+
+// scrollToLink ensures the link's row is visible in the viewport. Pads
+// by one line above so the link isn't flush with the top edge.
+func (m *Model) scrollToLink(l markdown.Link) {
+	top := m.viewport.YOffset
+	bottom := top + m.viewport.Height - 1
+	switch {
+	case l.Row < top:
+		m.viewport.SetYOffset(max(0, l.Row-1))
+	case l.Row > bottom:
+		m.viewport.SetYOffset(l.Row - m.viewport.Height + 2)
+	}
 }
 
 func (m Model) handleTreeKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
@@ -296,6 +376,7 @@ func (m Model) renderTree() string {
 func (m Model) renderFooter() string {
 	keys := []string{
 		"tab: switch", "↑↓/jk: move", "enter: open",
+		"n/p: link", "esc: clear",
 		"h/←: back", "l/→: forward", "q: quit",
 	}
 	help := strings.Join(keys, "  ")
