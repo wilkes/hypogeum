@@ -24,18 +24,28 @@ type Link struct {
 	Row      int          // zero-indexed row in the rendered output
 }
 
+// LinkMarker brackets a link's visible text in the rendered output. The
+// TUI uses this to inject BubbleZone Mark/Close pairs without coupling
+// the markdown package to a specific zone library.
+type LinkMarker func(linkIndex int) (open, close string)
+
 // RenderWithLinks renders src and returns both the rendered string and a
 // list of every followable link in document order. base is the path of
 // the file the source came from; it's used to resolve relative link
 // targets to absolute paths.
-func (r *Renderer) RenderWithLinks(src, base string) (string, []Link, error) {
+//
+// If marker is non-nil, the open/close strings it returns for each link
+// are spliced around that link's visible text in the rendered output.
+// They flow through downstream styling without changing visible width
+// (caller's responsibility — typically zero-width sentinel sequences).
+func (r *Renderer) RenderWithLinks(src, base string, marker LinkMarker) (string, []Link, error) {
 	raw, err := r.instrumented.Render(src)
 	if err != nil {
 		return "", nil, fmt.Errorf("render markdown: %w", err)
 	}
 
 	asts := ExtractLinks(src)
-	cleaned, spans := stripSentinels(raw)
+	cleaned, spans := stripSentinels(raw, marker)
 	links := make([]Link, 0, len(spans))
 	for i, s := range spans {
 		l := Link{Row: s.row}
@@ -60,14 +70,19 @@ type sentinelSpan struct {
 
 // stripSentinels removes every sentinel byte from raw and returns the
 // cleaned string plus a list of (row, visible-text) spans, one per link.
-func stripSentinels(raw string) (string, []sentinelSpan) {
+// If marker is non-nil, each link's text is wrapped with the open/close
+// strings it returns, in place of the stripped sentinels.
+func stripSentinels(raw string, marker LinkMarker) (string, []sentinelSpan) {
 	var (
-		out      strings.Builder
-		spans    []sentinelSpan
-		row      int
-		inLink   bool
-		linkText strings.Builder
-		linkRow  int
+		out       strings.Builder
+		spans     []sentinelSpan
+		row       int
+		inLink    bool
+		linkText  strings.Builder
+		linkRow   int
+		linkIdx   int
+		openMark  string
+		closeMark string
 	)
 	out.Grow(len(raw))
 
@@ -90,11 +105,18 @@ func stripSentinels(raw string) (string, []sentinelSpan) {
 			inLink = true
 			linkText.Reset()
 			linkRow = row
+			openMark, closeMark = "", ""
+			if marker != nil {
+				openMark, closeMark = marker(linkIdx)
+			}
+			out.WriteString(openMark)
 			i++
 		case sentinelEnd:
 			if inLink {
+				out.WriteString(closeMark)
 				spans = append(spans, sentinelSpan{row: linkRow, text: linkText.String()})
 				inLink = false
+				linkIdx++
 			}
 			i++
 		case '\n':

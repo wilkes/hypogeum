@@ -26,7 +26,7 @@ func (m *Model) refreshContent(path string) {
 		m.linkCursor = -1
 		return
 	}
-	out, links, err := m.renderer.RenderWithLinks(string(src), path)
+	out, links, err := m.renderer.RenderWithLinks(string(src), path, nil)
 	if err != nil {
 		m.status = err.Error()
 		m.viewport.SetContent(fmt.Sprintf("Error: %v", err))
