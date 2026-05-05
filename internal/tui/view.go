@@ -1,0 +1,89 @@
+package tui
+
+import (
+	"fmt"
+	"path/filepath"
+	"strings"
+
+	"github.com/charmbracelet/lipgloss"
+)
+
+func (m Model) View() string {
+	if m.width == 0 {
+		return "" // wait for first WindowSizeMsg
+	}
+
+	tree := m.renderTree()
+	content := m.viewport.View()
+
+	treeStyled := paneStyle(m.focus == focusTree).
+		Width(m.treeWidth()).
+		Height(m.height - 2).
+		Render(tree)
+	contentStyled := paneStyle(m.focus == focusContent).
+		Width(m.viewport.Width).
+		Height(m.height - 2).
+		Render(content)
+
+	body := lipgloss.JoinHorizontal(lipgloss.Top, treeStyled, contentStyled)
+	footer := m.renderFooter()
+	return lipgloss.JoinVertical(lipgloss.Left, body, footer)
+}
+
+func (m Model) renderTree() string {
+	var b strings.Builder
+	for i, row := range m.flatTree {
+		indent := strings.Repeat("  ", row.depth)
+		marker := " "
+		if i == m.treeCursor {
+			marker = ">"
+		}
+		name := row.node.Name
+		if row.node.IsDir {
+			name = name + "/"
+		}
+		fmt.Fprintf(&b, "%s%s %s\n", marker, indent, name)
+	}
+	return b.String()
+}
+
+func (m Model) renderFooter() string {
+	keys := []string{
+		"tab: switch", "↑↓/jk: move", "enter: open",
+		"n/p: link", "esc: clear",
+		"h/←: back", "l/→: forward", "q: quit",
+	}
+	help := strings.Join(keys, "  ")
+	loc := m.status
+	if loc != "" {
+		// Show path relative to root for brevity.
+		if rel, err := filepath.Rel(m.root, loc); err == nil {
+			loc = rel
+		}
+	}
+	if sel := m.selectedLink(); sel != nil {
+		loc = fmt.Sprintf("%s%s [%d/%d] %s", linkFooterMarker, loc, m.linkCursor+1, len(m.links), linkLabel(*sel, m.root))
+	}
+	footerStyle := lipgloss.NewStyle().Faint(true)
+	return footerStyle.Render(fmt.Sprintf("%s\n%s", loc, help))
+}
+
+func (m Model) treeWidth() int {
+	w := m.width / 4
+	if w < 20 {
+		w = 20
+	}
+	if w > 40 {
+		w = 40
+	}
+	return w
+}
+
+func paneStyle(focused bool) lipgloss.Style {
+	border := lipgloss.NormalBorder()
+	color := lipgloss.Color("240")
+	if focused {
+		color = lipgloss.Color("62")
+	}
+	return lipgloss.NewStyle().Border(border).BorderForeground(color)
+}
