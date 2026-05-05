@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
+	zone "github.com/lrstanley/bubblezone"
 )
 
 func (m Model) View() string {
@@ -16,18 +17,20 @@ func (m Model) View() string {
 	tree := m.renderTree()
 	content := m.viewport.View()
 
-	treeStyled := paneStyle(m.focus == focusTree).
+	treeStyled := zone.Mark(zoneTreePane, paneStyle(m.focus == focusTree).
 		Width(m.treeWidth()).
-		Height(m.height - 2).
-		Render(tree)
-	contentStyled := paneStyle(m.focus == focusContent).
+		Height(m.height-2).
+		Render(tree))
+	contentStyled := zone.Mark(zoneContentPane, paneStyle(m.focus == focusContent).
 		Width(m.viewport.Width).
-		Height(m.height - 2).
-		Render(content)
+		Height(m.height-2).
+		Render(content))
 
 	body := lipgloss.JoinHorizontal(lipgloss.Top, treeStyled, contentStyled)
 	footer := m.renderFooter()
-	return lipgloss.JoinVertical(lipgloss.Left, body, footer)
+	// Scan must run on the final composed output so BubbleZone records
+	// each zone's absolute screen position.
+	return zone.Scan(lipgloss.JoinVertical(lipgloss.Left, body, footer))
 }
 
 func (m Model) renderTree() string {
@@ -42,7 +45,11 @@ func (m Model) renderTree() string {
 		if row.node.IsDir {
 			name = name + "/"
 		}
-		fmt.Fprintf(&b, "%s%s %s\n", marker, indent, name)
+		// Wrap the whole row (minus its trailing newline) in a per-row
+		// zone so a click anywhere on the row routes to that index.
+		line := fmt.Sprintf("%s%s %s", marker, indent, name)
+		b.WriteString(zone.Mark(treeRowZoneID(i), line))
+		b.WriteByte('\n')
 	}
 	return b.String()
 }

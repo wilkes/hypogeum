@@ -7,6 +7,7 @@ import (
 
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
+	zone "github.com/lrstanley/bubblezone"
 
 	"github.com/wilkes/hypogeum/internal/markdown"
 	"github.com/wilkes/hypogeum/internal/nav"
@@ -69,9 +70,29 @@ type treeRow struct {
 	depth int
 }
 
+// Pane and content zone IDs used by the View to mark hit-test regions.
+// BubbleZone resolves these to bounding boxes during Scan, so Update can
+// route mouse events without computing pane geometry by hand.
+const (
+	zoneTreePane    = "pane:tree"
+	zoneContentPane = "pane:content"
+)
+
+// treeRowZoneID returns the BubbleZone id for the i-th visible tree row.
+// One zone per row keeps clicks unambiguous even when the tree pane gets
+// resized or scrolled in future versions.
+func treeRowZoneID(i int) string {
+	return fmt.Sprintf("tree:%d", i)
+}
+
 // New constructs a Model rooted at root. If initialFile is non-empty, that
 // file is opened on startup.
 func New(root, initialFile string) (Model, error) {
+	// Initialize the global zone manager. Idempotent — calling NewGlobal
+	// on a manager that's already running is a no-op, so it's safe in
+	// tests that construct multiple models in one process.
+	zone.NewGlobal()
+
 	rootNode, err := tree.Walk(root)
 	if err != nil {
 		return Model{}, fmt.Errorf("walk %s: %w", root, err)

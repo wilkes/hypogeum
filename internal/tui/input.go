@@ -1,9 +1,43 @@
 package tui
 
 import (
+	"fmt"
+	"os"
+
 	"github.com/charmbracelet/bubbles/key"
 	tea "github.com/charmbracelet/bubbletea"
+	zone "github.com/lrstanley/bubblezone"
 )
+
+// debugMouse logs every left-click to /tmp/hypogeum-mouse.log for
+// diagnostic purposes. Enabled via HYPOGEUM_DEBUG=mouse env var.
+func debugMouse(msg tea.MouseMsg, m *Model) {
+	if os.Getenv("HYPOGEUM_DEBUG") != "mouse" {
+		return
+	}
+	f, err := os.OpenFile("/tmp/hypogeum-mouse.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
+	if err != nil {
+		return
+	}
+	defer f.Close()
+	fmt.Fprintf(f, "click X=%d Y=%d  treePane=", msg.X, msg.Y)
+	if z := zone.Get(zoneTreePane); !z.IsZero() {
+		fmt.Fprintf(f, "(%d,%d)-(%d,%d)", z.StartX, z.StartY, z.EndX, z.EndY)
+	}
+	fmt.Fprintf(f, "  rows:")
+	for i := range m.flatTree {
+		z := zone.Get(treeRowZoneID(i))
+		if z.IsZero() {
+			continue
+		}
+		hit := ""
+		if z.InBounds(msg) {
+			hit = "*"
+		}
+		fmt.Fprintf(f, " [%d%s y=%d %s]", i, hit, z.StartY, m.flatTree[i].node.Name)
+	}
+	fmt.Fprintln(f)
+}
 
 // All Update-path helpers below take a pointer receiver and return
 // (tea.Model, tea.Cmd) where the model is *m. Update itself stays on a
@@ -11,10 +45,11 @@ import (
 // dispatching here. This keeps mutation sites unambiguous: if a method
 // changes m, it's a *Model method, and the returned tea.Model is *m.
 
-// handleMouse routes a mouse event by coordinate to the pane it lands in.
-// Wheel events go straight to the viewport (it scrolls regardless of
-// click position). Left-button presses select a tree row, follow a link,
-// or — failing both — pass through to the viewport's own click handling.
+// handleMouse routes a mouse event to the pane (or link) it lands in
+// using BubbleZone hit-testing. Wheel events go straight to the viewport
+// (it scrolls regardless of click position). Left-button presses are
+// dispatched in priority order: tree row first, then link in content,
+// then content pane fall-through to viewport.
 func (m *Model) handleMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 	if tea.MouseEvent(msg).IsWheel() {
 		var cmd tea.Cmd
@@ -25,22 +60,38 @@ func (m *Model) handleMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 		return *m, nil
 	}
 
-	// Pane interior bounds. Each Lip Gloss pane has a 1-char border on
-	// every side, so interior cells start at (paneX+1, 1) and the body
-	// ends at row m.height-3 (last row before the 2-line footer).
-	treeW := m.treeWidth()
-	bodyTop, bodyBottom := 1, m.height-3
-	if msg.Y < bodyTop || msg.Y > bodyBottom {
-		return *m, nil // footer or top border
-	}
-	row := msg.Y - bodyTop
+	debugMouse(msg, m)
 
-	switch {
-	case msg.X >= 1 && msg.X <= treeW: // inside tree pane (border + interior)
-		return m.clickTree(row)
-	case msg.X >= treeW+2: // inside content pane (skip both borders)
-		return m.clickContent(row, msg)
+	// Tree row hit. Iterate visible rows; the first that contains the
+	// click wins. Stops at len(m.flatTree) so out-of-range zones from a
+	// previous longer document don't match.
+	for i := range m.flatTree {
+		if zone.Get(treeRowZoneID(i)).InBounds(msg) {
+			return m.clickTree(i)
+		}
 	}
+
+	// Content link hit. Each link's visible text is a separate zone so a
+	// click on any cell of (possibly word-wrapped) link text follows it.
+	for i, l := range m.links {
+		if zone.Get(linkZoneID(i)).InBounds(msg) {
+			m.focus = focusContent
+			m.linkCursor = i
+			m.followLink(l)
+			return *m, nil
+		}
+	}
+
+	// Content pane fall-through: any click inside the content pane that
+	// missed a link gives focus and forwards to the viewport (so future
+	// viewport features like text selection keep working).
+	if zone.Get(zoneContentPane).InBounds(msg) {
+		m.focus = focusContent
+		var cmd tea.Cmd
+		m.viewport, cmd = m.viewport.Update(msg)
+		return *m, cmd
+	}
+
 	return *m, nil
 }
 
@@ -56,24 +107,6 @@ func (m *Model) clickTree(row int) (tea.Model, tea.Cmd) {
 		m.openFile(m.flatTree[row].node.Path)
 	}
 	return *m, nil
-}
-
-// clickContent finds a link on the clicked row and follows it. Falls
-// through to the viewport's own click handling otherwise (so future
-// viewport features like text selection keep working).
-func (m *Model) clickContent(row int, msg tea.MouseMsg) (tea.Model, tea.Cmd) {
-	m.focus = focusContent
-	docRow := row + m.viewport.YOffset
-	for i, l := range m.links {
-		if l.Row == docRow {
-			m.linkCursor = i
-			m.followLink(l)
-			return *m, nil
-		}
-	}
-	var cmd tea.Cmd
-	m.viewport, cmd = m.viewport.Update(msg)
-	return *m, cmd
 }
 
 func (m *Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {

@@ -4,9 +4,39 @@ import (
 	"fmt"
 	"os"
 
+	zone "github.com/lrstanley/bubblezone"
+
 	"github.com/wilkes/hypogeum/internal/tree"
 	"github.com/wilkes/hypogeum/internal/watch"
 )
+
+// linkZoneID returns the BubbleZone id used to track the i-th link in
+// the rendered content. Stable across re-renders of the same document
+// because zones are re-Marked every render; transient between documents
+// because the link count and meaning change on each open.
+func linkZoneID(i int) string {
+	return fmt.Sprintf("link:%d", i)
+}
+
+// linkZoneMarker is the markdown.LinkMarker passed into RenderWithLinks.
+// It returns the bubblezone open/close sentinel pair for the i-th link
+// so a click on rendered link text can be matched to the link index
+// without coordinate math.
+//
+// BubbleZone's Mark(id, body) emits "<gid>body<gid>" where <gid> is the
+// same on both sides. To get the bare sentinel, we mark a placeholder
+// and split around it. Mark(id, "") short-circuits to "", so we have to
+// use a non-empty placeholder.
+func linkZoneMarker(i int) (string, string) {
+	const placeholder = "\x00"
+	wrapped := zone.Mark(linkZoneID(i), placeholder)
+	if wrapped == placeholder {
+		// Zone manager disabled — emit no markers; downstream still works.
+		return "", ""
+	}
+	mid := len(wrapped) / 2 // wrapped == gid + placeholder + gid; placeholder is 1 byte
+	return wrapped[:mid], wrapped[mid+len(placeholder):]
+}
 
 // openFile records a visit in history and renders the file.
 func (m *Model) openFile(path string) {
@@ -26,7 +56,7 @@ func (m *Model) refreshContent(path string) {
 		m.linkCursor = -1
 		return
 	}
-	out, links, err := m.renderer.RenderWithLinks(string(src), path, nil)
+	out, links, err := m.renderer.RenderWithLinks(string(src), path, linkZoneMarker)
 	if err != nil {
 		m.status = err.Error()
 		m.viewport.SetContent(fmt.Sprintf("Error: %v", err))

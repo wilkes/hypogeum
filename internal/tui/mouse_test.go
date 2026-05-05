@@ -4,6 +4,8 @@ import (
 	"path/filepath"
 	"testing"
 
+	zone "github.com/lrstanley/bubblezone"
+
 	"github.com/wilkes/hypogeum/internal/markdown"
 )
 
@@ -28,7 +30,14 @@ func TestModel_MouseClick_OnTreeRow_SelectsAndOpens(t *testing.T) {
 		t.Fatalf("notes/first.md not in flat tree")
 	}
 
-	updated, _ := m.Update(leftClick(2, target+1))
+	// Pull the row's actual screen position from BubbleZone instead of
+	// hand-computing it; that keeps the test honest if the View layout
+	// changes (e.g. extra padding around the tree pane).
+	rowZone := zone.Get(treeRowZoneID(target))
+	if rowZone.IsZero() {
+		t.Fatalf("tree row zone for index %d not registered", target)
+	}
+	updated, _ := m.Update(leftClick(rowZone.StartX+1, rowZone.StartY))
 	m = updated.(Model)
 
 	if m.focus != focusTree {
@@ -55,13 +64,12 @@ func TestModel_MouseClick_OnContentLinkRow_FollowsLink(t *testing.T) {
 		t.Fatalf("first link should be local file, got %v", link.Resolved.Kind)
 	}
 
-	// Compute screen Y for the link's row inside the content pane:
-	// content pane starts at Y=1 (top border), and viewport.YOffset starts
-	// at 0 for a freshly-opened doc.
-	clickY := link.Row + 1
-	clickX := m.treeWidth() + 5 // somewhere inside the content pane
-
-	updated, _ := m.Update(leftClick(clickX, clickY))
+	// Click on the link via its registered zone, not on a guessed coord.
+	linkZone := zone.Get(linkZoneID(0))
+	if linkZone.IsZero() {
+		t.Fatalf("link zone 0 not registered after View()")
+	}
+	updated, _ := m.Update(leftClick(linkZone.StartX, linkZone.StartY))
 	m = updated.(Model)
 
 	if m.focus != focusContent {
@@ -72,28 +80,41 @@ func TestModel_MouseClick_OnContentLinkRow_FollowsLink(t *testing.T) {
 	}
 }
 
+// A click well outside any registered zone — e.g. at (0, m.height-1)
+// which is in the footer — must not change focus or history. This
+// guards against the routing falling through to a wrong pane when no
+// zone matches.
+func TestModel_MouseClick_OutsideAnyZone_IsIgnored(t *testing.T) {
+	root := writeFixture(t)
+	m := sized(t, root, "")
+	beforePath := m.history.Current()
+	beforeFocus := m.focus
+
+	// Click in the footer area (y >= height-2). No zones live there.
+	updated, _ := m.Update(leftClick(0, m.height-1))
+	m = updated.(Model)
+
+	if m.focus != beforeFocus {
+		t.Errorf("footer click changed focus: %v -> %v", beforeFocus, m.focus)
+	}
+	if got := m.history.Current(); got != beforePath {
+		t.Errorf("footer click changed history: %q -> %q", beforePath, got)
+	}
+}
+
 func TestModel_MouseClick_OnContentNonLinkRow_DoesNotNavigate(t *testing.T) {
 	root := writeFixture(t)
 	m := sized(t, root, "")
 	beforePath := m.history.Current()
 
-	// Find a content-pane row that has NO link on it.
-	used := make(map[int]bool)
-	for _, l := range m.links {
-		used[l.Row] = true
+	// Click somewhere inside the content pane that is not on any link's
+	// zone. We use the content pane's StartX,StartY (top-left interior
+	// corner) which is virtually never on a link in our fixture.
+	contentZone := zone.Get(zoneContentPane)
+	if contentZone.IsZero() {
+		t.Fatalf("content pane zone not registered")
 	}
-	noLinkRow := -1
-	for r := 0; r < 30; r++ {
-		if !used[r] {
-			noLinkRow = r
-			break
-		}
-	}
-	if noLinkRow < 0 {
-		t.Fatalf("could not find a row without a link")
-	}
-
-	updated, _ := m.Update(leftClick(m.treeWidth()+5, noLinkRow+1))
+	updated, _ := m.Update(leftClick(contentZone.StartX+2, contentZone.StartY+2))
 	m = updated.(Model)
 
 	if got := m.history.Current(); got != beforePath {

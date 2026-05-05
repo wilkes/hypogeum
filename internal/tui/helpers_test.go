@@ -4,8 +4,10 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
+	zone "github.com/lrstanley/bubblezone"
 )
 
 // writeFixture lays down a small markdown directory and returns its root.
@@ -31,6 +33,8 @@ func writeFixture(t *testing.T) string {
 
 // sized returns a model that has received an initial size message, so that
 // View() produces real output rather than the empty pre-resize string.
+// It also calls renderAndScan to populate BubbleZone bounds so tests that
+// synthesize mouse clicks find their zones.
 func sized(t *testing.T, root, initialFile string) Model {
 	t.Helper()
 	m, err := New(root, initialFile)
@@ -38,7 +42,30 @@ func sized(t *testing.T, root, initialFile string) Model {
 		t.Fatalf("New: %v", err)
 	}
 	updated, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
-	return updated.(Model)
+	m = updated.(Model)
+	renderAndScan(t, m, zoneContentPane)
+	return m
+}
+
+// renderAndScan calls View() and waits for BubbleZone's worker goroutine
+// to record zone bounds. Use waitID as a sentinel zone — the function
+// returns once that zone has non-zero bounds (or the deadline expires).
+//
+// BubbleZone's Scan is async: it pushes to a channel and the worker
+// goroutine writes the zone map. Tests that synthesize a click directly
+// after View() can race the worker and see empty bounds. Polling for a
+// known zone is the cheapest reliable sync without exporting internals.
+func renderAndScan(t *testing.T, m Model, waitID string) {
+	t.Helper()
+	_ = m.View() // triggers zone.Scan
+	deadline := time.Now().Add(500 * time.Millisecond)
+	for time.Now().Before(deadline) {
+		if !zone.Get(waitID).IsZero() {
+			return
+		}
+		time.Sleep(time.Millisecond)
+	}
+	t.Fatalf("zone %q never registered after View()", waitID)
 }
 
 // switchToContent presses Tab to move focus to the content pane.
