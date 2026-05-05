@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"strings"
+	"sync"
 
 	"github.com/charmbracelet/glamour/ansi"
 	"github.com/charmbracelet/glamour/styles"
@@ -139,15 +140,31 @@ func applyHypogeumOverrides(cfg *ansi.StyleConfig, width int) {
 // defaultStyleConfig mirrors Glamour's WithAutoStyle resolution: pick
 // NoTTY when stdout isn't a terminal, otherwise dark or light by
 // background detection.
+//
+// Result is cached: termenv.HasDarkBackground sends an OSC 11 query and
+// waits up to OSCTimeout (5s) for the terminal to reply. Calling it
+// per-renderer-construction made startup feel sluggish on terminals
+// that ignore the query, since NewRenderer runs once at boot and again
+// on the first WindowSizeMsg, with two renderers each — four queries
+// in the worst case.
 func defaultStyleConfig() *ansi.StyleConfig {
-	if !term.IsTerminal(int(os.Stdout.Fd())) {
-		return &styles.NoTTYStyleConfig
-	}
-	if termenv.HasDarkBackground() {
-		return &styles.DarkStyleConfig
-	}
-	return &styles.LightStyleConfig
+	defaultStyleOnce.Do(func() {
+		switch {
+		case !term.IsTerminal(int(os.Stdout.Fd())):
+			defaultStyle = &styles.NoTTYStyleConfig
+		case termenv.HasDarkBackground():
+			defaultStyle = &styles.DarkStyleConfig
+		default:
+			defaultStyle = &styles.LightStyleConfig
+		}
+	})
+	return defaultStyle
 }
+
+var (
+	defaultStyleOnce sync.Once
+	defaultStyle     *ansi.StyleConfig
+)
 
 // cloneStyleConfig returns a deep copy of cfg by JSON round-trip.
 // We never mutate the package-level styles.* configs, so deep copy is
