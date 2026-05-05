@@ -1,5 +1,7 @@
 # Link following
 
+**Status:** Phase 1 shipped. Phase 2 and 3 not started.
+
 Plan and design notes for following links inside rendered markdown documents.
 
 ## Background
@@ -38,19 +40,20 @@ What's out (Phase 2/3):
 
 ## Implementation steps (commits)
 
-Each commit is independently testable and leaves the tree green.
+All Phase 1 commits landed. Each was independently testable and left the tree green.
 
-1. **Plumbing: package skeleton + plan doc.** Add `docs/link-following.md`, update CLAUDE.md with the docs convention. (This commit.)
+1. ✅ **Plumbing: package skeleton + plan doc.** Added `docs/link-following.md`, updated CLAUDE.md with the docs convention.
+2. ✅ **`markdown.ExtractLinks`: AST walk.** Walks goldmark AST, returns inline links and autolinks in document order; skips images.
+3. ✅ **`markdown.RenderWithLinks`: instrumented render.** Sentinel-injected style is a JSON deep clone of the environment-resolved Glamour default (NoTTY/dark/light), so cleaned output is byte-equivalent to plain `Render` on the same terminal.
+4. ✅ **TUI integration: render + footer indicator.** `refreshContent` now reads source, renders with links, stores the list on the model. Footer marker only shows when a link is selected.
+5. ✅ **TUI keybindings: cycle, follow, clear.** `n`/`p`/`Enter`/`Esc`, content-pane scoped, with viewport auto-scroll.
+6. ✅ **Wire-up review and CLAUDE.md update.** This commit.
 
-2. **`markdown.ExtractLinks`: AST walk.** New function that takes raw markdown source and returns `[]ASTLink{Text, Href}` in document order using goldmark directly. Pure function, full unit test coverage. No TUI changes yet.
+## What changed from the original plan
 
-3. **`markdown.RenderWithLinks`: instrumented render.** Inject sentinel `block_prefix`/`block_suffix` into a `WithStyles` config that otherwise mirrors the dark default. Render with it, scan for sentinel pairs, strip sentinels from output, build `[]Link` cross-referenced with `ExtractLinks`. Returns the cleaned rendered string and the link list. Unit tested with fixtures: single link, multiple links, link inside list, word-wrapped link, external URL, anchor link, no links.
-
-4. **TUI integration: render + footer indicator.** Wire `RenderWithLinks` into `refreshContent`. Store the link list on the model. Footer shows `[k/n] target` when a link is selected. No keybindings yet — this commit just verifies the plumbing doesn't break existing behavior. Existing TUI tests stay green.
-
-5. **TUI keybindings: cycle, follow, clear.** Add `n` / `p` / `Enter` (when content focused, no current selection wins over picker logic) / `Esc`. Auto-scroll so the selected link's row is visible. Add tests that exercise: cycling order, selection wraps at end, Enter on local file calls `openFile`, Enter on external URL surfaces a "not yet" status, Esc clears selection.
-
-6. **Wire-up review and CLAUDE.md update.** Update CLAUDE.md "What's not built yet" to reflect Phase 1 done and Phase 2/3 outstanding. Final test pass + vet.
+- Picked a JSON deep-clone of `styles.DarkStyleConfig` / `styles.LightStyleConfig` (matched to the environment) as the base for the instrumented style, rather than building a partial `WithStyles` config. `WithStyles` is replace-only — passing a partial config silently drops headings, margins, code blocks, etc. The first instrumented render came out unstyled; this approach restored visual parity.
+- Single-byte sentinels (`\x1c`, `\x1e`) instead of the multi-byte `\x00LS\x01` / `\x00LE\x01` initially considered. Single bytes don't get split or doubled by Glamour's word-wrap pass; the multi-byte form leaked an extra `\x01` byte into spans.
+- Two prerequisite commits landed before commit 1 (gitignore fix, entrypoint+CLAUDE.md). The original plan assumed those were already in place; they weren't.
 
 ## Open questions
 

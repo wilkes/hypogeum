@@ -49,7 +49,11 @@ The packages are layered: `tui` depends on `tree`, `markdown`, `nav`; the lower 
 
 ## What's not built yet
 
-The README calls out link-following from inside rendered content as the next milestone. The plumbing is there (`markdown.ResolveLink` already classifies local/external/anchor links) but nothing in the TUI surfaces clickable links or moves a cursor between them yet. Plan and design notes live in [docs/link-following.md](docs/link-following.md).
+Link following is partially built. **Phase 1 done:** `n`/`p` cycle through every link in the current document, `Enter` follows the selected one (local files only — externals surface in the status bar), `Esc` clears the selection. The cursor is footer-only — nothing visible changes in the rendered text when a link is selected. Implementation lives in `internal/markdown` (`ExtractLinks`, `RenderWithLinks`) and the content-key handler in `internal/tui/model.go`.
+
+**Phase 2 (not started):** inline highlight of the active link by re-splicing SGR codes around its byte range; multi-segment cursor for word-wrapped links. **Phase 3 (not started):** actually launching external URLs via `xdg-open`/`open`, gated behind a one-keystroke confirm.
+
+Full plan and design rationale (including why we picked the sentinel-instrumented render approach over OSC 8 or coordinate mapping) lives in [docs/link-following.md](docs/link-following.md).
 
 ## Documentation and plans
 
