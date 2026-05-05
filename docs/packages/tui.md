@@ -68,12 +68,10 @@ Update(KeyMsg)
 
 `followLink` switches on `Resolved.Kind`:
 
-| Kind | Action |
-|---|---|
-| `LinkLocalFile` | `openFile(target)` + `selectInTree(target)` (records history, moves tree cursor if path is in tree) |
-| `LinkExternal` | Status bar: `"external link not opened: <href>"` (Phase 3 will hand off to `xdg-open`/`open`) |
-| `LinkAnchor` | Status bar: `"anchor navigation not implemented"` (Phase 2 will resolve to a heading row) |
-| `LinkInvalid` | Status bar: `"unrecognized link"` |
+- **`LinkLocalFile`** — `openFile(target)` plus `selectInTree(target)`. Records history; moves the tree cursor if the path is in the tree.
+- **`LinkExternal`** — Status bar: `"external link not opened: <href>"`. Phase 3 will hand off to `xdg-open` / `open` after a confirm flow.
+- **`LinkAnchor`** — Status bar: `"anchor navigation not implemented"`. Phase 2 will resolve to a heading row.
+- **`LinkInvalid`** — Status bar: `"unrecognized link"`.
 
 ## Why `Model` holds both `links` and `linkCursor`
 

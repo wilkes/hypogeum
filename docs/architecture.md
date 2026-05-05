@@ -48,13 +48,11 @@ Three trade-offs worth knowing because they look like accidents otherwise:
 
 ## Cross-cutting concerns
 
-| Concern | Owner | Notes |
-|---|---|---|
-| Style detection (dark/light/no-tty) | `markdown` | Mirrors Glamour's auto-style; required for the instrumented renderer to look identical to the plain one |
-| Path resolution | `markdown.ResolveLink` | Local files become absolute; anchors keep their fragment; URLs pass through with their original href |
-| History semantics | `nav` | Browser-style: visiting truncates forward history; visiting the same path is a no-op |
-| Hidden-entry filtering | `tree` | Anything starting with `.` is skipped, including `.git`, dotfile note dirs, etc. |
-| Empty-directory pruning | `tree` | A directory with no `.md` anywhere underneath doesn't appear in the tree at all |
+- **Style detection** (dark / light / no-tty) lives in `markdown`. It mirrors Glamour's auto-style so the instrumented renderer is byte-equivalent to the plain one.
+- **Path resolution** lives in `markdown.ResolveLink`. Local files become absolute; anchors keep their fragment; URLs pass through with their original href.
+- **History semantics** live in `nav`. Browser-style: visiting truncates forward history; visiting the same path is a no-op.
+- **Hidden-entry filtering** lives in `tree`. Anything starting with `.` is skipped — `.git`, dotfile note dirs, etc.
+- **Empty-directory pruning** lives in `tree`. A directory with no `.md` anywhere underneath doesn't appear in the tree at all.
 
 When you add a new concern, decide its owner first. The packages are small enough that the right home is usually obvious; pick wrong and the layering inverts.
 
