@@ -1,0 +1,17 @@
+# Binaries
+hypogeum
+/bin/
+/dist/
+
+# Editors
+.vscode/
+.idea/
+*.swp
+
+# OS
+.DS_Store
+
+# Go
+*.test
+*.out
+coverage.txt
