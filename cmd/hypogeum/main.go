@@ -1,0 +1,64 @@
+// Command hypogeum is the terminal markdown browser entrypoint. It parses
+// argv into a (root directory, optional initial file) pair and hands control
+// to the Bubble Tea program.
+package main
+
+import (
+	"fmt"
+	"os"
+	"path/filepath"
+
+	tea "github.com/charmbracelet/bubbletea"
+
+	"github.com/wilkes/hypogeum/internal/tui"
+)
+
+func main() {
+	if err := run(os.Args[1:]); err != nil {
+		fmt.Fprintln(os.Stderr, "hypogeum:", err)
+		os.Exit(1)
+	}
+}
+
+func run(args []string) error {
+	root, initialFile, err := resolveTarget(args)
+	if err != nil {
+		return err
+	}
+
+	model, err := tui.New(root, initialFile)
+	if err != nil {
+		return err
+	}
+
+	p := tea.NewProgram(model, tea.WithAltScreen(), tea.WithMouseCellMotion())
+	_, err = p.Run()
+	return err
+}
+
+// resolveTarget interprets the CLI args per the README:
+//   - no args:       browse the current working directory
+//   - one dir arg:   browse that directory
+//   - one file arg:  open that file, root the tree at its parent directory
+func resolveTarget(args []string) (root, initialFile string, err error) {
+	switch len(args) {
+	case 0:
+		root, err = os.Getwd()
+		return root, "", err
+	case 1:
+		target, err := filepath.Abs(args[0])
+		if err != nil {
+			return "", "", err
+		}
+		info, err := os.Stat(target)
+		if err != nil {
+			return "", "", err
+		}
+		if info.IsDir() {
+			return target, "", nil
+		}
+		return filepath.Dir(target), target, nil
+	default:
+		return "", "", fmt.Errorf("usage: hypogeum [path]")
+	}
+}

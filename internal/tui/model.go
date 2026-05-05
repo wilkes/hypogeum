@@ -101,15 +101,9 @@ func New(root, initialFile string) (Model, error) {
 	if initialFile != "" {
 		m.openFile(initialFile)
 		m.selectInTree(initialFile)
-	} else if len(m.flatTree) > 0 {
-		// Find the first file (skip the root directory header).
-		for i, row := range m.flatTree {
-			if !row.node.IsDir {
-				m.treeCursor = i
-				m.openFile(row.node.Path)
-				break
-			}
-		}
+	} else if first := firstTopLevelFile(rootNode); first != nil {
+		m.openFile(first.Path)
+		m.selectInTree(first.Path)
 	}
 
 	return m, nil
@@ -312,6 +306,21 @@ func paneStyle(focused bool) lipgloss.Style {
 		color = lipgloss.Color("62")
 	}
 	return lipgloss.NewStyle().Border(border).BorderForeground(color)
+}
+
+// firstTopLevelFile returns the first non-directory child of root, or nil if
+// every top-level entry is a directory. Used to pick the landing file so that
+// users see something at the top of the tree rather than the deepest leaf.
+func firstTopLevelFile(root *tree.Node) *tree.Node {
+	if root == nil {
+		return nil
+	}
+	for _, c := range root.Children {
+		if !c.IsDir {
+			return c
+		}
+	}
+	return nil
 }
 
 // flatten produces a depth-tagged linear list from a tree, used for
