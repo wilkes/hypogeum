@@ -14,9 +14,9 @@ func writeFixture(t *testing.T) string {
 	t.Helper()
 	root := t.TempDir()
 	files := map[string]string{
-		"index.md":            "# Index\n\n- [first](notes/first.md)\n",
-		"notes/first.md":      "# First\n\nHello.\n",
-		"notes/sub/deep.md":   "# Deep\n\nNested.\n",
+		"index.md":          "# Index\n\nSee [first](notes/first.md) and [external](https://x.test).\n",
+		"notes/first.md":    "# First\n\nHello.\n",
+		"notes/sub/deep.md": "# Deep\n\nNested.\n",
 	}
 	for rel, body := range files {
 		full := filepath.Join(root, rel)
@@ -60,6 +60,31 @@ func TestModel_BootsAndRendersFirstFile(t *testing.T) {
 	// Auto-opened first file should land us on Index content.
 	if !strings.Contains(view, "Index") {
 		t.Errorf("expected rendered content to contain 'Index', got:\n%s", view)
+	}
+}
+
+func TestModel_RefreshPopulatesLinks(t *testing.T) {
+	root := writeFixture(t)
+	m := sized(t, root, "")
+	// Auto-open lands on index.md, which has two links per writeFixture.
+	if got := len(m.links); got != 2 {
+		t.Fatalf("len(m.links) = %d, want 2 (index.md has [first] and [external])", got)
+	}
+	if m.links[0].Href != "notes/first.md" {
+		t.Errorf("links[0].Href = %q, want notes/first.md", m.links[0].Href)
+	}
+	if m.links[1].Href != "https://x.test" {
+		t.Errorf("links[1].Href = %q, want https://x.test", m.links[1].Href)
+	}
+}
+
+func TestModel_FooterShowsNoLinkSelectedByDefault(t *testing.T) {
+	root := writeFixture(t)
+	m := sized(t, root, "")
+	// Phase 1: nothing selected yet, so the footer should NOT contain the
+	// link-selection marker.
+	if strings.Contains(m.View(), linkFooterMarker) {
+		t.Errorf("expected no link-selection footer marker before any link is picked, got view:\n%s", m.View())
 	}
 }
 

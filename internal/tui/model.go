@@ -4,6 +4,7 @@ package tui
 
 import (
 	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
 
@@ -62,10 +63,17 @@ type Model struct {
 	history *nav.History
 	focus   focus
 
+	links       []markdown.Link // links extracted from the currently rendered file
+	linkCursor  int             // -1 when no link is selected (Phase 1: always -1)
+
 	width, height int
 	keys          keyMap
 	status        string // last error or info message
 }
+
+// linkFooterMarker is rendered into the footer when a link is selected.
+// Defined as a constant so tests can assert on its presence/absence.
+const linkFooterMarker = "→ "
 
 // treeRow is a flattened tree row used for cursor-driven navigation. Tracking
 // depth here avoids re-walking the tree on every keystroke.
@@ -88,13 +96,14 @@ func New(root, initialFile string) (Model, error) {
 	}
 
 	m := Model{
-		root:     root,
-		rootNode: rootNode,
-		viewport: viewport.New(0, 0),
-		renderer: r,
-		history:  nav.New(),
-		focus:    focusTree,
-		keys:     defaultKeys(),
+		root:       root,
+		rootNode:   rootNode,
+		viewport:   viewport.New(0, 0),
+		renderer:   r,
+		history:    nav.New(),
+		focus:      focusTree,
+		keys:       defaultKeys(),
+		linkCursor: -1,
 	}
 	m.flatTree = flatten(rootNode, 0)
 
@@ -209,17 +218,30 @@ func (m *Model) openFile(path string) {
 }
 
 // refreshContent re-renders the file at path into the viewport without
-// touching history. Used by back/forward and on resize.
+// touching history. Used by back/forward and on resize. Also refreshes
+// the link list and clears any active link selection.
 func (m *Model) refreshContent(path string) {
-	out, err := m.renderer.RenderFile(path)
+	src, err := os.ReadFile(path)
 	if err != nil {
 		m.status = err.Error()
 		m.viewport.SetContent(fmt.Sprintf("Error: %v", err))
+		m.links = nil
+		m.linkCursor = -1
+		return
+	}
+	out, links, err := m.renderer.RenderWithLinks(string(src), path)
+	if err != nil {
+		m.status = err.Error()
+		m.viewport.SetContent(fmt.Sprintf("Error: %v", err))
+		m.links = nil
+		m.linkCursor = -1
 		return
 	}
 	m.status = path
 	m.viewport.SetContent(out)
 	m.viewport.GotoTop()
+	m.links = links
+	m.linkCursor = -1
 }
 
 // selectInTree moves the tree cursor to the row matching path, if present.
@@ -284,8 +306,36 @@ func (m Model) renderFooter() string {
 			loc = rel
 		}
 	}
+	if sel := m.selectedLink(); sel != nil {
+		loc = fmt.Sprintf("%s%s [%d/%d] %s", linkFooterMarker, loc, m.linkCursor+1, len(m.links), linkLabel(*sel, m.root))
+	}
 	footerStyle := lipgloss.NewStyle().Faint(true)
 	return footerStyle.Render(fmt.Sprintf("%s\n%s", loc, help))
+}
+
+// selectedLink returns a pointer to the currently selected link, or nil
+// if no link is selected.
+func (m Model) selectedLink() *markdown.Link {
+	if m.linkCursor < 0 || m.linkCursor >= len(m.links) {
+		return nil
+	}
+	return &m.links[m.linkCursor]
+}
+
+// linkLabel formats a link's target for footer display: relative path
+// for local files (against the tree root for brevity), raw href otherwise.
+func linkLabel(l markdown.Link, root string) string {
+	switch l.Resolved.Kind {
+	case markdown.LinkLocalFile:
+		if rel, err := filepath.Rel(root, l.Resolved.Target); err == nil {
+			return rel
+		}
+		return l.Resolved.Target
+	case markdown.LinkAnchor:
+		return "#" + l.Resolved.Anchor
+	default:
+		return l.Href
+	}
 }
 
 func (m Model) treeWidth() int {
