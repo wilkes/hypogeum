@@ -4,7 +4,7 @@
 package tree
 
 import (
-	"io/fs"
+	"os"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -49,7 +49,7 @@ func Walk(root string) (*Node, error) {
 }
 
 func walk(dir string) (*Node, error) {
-	entries, err := readDir(dir)
+	entries, err := os.ReadDir(dir)
 	if err != nil {
 		return nil, err
 	}
@@ -93,26 +93,6 @@ func walk(dir string) (*Node, error) {
 		return nil, nil
 	}
 	return node, nil
-}
-
-// readDir is split out for testability and to centralize error handling.
-func readDir(dir string) ([]fs.DirEntry, error) {
-	entries, err := fs.ReadDir(rootedFS{}, dir)
-	if err != nil {
-		return nil, err
-	}
-	return entries, nil
-}
-
-// rootedFS satisfies fs.ReadDirFS using the OS filesystem. We use this rather
-// than os.ReadDir directly so the package is easier to drive with a fake FS
-// in tests later if we want to.
-type rootedFS struct{}
-
-func (rootedFS) Open(name string) (fs.File, error) { return nil, fs.ErrInvalid }
-func (rootedFS) ReadDir(name string) ([]fs.DirEntry, error) {
-	// Fall back to os.ReadDir for absolute paths.
-	return osReadDir(name)
 }
 
 func isMarkdown(name string) bool {
