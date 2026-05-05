@@ -158,15 +158,83 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case tea.KeyMsg:
 		return m.handleKey(msg)
+
+	case tea.MouseMsg:
+		return m.handleMouse(msg)
 	}
 
-	// Forward other messages (mouse, etc.) to the viewport when content has focus.
+	// Forward other messages to the viewport when content has focus.
 	if m.focus == focusContent {
 		var cmd tea.Cmd
 		m.viewport, cmd = m.viewport.Update(msg)
 		return m, cmd
 	}
 	return m, nil
+}
+
+// handleMouse routes a mouse event by coordinate to the pane it lands in.
+// Wheel events go straight to the viewport (it scrolls regardless of
+// click position). Left-button presses select a tree row, follow a link,
+// or — failing both — pass through to the viewport's own click handling.
+func (m Model) handleMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
+	if tea.MouseEvent(msg).IsWheel() {
+		var cmd tea.Cmd
+		m.viewport, cmd = m.viewport.Update(msg)
+		return m, cmd
+	}
+	if msg.Action != tea.MouseActionPress || msg.Button != tea.MouseButtonLeft {
+		return m, nil
+	}
+
+	// Pane interior bounds. Each Lip Gloss pane has a 1-char border on
+	// every side, so interior cells start at (paneX+1, 1) and the body
+	// ends at row m.height-3 (last row before the 2-line footer).
+	treeW := m.treeWidth()
+	bodyTop, bodyBottom := 1, m.height-3
+	if msg.Y < bodyTop || msg.Y > bodyBottom {
+		return m, nil // footer or top border
+	}
+	row := msg.Y - bodyTop
+
+	switch {
+	case msg.X >= 1 && msg.X <= treeW: // inside tree pane (border + interior)
+		return m.clickTree(row)
+	case msg.X >= treeW+2: // inside content pane (skip both borders)
+		return m.clickContent(row, msg)
+	}
+	return m, nil
+}
+
+// clickTree selects the tree row at index row (relative to the visible
+// flatTree top), opens it if it's a file, and switches focus.
+func (m Model) clickTree(row int) (tea.Model, tea.Cmd) {
+	if row < 0 || row >= len(m.flatTree) {
+		return m, nil
+	}
+	m.focus = focusTree
+	m.treeCursor = row
+	if !m.flatTree[row].node.IsDir {
+		m.openFile(m.flatTree[row].node.Path)
+	}
+	return m, nil
+}
+
+// clickContent finds a link on the clicked row and follows it. Falls
+// through to the viewport's own click handling otherwise (so future
+// viewport features like text selection keep working).
+func (m Model) clickContent(row int, msg tea.MouseMsg) (tea.Model, tea.Cmd) {
+	m.focus = focusContent
+	docRow := row + m.viewport.YOffset
+	for i, l := range m.links {
+		if l.Row == docRow {
+			m.linkCursor = i
+			m.followLink(l)
+			return m, nil
+		}
+	}
+	var cmd tea.Cmd
+	m.viewport, cmd = m.viewport.Update(msg)
+	return m, cmd
 }
 
 func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
