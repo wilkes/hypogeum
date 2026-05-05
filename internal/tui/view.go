@@ -61,11 +61,20 @@ func (m Model) renderFooter() string {
 			loc = rel
 		}
 	}
+	hasLink := false
 	if sel := m.selectedLink(); sel != nil {
 		loc = fmt.Sprintf("%s%s [%d/%d] %s", linkFooterMarker, loc, m.linkCursor+1, len(m.links), linkLabel(*sel, m.root))
+		hasLink = true
 	}
-	footerStyle := lipgloss.NewStyle().Faint(true)
-	return footerStyle.Render(fmt.Sprintf("%s\n%s", loc, help))
+	// The help row is always faint. The location row is faint by default
+	// but gets full brightness when a link is selected, since it's the
+	// only signal that link-cycling is active.
+	helpStyle := lipgloss.NewStyle().Faint(true)
+	locStyle := helpStyle
+	if hasLink {
+		locStyle = lipgloss.NewStyle()
+	}
+	return fmt.Sprintf("%s\n%s", locStyle.Render(loc), helpStyle.Render(help))
 }
 
 func (m Model) treeWidth() int {
