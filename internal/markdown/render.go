@@ -36,7 +36,7 @@ func NewRenderer(width int) (*Renderer, error) {
 	g, err := glamour.NewTermRenderer(
 		glamour.WithWordWrap(width),
 		glamour.WithEmoji(),
-		glamour.WithStyles(hypogeumStyle()),
+		glamour.WithStyles(hypogeumStyle(width)),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("init glamour: %w", err)
@@ -45,7 +45,7 @@ func NewRenderer(width int) (*Renderer, error) {
 	instrumented, err := glamour.NewTermRenderer(
 		glamour.WithWordWrap(width),
 		glamour.WithEmoji(),
-		glamour.WithStyles(linkInstrumentationStyles()),
+		glamour.WithStyles(linkInstrumentationStyles(width)),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("init instrumented glamour: %w", err)
@@ -245,12 +245,14 @@ func stripSentinels(raw string) (string, []sentinelSpan) {
 }
 
 // hypogeumStyle returns the project's house style: a clone of the
-// environment-detected default with heading bars and softer inline-code
-// styling layered on top. Both the plain and instrumented renderers
-// start from this so they remain byte-equivalent after sentinel-strip.
-func hypogeumStyle() ansi.StyleConfig {
+// environment-detected default with heading bars, inline code,
+// emphasis, lists, blockquotes, code blocks, and rules layered on top.
+// Both the plain and instrumented renderers start from this so they
+// remain byte-equivalent after sentinel-strip. width is the renderer's
+// wrap width; used to size the horizontal rule.
+func hypogeumStyle(width int) ansi.StyleConfig {
 	cfg := cloneStyleConfig(defaultStyleConfig())
-	applyHypogeumOverrides(&cfg)
+	applyHypogeumOverrides(&cfg, width)
 	return cfg
 }
 
@@ -258,8 +260,8 @@ func hypogeumStyle() ansi.StyleConfig {
 // block_prefix/block_suffix grafted onto the LinkText primitive. The
 // instrumented render is visually identical to the regular render after
 // sentinels are stripped.
-func linkInstrumentationStyles() ansi.StyleConfig {
-	cfg := hypogeumStyle()
+func linkInstrumentationStyles(width int) ansi.StyleConfig {
+	cfg := hypogeumStyle(width)
 	cfg.LinkText.BlockPrefix = string(sentinelStart) + cfg.LinkText.BlockPrefix
 	cfg.LinkText.BlockSuffix = cfg.LinkText.BlockSuffix + string(sentinelEnd)
 	return cfg
@@ -267,15 +269,25 @@ func linkInstrumentationStyles() ansi.StyleConfig {
 
 // applyHypogeumOverrides patches cfg in place with hypogeum's house
 // styling. Targets the readability points that the default Glamour dark
-// theme leaves flat: heading hierarchy and inline code prominence.
-func applyHypogeumOverrides(cfg *ansi.StyleConfig) {
-	bold := true
+// theme leaves flat. width is the renderer wrap width, used to span the
+// horizontal rule.
+func applyHypogeumOverrides(cfg *ansi.StyleConfig, width int) {
+	yes := true // shared *bool for any boolean style toggle (bold, italic, faint, ...)
+	bold := &yes
+	italic := &yes
+	faint := &yes
+
+	// H1: extra vertical breathing room so it reads as a page-break
+	// when scrolling between sections. Color/style left to the base
+	// theme (its pink-on-purple block is already distinctive).
+	cfg.H1.BlockPrefix = "\n\n"
+	cfg.H1.BlockSuffix = "\n"
 
 	// H2: bright cyan, vertical bar prefix. The bar gives the eye a
 	// clear left-edge anchor for skimming long docs.
 	h2 := "117"
 	cfg.H2.Color = &h2
-	cfg.H2.Bold = &bold
+	cfg.H2.Bold = bold
 	cfg.H2.Prefix = "▌ "
 	cfg.H2.BlockPrefix = "\n"
 	cfg.H2.BlockSuffix = "\n"
@@ -283,7 +295,7 @@ func applyHypogeumOverrides(cfg *ansi.StyleConfig) {
 	// H3: a step quieter than H2 — thinner bar, steel-blue.
 	h3 := "110"
 	cfg.H3.Color = &h3
-	cfg.H3.Bold = &bold
+	cfg.H3.Bold = bold
 	cfg.H3.Prefix = "│ "
 	cfg.H3.BlockPrefix = "\n"
 
@@ -302,6 +314,56 @@ func applyHypogeumOverrides(cfg *ansi.StyleConfig) {
 	cfg.Code.BackgroundColor = nil
 	cfg.Code.Prefix = ""
 	cfg.Code.Suffix = ""
+
+	// Strong: gold + bold. Default was bold-only, which is barely
+	// distinguishable from regular text in many terminals. Strip the
+	// markdown-source ** markers — once the span is colored the markers
+	// are noise.
+	strong := "222"
+	cfg.Strong.Color = &strong
+	cfg.Strong.Bold = bold
+	cfg.Strong.BlockPrefix = ""
+	cfg.Strong.BlockSuffix = ""
+
+	// Emph: soft cyan + italic. Same reasoning — italic alone
+	// disappears. Strip the * markers for the same reason as Strong.
+	emph := "117"
+	cfg.Emph.Color = &emph
+	cfg.Emph.Italic = italic
+	cfg.Emph.BlockPrefix = ""
+	cfg.Emph.BlockSuffix = ""
+
+	// Horizontal rule: a real spanning line, dim. Replaces the literal
+	// "--------" with a row of box-drawing characters sized to the
+	// renderer's wrap width. Reads as <hr>, not as ASCII art.
+	hrColor := "240"
+	cfg.HorizontalRule.Color = &hrColor
+	cfg.HorizontalRule.Format = "\n" + strings.Repeat("─", max(width-4, 8)) + "\n"
+
+	// List bullet: bright cyan accent. Each top-level bullet is now
+	// visually distinct from prose, like a styled <ul> marker.
+	bulletColor := "117"
+	cfg.Item.BlockPrefix = "• "
+	cfg.Item.Color = &bulletColor
+
+	// Task list: replace ASCII brackets with proper checkbox glyphs.
+	cfg.Task.Ticked = "☑ "
+	cfg.Task.Unticked = "☐ "
+
+	// Blockquote: lavender bar + faint quoted text. Default has the bar
+	// but no color, so quotes blend into prose. Now they read as
+	// quoted/lifted-out content.
+	bqColor := "141"
+	cfg.BlockQuote.Color = &bqColor
+	cfg.BlockQuote.Faint = faint
+	bqIndent := "│ "
+	cfg.BlockQuote.IndentToken = &bqIndent
+
+	// Code block: dim-near-black background so they look like <pre>
+	// cards instead of loose indentation. Chroma syntax highlighting
+	// inside is unaffected — we're only painting the frame.
+	cbBg := "235"
+	cfg.CodeBlock.BackgroundColor = &cbBg
 }
 
 // defaultStyleConfig mirrors Glamour's WithAutoStyle resolution: pick
