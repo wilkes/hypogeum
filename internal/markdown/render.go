@@ -268,102 +268,105 @@ func linkInstrumentationStyles(width int) ansi.StyleConfig {
 }
 
 // applyHypogeumOverrides patches cfg in place with hypogeum's house
-// styling. Targets the readability points that the default Glamour dark
-// theme leaves flat. width is the renderer wrap width, used to span the
-// horizontal rule.
+// styling. Philosophy: only color what the user clicks. Prose elements
+// get weight, glyph, or whitespace differentiation — never color
+// rotation. Headings keep restrained color because they're navigation
+// targets; links keep color because they're action targets; everything
+// else inherits the document's body color so prose reads as prose.
+// width is the renderer wrap width, used to span the horizontal rule.
 func applyHypogeumOverrides(cfg *ansi.StyleConfig, width int) {
-	yes := true // shared *bool for any boolean style toggle (bold, italic, faint, ...)
+	yes := true
 	bold := &yes
 	italic := &yes
-	faint := &yes
 
-	// H1: extra vertical breathing room so it reads as a page-break
-	// when scrolling between sections. Color/style left to the base
+	// Body text: light gray. Most everything inherits this implicitly.
+	// Setting it on Document makes the inheritance explicit.
+	body := "252"
+	cfg.Document.Color = &body
+
+	// H1: extra vertical breathing room. Color/style left to the base
 	// theme (its pink-on-purple block is already distinctive).
 	cfg.H1.BlockPrefix = "\n\n"
 	cfg.H1.BlockSuffix = "\n"
 
-	// H2: bright cyan, vertical bar prefix. The bar gives the eye a
-	// clear left-edge anchor for skimming long docs.
-	h2 := "117"
+	// H2/H3/H4: restrained blue ramp. Same hue family, decreasing
+	// saturation as we go deeper — gives navigation hierarchy without
+	// shouting. Bars stay because they're *structural* (left-edge
+	// anchors for the eye), not decorative.
+	h2 := "75" // muted sky blue
 	cfg.H2.Color = &h2
 	cfg.H2.Bold = bold
 	cfg.H2.Prefix = "▌ "
 	cfg.H2.BlockPrefix = "\n"
 	cfg.H2.BlockSuffix = "\n"
 
-	// H3: a step quieter than H2 — thinner bar, steel-blue.
-	h3 := "110"
+	h3 := "67" // dimmer steel blue
 	cfg.H3.Color = &h3
 	cfg.H3.Bold = bold
 	cfg.H3.Prefix = "│ "
 	cfg.H3.BlockPrefix = "\n"
 
-	// H4: caret marker, softer color, no bold. Mostly used for
-	// sub-grouping inside H3 sections.
-	h4 := "109"
+	h4 := "66" // dimmer still
 	cfg.H4.Color = &h4
 	cfg.H4.Prefix = "▸ "
 
-	// Inline code: drop the background-color block and the surrounding
-	// space pads. Default looks like a button; this looks like
-	// emphasized prose. Color stays warm so it's still distinct from
-	// regular text.
-	codeColor := "173"
+	// Inline code: barely-different. Same body color, just slightly
+	// faint and with single-space pads so they read as inline tokens
+	// without becoming polka dots across the page. The eye learns to
+	// recognize the rhythm without being pulled to it.
+	codeColor := "250"
 	cfg.Code.Color = &codeColor
 	cfg.Code.BackgroundColor = nil
 	cfg.Code.Prefix = ""
 	cfg.Code.Suffix = ""
 
-	// Strong: gold + bold. Default was bold-only, which is barely
-	// distinguishable from regular text in many terminals. Strip the
-	// markdown-source ** markers — once the span is colored the markers
-	// are noise.
-	strong := "222"
-	cfg.Strong.Color = &strong
+	// Strong: pure bold, no color. Reads as emphatic prose, not a
+	// special token. Strip the ** markers since bold alone carries the
+	// signal in ANSI terminals.
+	cfg.Strong.Color = &body
 	cfg.Strong.Bold = bold
 	cfg.Strong.BlockPrefix = ""
 	cfg.Strong.BlockSuffix = ""
 
-	// Emph: soft cyan + italic. Same reasoning — italic alone
-	// disappears. Strip the * markers for the same reason as Strong.
-	emph := "117"
-	cfg.Emph.Color = &emph
+	// Emph: italic only, body color, * markers stripped.
+	cfg.Emph.Color = &body
 	cfg.Emph.Italic = italic
 	cfg.Emph.BlockPrefix = ""
 	cfg.Emph.BlockSuffix = ""
 
 	// Horizontal rule: a real spanning line, dim. Replaces the literal
 	// "--------" with a row of box-drawing characters sized to the
-	// renderer's wrap width. Reads as <hr>, not as ASCII art.
-	hrColor := "240"
+	// renderer's wrap width.
+	hrColor := "238"
 	cfg.HorizontalRule.Color = &hrColor
 	cfg.HorizontalRule.Format = "\n" + strings.Repeat("─", max(width-4, 8)) + "\n"
 
-	// List bullet: bright cyan accent. Each top-level bullet is now
-	// visually distinct from prose, like a styled <ul> marker.
-	bulletColor := "117"
+	// List bullet: body color. The • glyph alone is enough marker; a
+	// brighter color would compete with the inline-code rhythm and the
+	// heading color for attention.
 	cfg.Item.BlockPrefix = "• "
-	cfg.Item.Color = &bulletColor
+	cfg.Item.Color = &body
 
-	// Task list: replace ASCII brackets with proper checkbox glyphs.
+	// Task list: proper checkbox glyphs.
 	cfg.Task.Ticked = "☑ "
 	cfg.Task.Unticked = "☐ "
 
-	// Blockquote: lavender bar + faint quoted text. Default has the bar
-	// but no color, so quotes blend into prose. Now they read as
-	// quoted/lifted-out content.
-	bqColor := "141"
+	// Blockquote: keep the structural left bar, drop the text color +
+	// faint. The bar tells you it's a quote; the text reads as prose.
+	bqColor := "240" // dim gray, just for the bar — text inherits body
 	cfg.BlockQuote.Color = &bqColor
-	cfg.BlockQuote.Faint = faint
 	bqIndent := "│ "
 	cfg.BlockQuote.IndentToken = &bqIndent
 
-	// Code block: dim-near-black background so they look like <pre>
-	// cards instead of loose indentation. Chroma syntax highlighting
-	// inside is unaffected — we're only painting the frame.
+	// Code block: dim-near-black background card. This one element gets
+	// to be visually distinct because code blocks ARE structurally
+	// different from prose — they're transcluded artifacts.
 	cbBg := "235"
 	cfg.CodeBlock.BackgroundColor = &cbBg
+
+	// Link: kept loud (color + underline) because links are clickable
+	// targets — the one element we WANT the eye to find. Already set
+	// by the base theme; no override needed.
 }
 
 // defaultStyleConfig mirrors Glamour's WithAutoStyle resolution: pick
