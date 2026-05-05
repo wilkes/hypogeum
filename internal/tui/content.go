@@ -5,6 +5,7 @@ import (
 	"os"
 
 	"github.com/wilkes/hypogeum/internal/tree"
+	"github.com/wilkes/hypogeum/internal/watch"
 )
 
 // openFile records a visit in history and renders the file.
@@ -63,6 +64,62 @@ func firstTopLevelFile(root *tree.Node) *tree.Node {
 		}
 	}
 	return nil
+}
+
+// handleFSEvent reacts to a debounced filesystem event. Structure changes
+// trigger a tree re-walk; file writes trigger a content refresh only if
+// the changed path is the one currently displayed.
+//
+// Cursor and viewport scroll position are preserved across both kinds of
+// refresh so live edits don't yank the user back to the top.
+func (m *Model) handleFSEvent(ev watch.Event) {
+	switch ev.Kind {
+	case watch.StructureChanged:
+		selectedPath := ""
+		if m.treeCursor < len(m.flatTree) {
+			selectedPath = m.flatTree[m.treeCursor].node.Path
+		}
+		newRoot, err := tree.Walk(m.root)
+		if err != nil {
+			m.status = err.Error()
+			return
+		}
+		m.rootNode = newRoot
+		m.flatTree = flatten(newRoot, 0)
+		// Restore cursor by path; if the previously selected node is gone,
+		// clamp to a valid index rather than dangling past the end.
+		m.treeCursor = 0
+		if selectedPath != "" {
+			for i, row := range m.flatTree {
+				if row.node.Path == selectedPath {
+					m.treeCursor = i
+					break
+				}
+			}
+		}
+		if m.treeCursor >= len(m.flatTree) {
+			m.treeCursor = len(m.flatTree) - 1
+		}
+		if m.treeCursor < 0 {
+			m.treeCursor = 0
+		}
+
+	case watch.FileModified:
+		cur := m.history.Current()
+		if cur == "" {
+			return
+		}
+		for _, p := range ev.Paths {
+			if p == cur {
+				offset := m.viewport.YOffset
+				m.refreshContent(cur)
+				// refreshContent calls GotoTop; restore scroll so a save
+				// in your editor doesn't jump the reader to the start.
+				m.viewport.SetYOffset(offset)
+				return
+			}
+		}
+	}
 }
 
 // flatten produces a depth-tagged linear list from a tree, used for

@@ -11,7 +11,13 @@ import (
 	"github.com/wilkes/hypogeum/internal/markdown"
 	"github.com/wilkes/hypogeum/internal/nav"
 	"github.com/wilkes/hypogeum/internal/tree"
+	"github.com/wilkes/hypogeum/internal/watch"
 )
+
+// fsEventMsg carries a debounced filesystem event from the watcher into the
+// Bubble Tea update loop. It is the only TUI-side reference to internal/watch
+// so that tests can synthesize one without spinning up a real watcher.
+type fsEventMsg watch.Event
 
 // Focus indicates which pane currently receives keyboard input for movement.
 type focus int
@@ -40,6 +46,10 @@ type Model struct {
 	width, height int
 	keys          keyMap
 	status        string // last error or info message
+
+	// watcher observes the tree for live updates. nil if construction
+	// failed (we degrade gracefully — the browser still works without it).
+	watcher *watch.Watcher
 }
 
 // linkFooterMarker is rendered into the footer when a link is selected.
@@ -84,6 +94,13 @@ func New(root, initialFile string) (Model, error) {
 	}
 	m.flatTree = flatten(rootNode, 0)
 
+	// A watcher is best-effort: if it fails (e.g. inotify limits hit on
+	// Linux), we silently fall back to the previous reload-on-navigate
+	// behavior rather than refusing to start.
+	if w, err := watch.New(root); err == nil {
+		m.watcher = w
+	}
+
 	if initialFile != "" {
 		m.openFile(initialFile)
 		m.selectInTree(initialFile)
@@ -95,7 +112,26 @@ func New(root, initialFile string) (Model, error) {
 	return m, nil
 }
 
-func (m Model) Init() tea.Cmd { return nil }
+func (m Model) Init() tea.Cmd { return m.waitForFSEvent() }
+
+// waitForFSEvent returns a tea.Cmd that blocks until the watcher emits an
+// event, then surfaces it as fsEventMsg. The Update path re-issues this
+// command so the loop keeps listening. Returns nil if there is no watcher
+// (which also means no rescheduled command — the channel select below
+// stays quiet for the rest of the session).
+func (m Model) waitForFSEvent() tea.Cmd {
+	if m.watcher == nil {
+		return nil
+	}
+	ch := m.watcher.Events()
+	return func() tea.Msg {
+		ev, ok := <-ch
+		if !ok {
+			return nil
+		}
+		return fsEventMsg(ev)
+	}
+}
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
@@ -124,6 +160,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case tea.MouseMsg:
 		return m.handleMouse(msg)
+
+	case fsEventMsg:
+		m.handleFSEvent(watch.Event(msg))
+		return m, m.waitForFSEvent()
 	}
 
 	// Forward other messages to the viewport when content has focus.
