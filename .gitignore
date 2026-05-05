@@ -1,5 +1,5 @@
-# Binaries
-hypogeum
+# Binaries (anchored to repo root so cmd/hypogeum/ source isn't matched)
+/hypogeum
 /bin/
 /dist/
 
