@@ -49,4 +49,8 @@ The packages are layered: `tui` depends on `tree`, `markdown`, `nav`; the lower 
 
 ## What's not built yet
 
-The README calls out link-following from inside rendered content as the next milestone. The plumbing is there (`markdown.ResolveLink` already classifies local/external/anchor links) but nothing in the TUI surfaces clickable links or moves a cursor between them yet. When wiring that up: the resolver returns absolute paths for local files, which can be fed straight into `model.openFile`.
+The README calls out link-following from inside rendered content as the next milestone. The plumbing is there (`markdown.ResolveLink` already classifies local/external/anchor links) but nothing in the TUI surfaces clickable links or moves a cursor between them yet. Plan and design notes live in [docs/link-following.md](docs/link-following.md).
+
+## Documentation and plans
+
+Write design docs, implementation plans, and investigation notes to `docs/` at the repo root. One file per topic, kebab-cased filename, no date prefix. Update plans in place as work progresses — strike-through or "Status:" lines beat parallel files. README.md and CLAUDE.md stay at the repo root; everything longer-form goes in `docs/`.
