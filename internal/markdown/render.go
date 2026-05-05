@@ -26,22 +26,23 @@ type Renderer struct {
 }
 
 // NewRenderer constructs a Renderer with the given output width.
-// The "auto" style follows the terminal's light/dark setting.
+// Both the plain and instrumented renderers go through hypogeumStyle so
+// they stay byte-equivalent and so the prose styling can evolve in one
+// place.
 func NewRenderer(width int) (*Renderer, error) {
 	if width < 20 {
 		width = 80
 	}
 	g, err := glamour.NewTermRenderer(
-		glamour.WithAutoStyle(),
 		glamour.WithWordWrap(width),
 		glamour.WithEmoji(),
+		glamour.WithStyles(hypogeumStyle()),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("init glamour: %w", err)
 	}
 
 	instrumented, err := glamour.NewTermRenderer(
-		glamour.WithAutoStyle(),
 		glamour.WithWordWrap(width),
 		glamour.WithEmoji(),
 		glamour.WithStyles(linkInstrumentationStyles()),
@@ -243,17 +244,64 @@ func stripSentinels(raw string) (string, []sentinelSpan) {
 	return out.String(), spans
 }
 
-// linkInstrumentationStyles returns a deep copy of the environment's
-// default StyleConfig (NoTTY / dark / light, matching what WithAutoStyle
-// would pick) with sentinel block_prefix/block_suffix grafted onto the
-// LinkText primitive. The instrumented render is visually identical to
-// the regular render after sentinels are stripped.
+// hypogeumStyle returns the project's house style: a clone of the
+// environment-detected default with heading bars and softer inline-code
+// styling layered on top. Both the plain and instrumented renderers
+// start from this so they remain byte-equivalent after sentinel-strip.
+func hypogeumStyle() ansi.StyleConfig {
+	cfg := cloneStyleConfig(defaultStyleConfig())
+	applyHypogeumOverrides(&cfg)
+	return cfg
+}
+
+// linkInstrumentationStyles returns hypogeumStyle with sentinel
+// block_prefix/block_suffix grafted onto the LinkText primitive. The
+// instrumented render is visually identical to the regular render after
+// sentinels are stripped.
 func linkInstrumentationStyles() ansi.StyleConfig {
-	base := defaultStyleConfig()
-	cfg := cloneStyleConfig(base)
+	cfg := hypogeumStyle()
 	cfg.LinkText.BlockPrefix = string(sentinelStart) + cfg.LinkText.BlockPrefix
 	cfg.LinkText.BlockSuffix = cfg.LinkText.BlockSuffix + string(sentinelEnd)
 	return cfg
+}
+
+// applyHypogeumOverrides patches cfg in place with hypogeum's house
+// styling. Targets the readability points that the default Glamour dark
+// theme leaves flat: heading hierarchy and inline code prominence.
+func applyHypogeumOverrides(cfg *ansi.StyleConfig) {
+	bold := true
+
+	// H2: bright cyan, vertical bar prefix. The bar gives the eye a
+	// clear left-edge anchor for skimming long docs.
+	h2 := "117"
+	cfg.H2.Color = &h2
+	cfg.H2.Bold = &bold
+	cfg.H2.Prefix = "▌ "
+	cfg.H2.BlockPrefix = "\n"
+	cfg.H2.BlockSuffix = "\n"
+
+	// H3: a step quieter than H2 — thinner bar, steel-blue.
+	h3 := "110"
+	cfg.H3.Color = &h3
+	cfg.H3.Bold = &bold
+	cfg.H3.Prefix = "│ "
+	cfg.H3.BlockPrefix = "\n"
+
+	// H4: caret marker, softer color, no bold. Mostly used for
+	// sub-grouping inside H3 sections.
+	h4 := "109"
+	cfg.H4.Color = &h4
+	cfg.H4.Prefix = "▸ "
+
+	// Inline code: drop the background-color block and the surrounding
+	// space pads. Default looks like a button; this looks like
+	// emphasized prose. Color stays warm so it's still distinct from
+	// regular text.
+	codeColor := "173"
+	cfg.Code.Color = &codeColor
+	cfg.Code.BackgroundColor = nil
+	cfg.Code.Prefix = ""
+	cfg.Code.Suffix = ""
 }
 
 // defaultStyleConfig mirrors Glamour's WithAutoStyle resolution: pick
