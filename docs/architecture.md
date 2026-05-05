@@ -1,0 +1,69 @@
+# Architecture
+
+Top-level map of how `hypogeum` fits together. Per-package detail lives in `packages/`; this doc stays at the level of "which package owns what" and "how a keystroke flows."
+
+See also: [docs index](index.md), [link-following plan](link-following.md).
+
+## Package layering
+
+```
+cmd/hypogeum               (entrypoint — argv → tui.New → tea.NewProgram)
+        │
+        ▼
+internal/tui               (Bubble Tea Model, the only package that knows about the UI)
+   │      │      │
+   ▼      ▼      ▼
+   tree   markdown   nav   (lower layers, mutually independent)
+```
+
+- [`internal/tree`](packages/tree.md) walks the filesystem and produces a `*Node` tree of markdown files.
+- [`internal/markdown`](packages/markdown.md) renders markdown via Glamour and resolves links.
+- [`internal/nav`](packages/nav.md) is a back/forward stack of opaque path strings.
+- [`internal/tui`](packages/tui.md) is the only package that imports the other three.
+
+The lower layers know nothing about Bubble Tea or terminals; they're testable as pure functions.
+
+## Data flow on a keystroke
+
+1. Bubble Tea delivers a `tea.KeyMsg` to `Model.Update`.
+2. Global bindings (quit, focus toggle, back/forward) match first.
+3. If still unhandled, dispatch by focus:
+   - `focusTree` → `handleTreeKey` updates `treeCursor` or calls `openFile`.
+   - `focusContent` → `handleContentKey` cycles the link cursor, follows a link, clears selection, or falls through to the viewport's own scrolling bindings.
+4. `openFile(path)` records the visit in `nav.History` and calls `refreshContent`.
+5. `refreshContent(path)` reads the file, calls `markdown.RenderWithLinks`, sets the viewport content, and stores the new link list. The link cursor resets to `-1`.
+6. `View()` joins the styled tree pane and viewport pane horizontally with Lip Gloss, then appends the footer.
+
+The whole loop is synchronous — no goroutines, no commands waited on — because every action is local I/O fast enough to inline.
+
+## Why this shape
+
+Three trade-offs worth knowing because they look like accidents otherwise:
+
+**Pre-flatten the tree.** `internal/tree` returns a recursive `*Node`, but `internal/tui` flattens it into a `[]treeRow` once in `New`. Cursor moves are then O(1) index updates, not tree walks. Don't add features that re-walk on every keystroke. ([model.go](../internal/tui/model.go), `flatten`)
+
+**Re-render on resize.** Glamour's word-wrap width is baked into the renderer, not the call. `WindowSizeMsg` rebuilds *both* the plain and instrumented renderers at the new width and re-renders the current file. Anything that changes content width must do the same. ([render.go](../internal/markdown/render.go), `NewRenderer`)
+
+**Pre-flattened tree means `selectInTree` is a linear scan.** It's fine — the tree is small, the user pressed a key, microseconds don't matter. We optimized for the *typing-speed* path (cursor up/down), not the *click-something-in-the-content-pane* path.
+
+## Cross-cutting concerns
+
+| Concern | Owner | Notes |
+|---|---|---|
+| Style detection (dark/light/no-tty) | `markdown` | Mirrors Glamour's auto-style; required for the instrumented renderer to look identical to the plain one |
+| Path resolution | `markdown.ResolveLink` | Local files become absolute; anchors keep their fragment; URLs pass through with their original href |
+| History semantics | `nav` | Browser-style: visiting truncates forward history; visiting the same path is a no-op |
+| Hidden-entry filtering | `tree` | Anything starting with `.` is skipped, including `.git`, dotfile note dirs, etc. |
+| Empty-directory pruning | `tree` | A directory with no `.md` anywhere underneath doesn't appear in the tree at all |
+
+When you add a new concern, decide its owner first. The packages are small enough that the right home is usually obvious; pick wrong and the layering inverts.
+
+## Where to start reading
+
+If you want to understand the whole codebase, read in dependency order — bottom up:
+
+1. [`internal/nav`](packages/nav.md) — 66 lines, pure stack, sets the vocabulary for "history."
+2. [`internal/tree`](packages/tree.md) — 135 lines, no UI, easy to picture.
+3. [`internal/markdown`](packages/markdown.md) — render + link resolution + the sentinel trick.
+4. [`internal/tui`](packages/tui.md) — biggest package; sits on the other three.
+5. [`cmd/hypogeum/main.go`](../cmd/hypogeum/main.go) — 64 lines, just argv parsing and a `tea.NewProgram` call.

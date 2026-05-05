@@ -57,4 +57,6 @@ Full plan and design rationale (including why we picked the sentinel-instrumente
 
 ## Documentation and plans
 
-Write design docs, implementation plans, and investigation notes to `docs/` at the repo root. One file per topic, kebab-cased filename, no date prefix. Update plans in place as work progresses — strike-through or "Status:" lines beat parallel files. README.md and CLAUDE.md stay at the repo root; everything longer-form goes in `docs/`.
+Write design docs, implementation plans, and investigation notes to `docs/` at the repo root. Start at [docs/index.md](docs/index.md) — it points at the [architecture overview](docs/architecture.md) (which links to per-package docs in `docs/packages/`) and to active feature plans like [link-following](docs/link-following.md).
+
+One file per topic, kebab-cased filename, no date prefix. Update plans in place as work progresses — strike-through or "Status:" lines beat parallel files. README.md and CLAUDE.md stay at the repo root; everything longer-form goes in `docs/`. Update `docs/index.md` whenever you add a new file under `docs/`.

@@ -4,6 +4,8 @@
 
 Plan and design notes for following links inside rendered markdown documents.
 
+See also: [docs index](index.md), [architecture overview](architecture.md), [`internal/markdown`](packages/markdown.md), [`internal/tui`](packages/tui.md).
+
 ## Background
 
 The TUI walks a directory tree and renders the selected file via Glamour. Links rendered inside the markdown are decorative only — there's no way to follow `[other note](other.md)` from inside the right-hand pane. The README calls this out as the next milestone.
