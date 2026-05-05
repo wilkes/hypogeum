@@ -26,10 +26,11 @@ cmd/hypogeum/main.go     CLI entrypoint: parses argv, hands off to tui.New
 internal/tree/           Walks the filesystem, returns a *Node tree of markdown files
 internal/markdown/       Glamour wrapper + link resolution (relative paths, anchors, external URLs)
 internal/nav/            Browser-style back/forward history stack, no I/O
-internal/tui/            Bubble Tea Model that wires the three above into the two-pane UI
+internal/watch/          fsnotify-backed live-update watcher, debounced and markdown-aware
+internal/tui/            Bubble Tea Model that wires the four above into the two-pane UI
 ```
 
-The packages are layered: `tui` depends on `tree`, `markdown`, `nav`; the lower layers know nothing about the TUI.
+The packages are layered: `tui` depends on `tree`, `markdown`, `nav`, `watch`; the lower layers know nothing about the TUI.
 
 ## Conventions
 
@@ -46,6 +47,8 @@ The packages are layered: `tui` depends on `tree`, `markdown`, `nav`; the lower 
 - **`tree.Walk` returns a synthesized empty root** when nothing matches, instead of nil — callers don't have to special-case nil. Keep that contract.
 - **Hidden entries are skipped** (anything starting with `.`) — `.git`, dotfile notes directories, etc. If you ever expose a flag to include them, do it in `tree`, not `tui`.
 - **Glamour renderer is per-width.** It's recreated on every `WindowSizeMsg`. Don't cache it across width changes or wrapping breaks silently.
+- **The watcher is best-effort.** If `watch.New` fails (e.g. inotify limits exhausted), `tui.New` swallows the error and the browser runs without live updates rather than refusing to start. Consumers must tolerate `m.watcher == nil`.
+- **Watcher events are debounced and coarse.** `internal/watch` collapses fsnotify ops into `StructureChanged` (re-walk the tree) or `FileModified` (re-read the open file). Don't try to plumb finer-grained ops through; the TUI doesn't need them and editors save in bursts that mean per-op handling would re-walk redundantly.
 
 ## What's not built yet
 

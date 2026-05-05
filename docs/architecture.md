@@ -11,15 +11,16 @@ cmd/hypogeum               (entrypoint — argv → tui.New → tea.NewProgram)
         │
         ▼
 internal/tui               (Bubble Tea Model, the only package that knows about the UI)
-   │      │      │
-   ▼      ▼      ▼
-   tree   markdown   nav   (lower layers, mutually independent)
+   │      │      │      │
+   ▼      ▼      ▼      ▼
+   tree   markdown   nav   watch   (lower layers, mutually independent)
 ```
 
 - [`internal/tree`](packages/tree.md) walks the filesystem and produces a `*Node` tree of markdown files.
 - [`internal/markdown`](packages/markdown.md) renders markdown via Glamour and resolves links.
 - [`internal/nav`](packages/nav.md) is a back/forward stack of opaque path strings.
-- [`internal/tui`](packages/tui.md) is the only package that imports the other three.
+- [`internal/watch`](packages/watch.md) wraps fsnotify and emits debounced, markdown-aware events.
+- [`internal/tui`](packages/tui.md) is the only package that imports the other four.
 
 The lower layers know nothing about Bubble Tea or terminals; they're testable as pure functions.
 
@@ -34,7 +35,7 @@ The lower layers know nothing about Bubble Tea or terminals; they're testable as
 5. `refreshContent(path)` reads the file, calls `markdown.RenderWithLinks`, sets the viewport content, and stores the new link list. The link cursor resets to `-1`.
 6. `View()` joins the styled tree pane and viewport pane horizontally with Lip Gloss, then appends the footer.
 
-The whole loop is synchronous — no goroutines, no commands waited on — because every action is local I/O fast enough to inline.
+The keystroke path is synchronous — no goroutines, no commands waited on — because every action is local I/O fast enough to inline. The one exception is the watcher: `Init()` returns a `tea.Cmd` that blocks on `internal/watch`'s event channel, surfacing each debounced event as `fsEventMsg`. `Update` rebuilds the tree (on `StructureChanged`) or refreshes the open file (on `FileModified`) while preserving cursor and scroll position, then re-issues the wait command to keep listening.
 
 ## Why this shape
 

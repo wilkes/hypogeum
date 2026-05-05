@@ -9,6 +9,7 @@ Index of everything in `docs/`. Browse this folder by running `hypogeum docs/` f
   - [`internal/markdown`](packages/markdown.md) — Glamour wrapper, link resolution, sentinel-instrumented render
   - [`internal/nav`](packages/nav.md) — browser-style back/forward stack, no I/O
   - [`internal/tui`](packages/tui.md) — Bubble Tea Model that wires everything together
+  - [`internal/watch`](packages/watch.md) — fsnotify-backed live-update watcher, debounced and tree-aware
 
 ## Active feature work
 
