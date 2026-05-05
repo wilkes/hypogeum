@@ -83,6 +83,12 @@ type Model struct {
 // Defined as a constant so tests can assert on its presence/absence.
 const linkFooterMarker = "→ "
 
+// maxRenderWidth caps Glamour's word-wrap width. The viewport pane can
+// be wider than this (uses whatever space is left after the tree); this
+// only affects where lines break. Keeps prose at a comfortable reading
+// width even on ultra-wide terminals.
+const maxRenderWidth = 80
+
 // treeRow is a flattened tree row used for cursor-driven navigation. Tracking
 // depth here avoids re-walking the tree on every keystroke.
 type treeRow struct {
@@ -139,8 +145,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.viewport.Width = contentWidth
 		m.viewport.Height = m.height - 2 // header + footer
-		// Re-render with the new wrap width.
-		if r, err := markdown.NewRenderer(contentWidth); err == nil {
+		// Cap the renderer's wrap width so prose stays readable on wide
+		// terminals; the viewport pane keeps the full available width.
+		renderWidth := min(contentWidth, maxRenderWidth)
+		if r, err := markdown.NewRenderer(renderWidth); err == nil {
 			m.renderer = r
 		}
 		if cur := m.history.Current(); cur != "" {
