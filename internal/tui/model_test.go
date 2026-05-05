@@ -52,6 +52,18 @@ func TestModel_FooterShowsNoLinkSelectedByDefault(t *testing.T) {
 	}
 }
 
+// View() must fit within the reported terminal height. Overshooting causes
+// the terminal to scroll and clips the top borders/title row off-screen.
+func TestModel_ViewFitsTerminalHeight(t *testing.T) {
+	root := writeFixture(t)
+	m := sized(t, root, "")
+
+	lines := strings.Split(m.View(), "\n")
+	if got, want := len(lines), m.height; got > want {
+		t.Errorf("View() produced %d lines, exceeds terminal height %d (top will clip)", got, want)
+	}
+}
+
 func TestModel_OpensInitialFile(t *testing.T) {
 	root := writeFixture(t)
 	target := filepath.Join(root, "notes", "first.md")

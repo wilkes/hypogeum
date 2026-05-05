@@ -19,11 +19,11 @@ func (m Model) View() string {
 
 	treeStyled := zone.Mark(zoneTreePane, paneStyle(m.focus == focusTree).
 		Width(m.treeWidth()).
-		Height(m.height-2).
+		Height(m.height-4).
 		Render(tree))
 	contentStyled := zone.Mark(zoneContentPane, paneStyle(m.focus == focusContent).
 		Width(m.viewport.Width).
-		Height(m.height-2).
+		Height(m.height-4).
 		Render(content))
 
 	body := lipgloss.JoinHorizontal(lipgloss.Top, treeStyled, contentStyled)
@@ -96,7 +96,7 @@ func (m Model) treeWidth() int {
 }
 
 func paneStyle(focused bool) lipgloss.Style {
-	border := lipgloss.NormalBorder()
+	border := lipgloss.RoundedBorder()
 	color := lipgloss.Color("240")
 	if focused {
 		color = lipgloss.Color("62")

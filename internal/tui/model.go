@@ -164,7 +164,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			contentWidth = 20
 		}
 		m.viewport.Width = contentWidth
-		m.viewport.Height = m.height - 2 // header + footer
+		// Leave room for the pane's top+bottom borders (2) and the
+		// two-line footer (2) so View() fits within m.height.
+		m.viewport.Height = m.height - 4
 		// Cap the renderer's wrap width so prose stays readable on wide
 		// terminals; the viewport pane keeps the full available width.
 		renderWidth := min(contentWidth, maxRenderWidth)
