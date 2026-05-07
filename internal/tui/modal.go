@@ -19,6 +19,7 @@ const (
 	modalBacklinks
 	modalLogs
 	modalPicker
+	modalHelp
 )
 
 // toggleModal closes the modal of `kind` if it's currently open;

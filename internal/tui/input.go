@@ -127,6 +127,17 @@ func (m *Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.refreshLogsModal()
 			return nil
 		})
+	case key.Matches(msg, m.keys.OpenHelpModal):
+		// Help is anchored: pressing `?` while a *different* modal is
+		// open is a no-op (unlike B/^l which swap). `?` while help is
+		// already open still toggles it closed via the toggleModal path.
+		if m.modalOpen != modalNone && m.modalOpen != modalHelp {
+			return *m, nil
+		}
+		return *m, m.toggleModal(modalHelp, func() tea.Cmd {
+			m.refreshHelpModal()
+			return nil
+		})
 	case key.Matches(msg, m.keys.OpenPicker):
 		return *m, m.toggleModal(modalPicker, func() tea.Cmd {
 			// Each open starts fresh: cursor at top, all dirs collapsed.

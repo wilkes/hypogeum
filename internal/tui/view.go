@@ -106,13 +106,7 @@ func (m Model) renderTree() string {
 }
 
 func (m Model) renderFooter() string {
-	keys := []string{
-		"tab: switch", "↑↓/jk: move", "enter: open",
-		"n/p: link", "esc: clear",
-		"b: backlinks", "B: modal", "?: logs",
-		"^p: open", "h/←: back", "l/→: forward", "q: quit",
-	}
-	help := strings.Join(keys, "  ")
+	help := "?: help  q: quit"
 
 	loc := m.status
 	if loc != "" {
