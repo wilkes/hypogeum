@@ -258,9 +258,12 @@ func (m *Model) handleContentKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 // handleBacklinksKey routes keystrokes received while the persistent
 // backlinks pane has focus. j/k move the cursor; Enter follows
-// (added in Task 9); Esc returns focus to prevFocus.
+// (added in Task 9); Esc restores focus to prevFocus without closing the pane.
 func (m *Model) handleBacklinksKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch {
+	case key.Matches(msg, m.keys.ClearLink): // Esc
+		m.focus = m.prevFocus
+		return *m, nil
 	case key.Matches(msg, m.keys.Down):
 		if m.backlinkCursor < len(m.backlinks)-1 {
 			m.backlinkCursor++

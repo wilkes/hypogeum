@@ -397,3 +397,25 @@ func TestReturnCursor_ClampsToShrunkList(t *testing.T) {
 		t.Fatalf("expected 1 backlink after refresh, got %d", len(m.backlinks))
 	}
 }
+
+func TestEsc_RestoresFocusFromBacklinksWithoutClosingPane(t *testing.T) {
+	dir := t.TempDir()
+	writeTUITestFile(t, dir, "a.md", "see [[c]].")
+	writeTUITestFile(t, dir, "c.md", "i am c.")
+
+	m := sized(t, dir, "")
+	m.openFile(filepath.Join(dir, "c.md"))
+	m = pressRune(t, m, 'b')
+	if m.focus != focusBacklinks || !m.backlinksOpen {
+		t.Fatalf("setup: expected focusBacklinks and pane open, got focus=%v open=%v", m.focus, m.backlinksOpen)
+	}
+
+	m = pressKey(t, m, tea.KeyMsg{Type: tea.KeyEsc})
+
+	if m.focus == focusBacklinks {
+		t.Fatalf("Esc should restore prevFocus, but focus is still focusBacklinks")
+	}
+	if !m.backlinksOpen {
+		t.Fatalf("Esc should NOT close the pane")
+	}
+}
