@@ -100,3 +100,42 @@ func TestWikilinkParse_UnclosedNotConsumed(t *testing.T) {
 		t.Fatalf("unclosed wikilink parsed: %+v", w)
 	}
 }
+
+func TestStandardLinksUnchangedByWikilinkExtension(t *testing.T) {
+	src := `# Title
+
+A paragraph with a [normal link](other.md) and a [link with title](x.md "title").
+
+- list with [a link](y.md)
+- list with [[Wikilink]]
+
+[autolink test](https://example.com).
+`
+	withoutExt := goldmark.New().Parser().Parse(text.NewReader([]byte(src)))
+	withExt := goldmark.New(goldmark.WithExtensions(WikilinkExtension)).Parser().Parse(text.NewReader([]byte(src)))
+
+	stdLinks := func(n ast.Node) []string {
+		var out []string
+		_ = ast.Walk(n, func(n ast.Node, entering bool) (ast.WalkStatus, error) {
+			if !entering {
+				return ast.WalkContinue, nil
+			}
+			if l, ok := n.(*ast.Link); ok {
+				out = append(out, string(l.Destination))
+			}
+			return ast.WalkContinue, nil
+		})
+		return out
+	}
+
+	got := stdLinks(withExt)
+	want := stdLinks(withoutExt)
+	if len(got) != len(want) {
+		t.Fatalf("standard link count changed: got %d want %d (got=%v want=%v)", len(got), len(want), got, want)
+	}
+	for i := range got {
+		if got[i] != want[i] {
+			t.Fatalf("link %d destination changed: got %q want %q", i, got[i], want[i])
+		}
+	}
+}
