@@ -59,6 +59,9 @@ type Model struct {
 	backlinksOpen  bool
 	backlinksVP    viewport.Model
 	backlinkCursor int
+	backlinks      []vault.Backlink // cached so cursor moves don't re-query the vault
+	prevFocus      focus            // saved when opening a backlinks surface, restored on close
+	returnCursor   *returnCursor    // set on follow, consumed on the next matching Back navigation
 
 	modalOpen modalKind
 	modalVP   viewport.Model

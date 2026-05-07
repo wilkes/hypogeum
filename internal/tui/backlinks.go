@@ -29,6 +29,41 @@ const (
 	snippetHighlightCloseChar = "\x12"
 )
 
+// backlinksSurface identifies which backlinks UI surface (persistent
+// pane vs modal) the user was navigating when they followed a backlink.
+// Used by returnCursor so Back can restore them to the same surface.
+type backlinksSurface int
+
+const (
+	surfacePane backlinksSurface = iota
+	surfaceModal
+)
+
+// returnCursor remembers where the user was in the backlinks list
+// before following a backlink. Single-slot: we only restore on the
+// next Back navigation, and only if it lands on the file we recorded.
+type returnCursor struct {
+	sourceFile string
+	cursor     int
+	surface    backlinksSurface
+}
+
+// clamp returns v constrained to [lo, hi]. If hi < lo (e.g. when the
+// list is empty so hi = -1), returns lo. Used on cursor restoration
+// to defend against the list shrinking between follow and return.
+func clamp(v, lo, hi int) int {
+	if hi < lo {
+		return lo
+	}
+	if v < lo {
+		return lo
+	}
+	if v > hi {
+		return hi
+	}
+	return v
+}
+
 // shouldShowBacklinks returns true when the persistent pane is open
 // AND the terminal is tall enough for it.
 func (m Model) shouldShowBacklinks() bool {
