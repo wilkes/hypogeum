@@ -252,3 +252,23 @@ func (m *Model) maybeRestoreReturnCursor(path string) {
 		m.refreshBacklinksModal(path)
 	}
 }
+
+// nextFocus returns the focus that Tab should move to. Three-way
+// cycle (tree → content → backlinks → tree) when the persistent pane
+// is open and visible; otherwise two-way (tree ↔ content).
+func (m Model) nextFocus() focus {
+	if m.shouldShowBacklinks() {
+		switch m.focus {
+		case focusTree:
+			return focusContent
+		case focusContent:
+			return focusBacklinks
+		case focusBacklinks:
+			return focusTree
+		}
+	}
+	if m.focus == focusTree {
+		return focusContent
+	}
+	return focusTree
+}

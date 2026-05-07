@@ -184,11 +184,7 @@ func (m *Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return *m, tea.Quit
 
 	case key.Matches(msg, m.keys.FocusTog):
-		if m.focus == focusTree {
-			m.focus = focusContent
-		} else {
-			m.focus = focusTree
-		}
+		m.focus = m.nextFocus()
 		return *m, nil
 
 	case key.Matches(msg, m.keys.Back):

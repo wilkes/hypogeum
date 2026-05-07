@@ -419,3 +419,54 @@ func TestEsc_RestoresFocusFromBacklinksWithoutClosingPane(t *testing.T) {
 		t.Fatalf("Esc should NOT close the pane")
 	}
 }
+
+func TestTab_ThreeWayCycleWhenPaneVisible(t *testing.T) {
+	dir := t.TempDir()
+	writeTUITestFile(t, dir, "a.md", "see [[c]].")
+	writeTUITestFile(t, dir, "c.md", "i am c.")
+
+	m := sized(t, dir, "")
+	m.openFile(filepath.Join(dir, "c.md"))
+	m = pressRune(t, m, 'b')          // pane open, focus on backlinks
+	if m.focus != focusBacklinks {
+		t.Fatalf("setup: expected focusBacklinks, got %v", m.focus)
+	}
+
+	// Tab: backlinks → tree.
+	m = pressKey(t, m, tea.KeyMsg{Type: tea.KeyTab})
+	if m.focus != focusTree {
+		t.Fatalf("Tab from backlinks: expected focusTree, got %v", m.focus)
+	}
+
+	// Tab: tree → content.
+	m = pressKey(t, m, tea.KeyMsg{Type: tea.KeyTab})
+	if m.focus != focusContent {
+		t.Fatalf("Tab from tree: expected focusContent, got %v", m.focus)
+	}
+
+	// Tab: content → backlinks (pane is visible).
+	m = pressKey(t, m, tea.KeyMsg{Type: tea.KeyTab})
+	if m.focus != focusBacklinks {
+		t.Fatalf("Tab from content: expected focusBacklinks, got %v", m.focus)
+	}
+}
+
+func TestTab_TwoWayWhenPaneClosed(t *testing.T) {
+	dir := t.TempDir()
+	writeTUITestFile(t, dir, "a.md", "hi.")
+	m := sized(t, dir, "")
+	m.openFile(filepath.Join(dir, "a.md"))
+
+	// Pane closed (default). Cycle: tree ↔ content.
+	if m.focus != focusTree {
+		t.Fatalf("default focus should be tree, got %v", m.focus)
+	}
+	m = pressKey(t, m, tea.KeyMsg{Type: tea.KeyTab})
+	if m.focus != focusContent {
+		t.Fatalf("expected focusContent, got %v", m.focus)
+	}
+	m = pressKey(t, m, tea.KeyMsg{Type: tea.KeyTab})
+	if m.focus != focusTree {
+		t.Fatalf("expected focusTree (skipping invisible backlinks), got %v", m.focus)
+	}
+}
