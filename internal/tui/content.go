@@ -45,10 +45,9 @@ func (m *Model) openFile(path string) {
 	m.refreshContent(path)
 }
 
-// navigateTo opens path and moves the tree cursor to its row. Used by
-// any code path that lands on a file from outside Back/Forward (initial
-// open, link follow, picker selection) — Back/Forward have their own
-// flow because they don't add a history entry.
+// navigateTo opens path and moves the tree cursor to its row. Used
+// anywhere a file is opened by user action other than Back/Forward
+// (those have their own path because they don't push history).
 func (m *Model) navigateTo(path string) {
 	m.openFile(path)
 	m.selectInTree(path)
