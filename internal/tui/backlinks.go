@@ -93,6 +93,18 @@ func applyHighlight(s string) string {
 	return out
 }
 
+// refreshBacklinksModal repopulates m.modalVP from the vault for the
+// currently-open file. Called when opening the backlinks modal.
+func (m *Model) refreshBacklinksModal(currentPath string) {
+	if m.vault == nil || currentPath == "" {
+		m.modalVP.SetContent("")
+		return
+	}
+	m.resizeModalVP()
+	links := m.vault.Backlinks(currentPath)
+	m.modalVP.SetContent(formatBacklinks(links, m.root, m.modalVP.Width))
+}
+
 // truncateOneLine collapses internal newlines into spaces and clips
 // to width with an ellipsis if needed.
 func truncateOneLine(s string, width int) string {

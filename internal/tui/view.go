@@ -39,7 +39,11 @@ func (m Model) View() string {
 	footer := m.renderFooter()
 	// Scan must run on the final composed output so BubbleZone records
 	// each zone's absolute screen position.
-	return zone.Scan(lipgloss.JoinVertical(lipgloss.Left, body, footer))
+	base := zone.Scan(lipgloss.JoinVertical(lipgloss.Left, body, footer))
+	if m.modalOpen != modalNone {
+		return overlayModal(base, m.renderModal(m.modalVP.View()), m.width, m.height)
+	}
+	return base
 }
 
 func (m Model) renderTree() string {

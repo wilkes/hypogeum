@@ -110,6 +110,31 @@ func (m *Model) clickTree(row int) (tea.Model, tea.Cmd) {
 }
 
 func (m *Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	// Modal-toggle keys take priority — they open/close modals regardless
+	// of which pane has focus. They must run before the modal-forwarding
+	// block below so that pressing a toggle while a modal is open swaps
+	// or closes it.
+	if key.Matches(msg, m.keys.OpenBacklinksModal) {
+		if m.modalOpen == modalBacklinks {
+			m.modalOpen = modalNone
+		} else {
+			m.modalOpen = modalBacklinks
+			m.refreshBacklinksModal(m.history.Current())
+		}
+		return *m, nil
+	}
+
+	// While a modal is open, Esc closes it; other keys go to the modal viewport.
+	if m.modalOpen != modalNone {
+		if key.Matches(msg, m.keys.ClearLink) { // Esc
+			m.modalOpen = modalNone
+			return *m, nil
+		}
+		var cmd tea.Cmd
+		m.modalVP, cmd = m.modalVP.Update(msg)
+		return *m, cmd
+	}
+
 	switch {
 	case key.Matches(msg, m.keys.Quit):
 		return *m, tea.Quit

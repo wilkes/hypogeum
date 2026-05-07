@@ -55,3 +55,24 @@ func TestBacklinksPaneAutoCollapsesBelowThreshold(t *testing.T) {
 		t.Fatalf("expected backlinks visible at height %d", m.height)
 	}
 }
+
+func TestBacklinksModalToggleAndEsc(t *testing.T) {
+	dir := t.TempDir()
+	writeTUITestFile(t, dir, "a.md", "see [[b]].")
+	writeTUITestFile(t, dir, "b.md", "i am b.")
+
+	m, _ := New(dir, "")
+	mm, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 40})
+	m = mm.(Model)
+	m.openFile(filepath.Join(dir, "b.md"))
+
+	out, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'B'}})
+	if out.(Model).modalOpen != modalBacklinks {
+		t.Fatalf("after B: expected modalBacklinks, got %v", out.(Model).modalOpen)
+	}
+
+	out2, _ := out.(Model).Update(tea.KeyMsg{Type: tea.KeyEsc})
+	if out2.(Model).modalOpen != modalNone {
+		t.Fatalf("after Esc: expected modalNone, got %v", out2.(Model).modalOpen)
+	}
+}

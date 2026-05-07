@@ -1,6 +1,8 @@
 package tui
 
 import (
+	"strings"
+
 	"github.com/charmbracelet/bubbles/viewport"
 	"github.com/charmbracelet/lipgloss"
 )
@@ -67,4 +69,40 @@ func (m *Model) resizeModalVP() {
 // newModalViewport returns an empty viewport sized 0,0 — resized later.
 func newModalViewport() viewport.Model {
 	return viewport.New(0, 0)
+}
+
+// overlayModal places `modal` in the center of `base`. Both are full
+// width/height strings; this implementation renders `modal` over the
+// corresponding rows of `base`.
+//
+// spliceLine is naive about ANSI escapes inside `base` — Phase 1 modal
+// is opaque enough that this works in practice.
+func overlayModal(base, modal string, termW, termH int) string {
+	x, y, _, _ := modalGeometry(termW, termH)
+
+	baseLines := strings.Split(base, "\n")
+	modalLines := strings.Split(modal, "\n")
+
+	for i, ml := range modalLines {
+		row := y + i
+		if row < 0 || row >= len(baseLines) {
+			continue
+		}
+		baseLines[row] = spliceLine(baseLines[row], ml, x)
+	}
+	return strings.Join(baseLines, "\n")
+}
+
+// spliceLine overlays `over` onto `base` starting at column x.
+// Naive ASCII-aware version (does not handle ANSI escapes inside
+// `base` — modal is opaque so this is acceptable for Phase 1).
+func spliceLine(base, over string, x int) string {
+	if x >= len(base) {
+		return base + strings.Repeat(" ", x-len(base)) + over
+	}
+	end := x + len(over)
+	if end > len(base) {
+		return base[:x] + over
+	}
+	return base[:x] + over + base[end:]
 }
