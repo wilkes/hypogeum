@@ -11,6 +11,17 @@ Index of everything in `docs/`. Browse this folder by running `hypogeum docs/` f
   - [`internal/tui`](packages/tui.md) — Bubble Tea Model that wires everything together
   - [`internal/watch`](packages/watch.md) — fsnotify-backed live-update watcher, debounced and tree-aware
 
+## Concepts
+
+Cross-cutting ideas that show up in multiple specs and packages. Each is its own short file so the backlinks pane (`b`) shows everywhere it's referenced. Wikilink syntax is used here (and only here) to dogfood the feature; the rest of this index uses standard markdown links so GitHub renders them.
+
+- [[sentinel-render]] — how link positions are recovered from Glamour's ANSI output
+- [[vault-index]] — forward + reverse reference index, basename resolution, proximity tiebreak
+- [[diagnostics]] — the warn/error stream, footer transient, log file, `?` modal
+- [[modal-geometry]] — single-modal invariant and layout recompute on `B`/`?`
+- [[return-cursor]] — path-keyed cursor restoration on Back navigation
+- [[link-cursor]] — content-pane link selection (`n`/`p`/`Enter`/`Esc`) state model
+
 ## Active feature work
 
 - [Link following](link-following.md) — Phase 1 shipped (cursor-based selection). Phase 2 (inline highlight) and Phase 3 (external URL launch) outlined.
