@@ -201,11 +201,7 @@ const (
 
 The single-modal invariant means `B` and `?` are mutually exclusive: opening one closes the other. This keeps geometry simple (one modal viewport, swap content) and avoids stacking semantics.
 
-Geometry:
-- `b` toggles `backlinksOpen`. When open *and* `m.height >= 20`, the content viewport's height is reduced by `backlinksHeight` (8 rows including its border). When `m.height < 20`, `backlinksOpen` is honored as state but the pane is suppressed in `View()` — when the terminal grows again, the pane reappears.
-- `B` toggles the backlinks modal (`modalOpen = modalBacklinks` ↔ `modalNone`). While any modal is open, geometry is recomputed as if `backlinksOpen` were false — the content viewport reclaims the bottom-split's space, and the modal renders centered on top. When the modal is dismissed, if `backlinksOpen` is still true, the bottom split reappears. Modal size is fixed at 60% width × 60% height (clamped to min 40 cols × 12 rows, max 120 cols × 40 rows).
-- `?` toggles the log viewer modal (`modalOpen = modalLogs` ↔ `modalNone`). Same modal infrastructure and geometry as the backlinks modal. Mutually exclusive with the backlinks modal — pressing `?` while backlinks modal is open swaps the modal's content; pressing `B` while logs modal is open does the same.
-- `Esc` dismisses the modal (any kind) first, then clears the link cursor as today, then is a no-op.
+Geometry: `b` toggles the persistent bottom split; `B` and `?` toggle modals that share one viewport with single-modal-swap semantics. While any modal is open, the bottom split is suppressed; closing the modal restores it. Below `m.height = 20` the persistent pane is suppressed but its state is preserved. Full layout rules and `Esc` priority chain: [[modal-geometry]].
 
 Backlink row rendering (used by both surfaces):
 
