@@ -11,6 +11,8 @@ import (
 	"github.com/yuin/goldmark"
 	"github.com/yuin/goldmark/ast"
 	"github.com/yuin/goldmark/text"
+
+	"github.com/wilkes/hypogeum/internal/tree"
 )
 
 // Vault is the in-memory index of a directory of markdown files.
@@ -206,7 +208,7 @@ func (v *Vault) walkAndIndex() error {
 			}
 			return nil
 		}
-		if strings.HasPrefix(d.Name(), ".") || !isMarkdownExt(d.Name()) {
+		if strings.HasPrefix(d.Name(), ".") || !tree.IsMarkdown(d.Name()) {
 			return nil
 		}
 		v.indexFile(path)
@@ -345,16 +347,6 @@ func nameKey(path string) string {
 		name = name[:i]
 	}
 	return strings.ToLower(name)
-}
-
-// isMarkdownExt mirrors internal/tree's set; duplicated to keep vault
-// independent of tree.
-func isMarkdownExt(name string) bool {
-	switch strings.ToLower(filepath.Ext(name)) {
-	case ".md", ".markdown", ".mdown", ".mkd":
-		return true
-	}
-	return false
 }
 
 // fileCount is exposed for tests. Not part of the public API.
