@@ -247,12 +247,10 @@ func (v *Vault) indexFile(path string) {
 // and returns one reference per outgoing link, in document order.
 // Standard ast.Link nodes become refStdLink entries; wikilinkNode
 // instances become refWikilink entries.
-//
-// Snippet extraction and resolution against the vault are *not* done
-// here — they happen in later stages once those subsystems exist.
 func extractReferences(src, fromPath string) []reference {
+	source := []byte(src)
 	md := goldmark.New(goldmark.WithExtensions(WikilinkExtension))
-	doc := md.Parser().Parse(text.NewReader([]byte(src)))
+	doc := md.Parser().Parse(text.NewReader(source))
 
 	var refs []reference
 	_ = ast.Walk(doc, func(n ast.Node, entering bool) (ast.WalkStatus, error) {
@@ -272,15 +270,20 @@ func extractReferences(src, fromPath string) []reference {
 				block:       nn.Block,
 				alias:       nn.Alias,
 				displayText: disp,
+				snippet:     snippetForNode(nn, source, disp),
+				line:        lineForNode(nn, source),
 			})
 			return ast.WalkSkipChildren, nil
 		case *ast.Link:
 			href := string(nn.Destination)
+			disp := linkText(nn, source)
 			refs = append(refs, reference{
 				kind:        refStdLink,
 				target:      href,
 				resolved:    resolveStdLink(fromPath, href),
-				displayText: linkText(nn, []byte(src)),
+				displayText: disp,
+				snippet:     snippetForNode(nn, source, disp),
+				line:        lineForNode(nn, source),
 			})
 			return ast.WalkSkipChildren, nil
 		case *ast.Image:
@@ -289,6 +292,36 @@ func extractReferences(src, fromPath string) []reference {
 		return ast.WalkContinue, nil
 	})
 	return refs
+}
+
+// lineForNode returns the 1-indexed line of the first segment of n
+// within source. Returns 0 if no segment is found (rare — defensive).
+func lineForNode(n ast.Node, source []byte) int {
+	var seg *ast.Text
+	_ = ast.Walk(n, func(c ast.Node, entering bool) (ast.WalkStatus, error) {
+		if !entering {
+			return ast.WalkContinue, nil
+		}
+		if t, ok := c.(*ast.Text); ok {
+			seg = t
+			return ast.WalkStop, nil
+		}
+		return ast.WalkContinue, nil
+	})
+	if seg == nil {
+		return 0
+	}
+	stop := seg.Segment.Start
+	if stop > len(source) {
+		stop = len(source)
+	}
+	line := 1
+	for i := 0; i < stop; i++ {
+		if source[i] == '\n' {
+			line++
+		}
+	}
+	return line
 }
 
 // linkText returns the visible text under a *ast.Link.
