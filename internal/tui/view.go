@@ -71,9 +71,11 @@ func (m Model) renderFooter() string {
 	keys := []string{
 		"tab: switch", "↑↓/jk: move", "enter: open",
 		"n/p: link", "esc: clear",
+		"b: backlinks", "B: modal", "?: logs",
 		"h/←: back", "l/→: forward", "q: quit",
 	}
 	help := strings.Join(keys, "  ")
+
 	loc := m.status
 	if loc != "" {
 		// Show path relative to root for brevity.
@@ -81,6 +83,14 @@ func (m Model) renderFooter() string {
 			loc = rel
 		}
 	}
+
+	transientStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("11"))
+	if m.diag != nil {
+		if e, ok := m.diag.transientStatus(); ok {
+			loc = transientStyle.Render(e.Severity.String() + ": " + e.Message)
+		}
+	}
+
 	hasLink := false
 	if sel := m.selectedLink(); sel != nil {
 		loc = fmt.Sprintf("%s%s [%d/%d] %s", linkFooterMarker, loc, m.linkCursor+1, len(m.links), linkLabel(*sel, m.root))

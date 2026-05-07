@@ -9,6 +9,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	tea "github.com/charmbracelet/bubbletea"
 )
 
 func TestDiagnosticsRingBufferBoundedAndOrdered(t *testing.T) {
@@ -142,5 +144,18 @@ func TestDefaultLogPathMacOS(t *testing.T) {
 	want := "/tmp/home-test/Library/Logs/hypogeum/hypogeum.log"
 	if got != want {
 		t.Fatalf("macOS path: got %q want %q", got, want)
+	}
+}
+
+func TestFooterShowsTransientDiagnostic(t *testing.T) {
+	dir := t.TempDir()
+	m, _ := New(dir, "")
+	mm, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 40})
+	m = mm.(Model)
+	m.diag.Warn("transient warning here")
+
+	rendered := m.renderFooter()
+	if !strings.Contains(rendered, "transient warning here") {
+		t.Fatalf("expected transient warning in footer, got: %q", rendered)
 	}
 }
