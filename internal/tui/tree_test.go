@@ -183,3 +183,39 @@ func TestModel_TreeShownAtNarrowWidths(t *testing.T) {
 		}
 	}
 }
+
+// TestModel_ToggleTreeNarrowFlipsIntentOnly checks that ^b at a narrow
+// terminal width flips treeVisible (so the user's preference survives
+// resize) but doesn't change effective state — treeShown stays false
+// because the width gate fails.
+func TestModel_ToggleTreeNarrowFlipsIntentOnly(t *testing.T) {
+	root := writeFixture(t)
+	m := sized(t, root, "")
+
+	updated, _ := m.Update(tea.WindowSizeMsg{Width: 60, Height: 30})
+	m = updated.(Model)
+	if !m.treeVisible {
+		t.Fatalf("precondition: treeVisible should still be true after a narrow resize")
+	}
+	if m.treeShown() {
+		t.Fatalf("precondition: treeShown should be false at 60 cols")
+	}
+
+	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyCtrlB})
+	m = updated.(Model)
+	if m.treeVisible {
+		t.Errorf("treeVisible should be false after ^b")
+	}
+	if m.treeShown() {
+		t.Errorf("treeShown should still be false at 60 cols")
+	}
+
+	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyCtrlB})
+	m = updated.(Model)
+	if !m.treeVisible {
+		t.Errorf("treeVisible should flip back to true on second ^b")
+	}
+	if m.treeShown() {
+		t.Errorf("treeShown should still be false at 60 cols")
+	}
+}
