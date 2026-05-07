@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -25,6 +26,21 @@ func writeFixture(t *testing.T) string {
 			t.Fatal(err)
 		}
 		if err := os.WriteFile(full, []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	return root
+}
+
+// writeTallFixture lays down n flat markdown files (file000.md, file001.md, …)
+// at root, used to exercise tree-pane scrolling when the row count exceeds
+// terminal height.
+func writeTallFixture(t *testing.T, n int) string {
+	t.Helper()
+	root := t.TempDir()
+	for i := 0; i < n; i++ {
+		full := filepath.Join(root, fmt.Sprintf("file%03d.md", i))
+		if err := os.WriteFile(full, []byte("# "+filepath.Base(full)+"\n"), 0o644); err != nil {
 			t.Fatal(err)
 		}
 	}
