@@ -301,3 +301,32 @@ func TestBacklinksPane_BackRestoresCursor(t *testing.T) {
 		t.Fatalf("expected returnCursor cleared, got %+v", m.returnCursor)
 	}
 }
+
+func TestBacklinksModal_BackReopensModal(t *testing.T) {
+	dir := t.TempDir()
+	writeTUITestFile(t, dir, "a.md", "see [[c]].")
+	writeTUITestFile(t, dir, "b.md", "also [[c]].")
+	writeTUITestFile(t, dir, "c.md", "i am c.")
+
+	m := sized(t, dir, "")
+	cAbs := filepath.Join(dir, "c.md")
+	m.openFile(cAbs)
+	m = pressRune(t, m, 'B')          // open modal
+	m = pressRune(t, m, 'j')          // cursor → 1
+	m = pressKey(t, m, tea.KeyMsg{Type: tea.KeyEnter}) // follow + close modal
+	if m.modalOpen != modalNone {
+		t.Fatalf("expected modal closed during follow, got %v", m.modalOpen)
+	}
+
+	m = pressRune(t, m, 'h')
+
+	if m.modalOpen != modalBacklinks {
+		t.Fatalf("expected modalBacklinks reopened on Back, got %v", m.modalOpen)
+	}
+	if m.backlinkCursor != 1 {
+		t.Fatalf("expected cursor=1 restored, got %d", m.backlinkCursor)
+	}
+	if m.returnCursor != nil {
+		t.Fatalf("expected returnCursor cleared, got %+v", m.returnCursor)
+	}
+}
