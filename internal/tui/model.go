@@ -180,22 +180,20 @@ func New(root, initialFile string) (Model, error) {
 	}
 
 	if initialFile != "" {
-		m.openFile(initialFile)
-		m.selectInTree(initialFile)
+		m.navigateTo(initialFile)
 	} else if first := firstTopLevelFile(rootNode); first != nil {
-		m.openFile(first.Path)
-		m.selectInTree(first.Path)
+		m.navigateTo(first.Path)
 	}
 
 	return m, nil
 }
 
 func (m Model) Init() tea.Cmd {
-	cmds := []tea.Cmd{clearTransientAfter(time.Second), m.picker.Init()}
+	tick := clearTransientAfter(time.Second)
 	if cmd := m.waitForFSEvent(); cmd != nil {
-		cmds = append(cmds, cmd)
+		return tea.Batch(cmd, tick)
 	}
-	return tea.Batch(cmds...)
+	return tick
 }
 
 // waitForFSEvent returns a tea.Cmd that blocks until the watcher emits an
@@ -271,9 +269,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, clearTransientAfter(time.Second)
 	}
 
-	// Forward async picker messages (notably readDirMsg from Init) to the
-	// picker while it's open. Without this the picker never receives the
-	// directory listing it queued during open.
+	// filepicker dispatches readDirMsg async (from Init); deliver it
+	// while the picker is open.
 	if m.modalOpen == modalPicker {
 		var cmd tea.Cmd
 		m.picker, cmd = m.picker.Update(msg)

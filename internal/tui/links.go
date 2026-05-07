@@ -31,8 +31,7 @@ func (m *Model) cycleLink(step int) {
 func (m *Model) followLink(l markdown.Link) {
 	switch l.Resolved.Kind {
 	case markdown.LinkLocalFile:
-		m.openFile(l.Resolved.Target)
-		m.selectInTree(l.Resolved.Target)
+		m.navigateTo(l.Resolved.Target)
 	case markdown.LinkExternal:
 		m.status = "external link not opened: " + l.Href
 	case markdown.LinkAnchor:

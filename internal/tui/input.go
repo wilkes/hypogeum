@@ -186,8 +186,7 @@ func (m *Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			if did, path := m.picker.DidSelectFile(msg); did {
 				m.modalOpen = modalNone
 				m.focus = m.prevFocus
-				m.openFile(path)
-				m.selectInTree(path)
+				m.navigateTo(path)
 			}
 			return *m, cmd
 		}
