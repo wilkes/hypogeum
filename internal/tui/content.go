@@ -106,6 +106,11 @@ func firstTopLevelFile(root *tree.Node) *tree.Node {
 func (m *Model) handleFSEvent(ev watch.Event) {
 	switch ev.Kind {
 	case watch.StructureChanged:
+		if m.vault != nil {
+			if err := m.vault.Rebuild(); err != nil {
+				m.diag.Warn("vault rebuild failed: " + err.Error())
+			}
+		}
 		selectedPath := ""
 		if m.treeCursor < len(m.flatTree) {
 			selectedPath = m.flatTree[m.treeCursor].node.Path
@@ -136,6 +141,13 @@ func (m *Model) handleFSEvent(ev watch.Event) {
 		}
 
 	case watch.FileModified:
+		if m.vault != nil {
+			for _, p := range ev.Paths {
+				if err := m.vault.RefreshFile(p); err != nil {
+					m.diag.Warn("vault refresh failed: " + err.Error())
+				}
+			}
+		}
 		cur := m.history.Current()
 		if cur == "" {
 			return
