@@ -58,11 +58,7 @@ type ASTLink struct {
 
 ## The sentinel trick
 
-Glamour produces ANSI output with no positional metadata, no OSC 8 hyperlinks, and theme-dependent SGR codes. To recover link positions, the instrumented renderer injects two ASCII separator characters (`\x1c` FS, `\x1e` RS) into Glamour's `link_text` style as `block_prefix` / `block_suffix`. Glamour writes them literally around every link's visible text and they survive word-wrap. A single pass over the rendered output strips the sentinels, records each pair's `(row, text)`, and cross-references with the AST.
-
-The instrumented style is a JSON deep clone of whichever environment default Glamour's `WithAutoStyle` would resolve to (NoTTY / dark / light), with sentinels grafted onto the `LinkText` primitive. **Do not** pass a partial config to `WithStyles` — it's replace-only, not merge, and silently drops everything not specified. There's a regression test that catches this.
-
-Full design rationale and the alternatives we rejected (OSC 8, coordinate mapping) are in [link-following.md](../link-following.md).
+The instrumented renderer injects two ASCII separator characters (`\x1c` FS, `\x1e` RS) into Glamour's `link_text` style. Glamour writes them around every link's visible text; a post-pass strips them and records `(row, text)`. The cleaned output is byte-equivalent to a plain `Render` on the same terminal — verified by `TestRenderWithLinks_OutputIsCleanRender`. Full design and rationale (including the alternatives we rejected): [[sentinel-render]].
 
 ## Why goldmark is a direct dependency
 
