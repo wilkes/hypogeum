@@ -9,6 +9,18 @@ import (
 	zone "github.com/lrstanley/bubblezone"
 )
 
+// twoPaneMinWidth is the minimum terminal width at which the tree
+// pane is shown alongside content. Mirrors backlinksMinTotalHeight on
+// the height axis.
+const twoPaneMinWidth = 80
+
+// shouldShowTree gates m.treeVisible (user intent) on terminal width.
+// Below twoPaneMinWidth the tree is force-hidden so content gets the
+// full window. Parallels shouldShowBacklinks on the height axis.
+func (m Model) shouldShowTree() bool {
+	return m.treeVisible && m.width >= twoPaneMinWidth
+}
+
 func (m Model) View() string {
 	if m.width == 0 {
 		return "" // wait for first WindowSizeMsg
@@ -31,7 +43,7 @@ func (m Model) View() string {
 	}
 
 	var body string
-	if m.treeVisible {
+	if m.shouldShowTree() {
 		treeStyled := zone.Mark(zoneTreePane, paneStyle(m.focus == focusTree).
 			Width(m.treeWidth()).
 			Height(m.height-4).
@@ -122,17 +134,10 @@ func (m Model) renderFooter() string {
 }
 
 func (m Model) treeWidth() int {
-	if !m.treeVisible {
+	if !m.shouldShowTree() {
 		return 0
 	}
-	w := m.width / 4
-	if w < 20 {
-		w = 20
-	}
-	if w > 40 {
-		w = 40
-	}
-	return w
+	return clamp(m.width/4, 16, 40)
 }
 
 func paneStyle(focused bool) lipgloss.Style {

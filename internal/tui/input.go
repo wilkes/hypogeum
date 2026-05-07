@@ -139,9 +139,6 @@ func (m *Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	// viewport widths recompute through the existing WindowSizeMsg path.
 	if key.Matches(msg, m.keys.ToggleTree) {
 		m.treeVisible = !m.treeVisible
-		if !m.treeVisible && m.focus == focusTree {
-			m.focus = focusContent
-		}
 		return m.Update(tea.WindowSizeMsg{Width: m.width, Height: m.height})
 	}
 

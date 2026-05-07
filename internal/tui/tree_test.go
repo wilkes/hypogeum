@@ -129,3 +129,132 @@ func TestModel_SelectInTreeExpandsAncestors(t *testing.T) {
 		t.Errorf("cursor should land on deep.md, got row %d in tree of %d", m.treeCursor, len(m.flatTree))
 	}
 }
+
+// TestModel_TreeForceHiddenAt60Cols checks that below twoPaneMinWidth
+// the tree pane is rendered as 0 cells wide, its row text doesn't
+// appear in the View output, and focus snaps off the (now invisible)
+// tree onto the content pane so keystrokes route somewhere visible.
+func TestModel_TreeForceHiddenAt60Cols(t *testing.T) {
+	root := writeFixture(t)
+	m := sized(t, root, "")
+	if m.focus != focusTree {
+		t.Fatalf("precondition: model defaults to focusTree, got %v", m.focus)
+	}
+
+	updated, _ := m.Update(tea.WindowSizeMsg{Width: 60, Height: 30})
+	m = updated.(Model)
+
+	if m.shouldShowTree() {
+		t.Errorf("shouldShowTree() should be false at 60 cols")
+	}
+	if w := m.treeWidth(); w != 0 {
+		t.Errorf("treeWidth() = %d at 60 cols, want 0", w)
+	}
+	if m.focus == focusTree {
+		t.Errorf("focus should snap off focusTree when the tree is force-hidden")
+	}
+	// The tree pane renders directory rows with a chevron prefix; the
+	// rendered content of index.md may contain "notes/" inside link
+	// text, so we match the chevron+name shape that only appears in the
+	// tree pane.
+	if strings.Contains(m.View(), "▾ notes/") || strings.Contains(m.View(), "▸ notes/") {
+		t.Errorf("View() should not contain tree row 'notes/' at 60 cols")
+	}
+}
+
+// TestModel_TreeShownAtNarrowWidths checks that shouldShowTree() returns false
+// when the terminal is narrower than twoPaneMinWidth even if the user
+// has the tree visible — the threshold gates effective state.
+func TestModel_TreeShownAtNarrowWidths(t *testing.T) {
+	root := writeFixture(t)
+	m := sized(t, root, "")
+
+	if !m.treeVisible {
+		t.Fatalf("tree should default to visible")
+	}
+
+	cases := []struct {
+		width int
+		want  bool
+	}{
+		{60, false},
+		{79, false},
+		{80, true},
+		{120, true},
+	}
+	for _, tc := range cases {
+		updated, _ := m.Update(tea.WindowSizeMsg{Width: tc.width, Height: 30})
+		mm := updated.(Model)
+		if got := mm.shouldShowTree(); got != tc.want {
+			t.Errorf("width=%d: shouldShowTree() = %v, want %v", tc.width, got, tc.want)
+		}
+	}
+}
+
+// TestModel_ToggleTreeNarrowFlipsIntentOnly checks that ^b at a narrow
+// terminal width flips treeVisible (so the user's preference survives
+// resize) but doesn't change effective state — shouldShowTree stays false
+// because the width gate fails.
+func TestModel_ToggleTreeNarrowFlipsIntentOnly(t *testing.T) {
+	root := writeFixture(t)
+	m := sized(t, root, "")
+
+	updated, _ := m.Update(tea.WindowSizeMsg{Width: 60, Height: 30})
+	m = updated.(Model)
+	if !m.treeVisible {
+		t.Fatalf("precondition: treeVisible should still be true after a narrow resize")
+	}
+	if m.shouldShowTree() {
+		t.Fatalf("precondition: shouldShowTree should be false at 60 cols")
+	}
+
+	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyCtrlB})
+	m = updated.(Model)
+	if m.treeVisible {
+		t.Errorf("treeVisible should be false after ^b")
+	}
+	if m.shouldShowTree() {
+		t.Errorf("shouldShowTree should still be false at 60 cols")
+	}
+
+	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyCtrlB})
+	m = updated.(Model)
+	if !m.treeVisible {
+		t.Errorf("treeVisible should flip back to true on second ^b")
+	}
+	if m.shouldShowTree() {
+		t.Errorf("shouldShowTree should still be false at 60 cols")
+	}
+}
+
+// TestModel_TreeReturnsOnGrow checks that after a narrow resize hides
+// the tree, growing the terminal back above the threshold restores it
+// without any user interaction — m.treeVisible is preserved. Focus
+// stays on content (where it was snapped during the narrow window);
+// restoring it to the tree on grow would yank focus away from whatever
+// the user was reading.
+func TestModel_TreeReturnsOnGrow(t *testing.T) {
+	root := writeFixture(t)
+	m := sized(t, root, "")
+
+	updated, _ := m.Update(tea.WindowSizeMsg{Width: 60, Height: 30})
+	m = updated.(Model)
+	if m.shouldShowTree() {
+		t.Fatalf("precondition: shouldShowTree should be false at 60 cols")
+	}
+	if m.focus == focusTree {
+		t.Fatalf("precondition: narrow resize should have snapped focus off the tree")
+	}
+
+	updated, _ = m.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
+	m = updated.(Model)
+	if !m.shouldShowTree() {
+		t.Errorf("shouldShowTree should be true after growing to 100 cols")
+	}
+	if w := m.treeWidth(); w == 0 {
+		t.Errorf("treeWidth should be nonzero after growing to 100 cols")
+	}
+	if m.focus == focusTree {
+		t.Errorf("focus should not be restored to tree on grow; stays where the user left it")
+	}
+}
