@@ -19,9 +19,9 @@ No new packages. All work in `internal/tui`. The change mirrors an existing patt
 | State name | Meaning |
 |---|---|
 | `m.treeVisible bool` | *user wants* tree shown (toggled by `^b`) |
-| `m.treeShown() bool` | tree is *currently* shown — `treeVisible && m.width >= twoPaneMinWidth` |
+| `m.shouldShowTree() bool` | tree is *currently* shown — `treeVisible && m.width >= twoPaneMinWidth` |
 
-Everywhere that reads `m.treeVisible` for layout decisions reads `m.treeShown()` instead. `^b` continues to toggle `m.treeVisible`; nothing else writes it.
+Everywhere that reads `m.treeVisible` for layout decisions reads `m.shouldShowTree()` instead. `^b` continues to toggle `m.treeVisible`; nothing else writes it.
 
 `twoPaneMinWidth = 80` constant. Rationale: 16+40+2=58 is the hard floor where a useful tree (16 cells) + comfortable prose (40 cells) + borders fit. 80 leaves a comfortable cushion before the layout feels cramped, and matches the `maxRenderWidth = 80` cap on Glamour wrap width — below 80 cols, single-pane already gets the full window for prose.
 
@@ -36,12 +36,12 @@ Everywhere that reads `m.treeVisible` for layout decisions reads `m.treeShown()`
 ```go
 const twoPaneMinWidth = 80
 
-func (m Model) treeShown() bool {
+func (m Model) shouldShowTree() bool {
     return m.treeVisible && m.width >= twoPaneMinWidth
 }
 
 func (m Model) treeWidth() int {
-    if !m.treeShown() {
+    if !m.shouldShowTree() {
         return 0
     }
     w := m.width / 4
@@ -55,7 +55,7 @@ func (m Model) treeWidth() int {
 }
 ```
 
-The `View()` body conditional changes from `if m.treeVisible` to `if m.treeShown()`. No other view-side change.
+The `View()` body conditional changes from `if m.treeVisible` to `if m.shouldShowTree()`. No other view-side change.
 
 **`model.go`:** unchanged. The `WindowSizeMsg` handler reads `m.treeWidth()`, which now correctly returns 0 below the threshold without further logic.
 
@@ -63,7 +63,7 @@ The `View()` body conditional changes from `if m.treeVisible` to `if m.treeShown
 
 **`content.go`:** new `m.normalizeFocus()` helper enforces the invariant *focus may not point at a pane that isn't shown*. Called from the `WindowSizeMsg` handler so resize paths repair focus consistently — covers both the user dragging the terminal narrower (auto-hide) and `^b` (which routes through a synthetic resize). Focus on grow is intentionally *not* restored: snapping focus back to the tree as soon as it reappears would yank the cursor away from whatever the user is reading.
 
-**`CLAUDE.md`:** add a gotcha note explaining the `treeVisible` (intent) / `treeShown()` (effective) split and the 80-col threshold; cross-reference the parallel `backlinksOpen` / `shouldShowBacklinks()` pair.
+**`CLAUDE.md`:** add a gotcha note explaining the `treeVisible` (intent) / `shouldShowTree()` (effective) split and the 80-col threshold; cross-reference the parallel `backlinksOpen` / `shouldShowBacklinks()` pair.
 
 ## UX behavior
 
@@ -80,9 +80,9 @@ When the user resizes from 60 → 100 cols, the tree returns automatically with 
 
 New tests in `internal/tui/tree_test.go` (or a new `narrow_test.go`, depending on file size when implementing):
 
-1. **Tree force-hidden below threshold.** Construct model, send `WindowSizeMsg{Width: 60, Height: 30}`, assert `m.treeShown() == false`, `m.treeWidth() == 0`, and `View()` doesn't contain a tree row's name.
-2. **`^b` flips intent silently when narrow.** Open at 60 cols, send `^b`, assert `m.treeVisible == false` (state flipped), `m.treeShown() == false` (still not shown). Send `^b` again, assert `m.treeVisible == true`, `m.treeShown() == false`.
-3. **Tree returns when window grows.** Start at 60 cols (tree force-hidden), send `WindowSizeMsg{Width: 100, Height: 30}`, assert `m.treeShown() == true` because the default `m.treeVisible == true` was preserved.
+1. **Tree force-hidden below threshold.** Construct model, send `WindowSizeMsg{Width: 60, Height: 30}`, assert `m.shouldShowTree() == false`, `m.treeWidth() == 0`, and `View()` doesn't contain a tree row's name.
+2. **`^b` flips intent silently when narrow.** Open at 60 cols, send `^b`, assert `m.treeVisible == false` (state flipped), `m.shouldShowTree() == false` (still not shown). Send `^b` again, assert `m.treeVisible == true`, `m.shouldShowTree() == false`.
+3. **Tree returns when window grows.** Start at 60 cols (tree force-hidden), send `WindowSizeMsg{Width: 100, Height: 30}`, assert `m.shouldShowTree() == true` because the default `m.treeVisible == true` was preserved.
 4. **Threshold boundary regression.** At exactly 80 cols (`twoPaneMinWidth`), assert tree is shown. At 79 cols, assert tree is hidden.
 
 The existing test fixture in `helpers_test.go` opens at `Width: 120, Height: 40` — well above the threshold; existing tests are undisturbed.

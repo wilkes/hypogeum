@@ -9,18 +9,15 @@ import (
 	zone "github.com/lrstanley/bubblezone"
 )
 
-// twoPaneMinWidth is the minimum terminal width at which the two-pane
-// (tree + content) layout is shown. Below this, the tree pane is force-
-// hidden regardless of user intent — content gets the full window so
-// prose has room to wrap. Mirrors backlinksMinTotalHeight on the height
-// axis. Tunable; if 80 turns out to be wrong, change here.
+// twoPaneMinWidth is the minimum terminal width at which the tree
+// pane is shown alongside content. Mirrors backlinksMinTotalHeight on
+// the height axis.
 const twoPaneMinWidth = 80
 
-// treeShown returns true when the tree pane is currently rendered.
-// Combines user intent (m.treeVisible, toggled by ^b) with terminal
-// width: even with treeVisible=true, narrow terminals force-hide the
-// pane. Same intent/effective-state pattern as shouldShowBacklinks.
-func (m Model) treeShown() bool {
+// shouldShowTree gates m.treeVisible (user intent) on terminal width.
+// Below twoPaneMinWidth the tree is force-hidden so content gets the
+// full window. Parallels shouldShowBacklinks on the height axis.
+func (m Model) shouldShowTree() bool {
 	return m.treeVisible && m.width >= twoPaneMinWidth
 }
 
@@ -46,7 +43,7 @@ func (m Model) View() string {
 	}
 
 	var body string
-	if m.treeShown() {
+	if m.shouldShowTree() {
 		treeStyled := zone.Mark(zoneTreePane, paneStyle(m.focus == focusTree).
 			Width(m.treeWidth()).
 			Height(m.height-4).
@@ -137,17 +134,10 @@ func (m Model) renderFooter() string {
 }
 
 func (m Model) treeWidth() int {
-	if !m.treeShown() {
+	if !m.shouldShowTree() {
 		return 0
 	}
-	w := m.width / 4
-	if w < 16 {
-		w = 16
-	}
-	if w > 40 {
-		w = 40
-	}
-	return w
+	return clamp(m.width/4, 16, 40)
 }
 
 func paneStyle(focused bool) lipgloss.Style {

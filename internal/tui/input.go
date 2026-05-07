@@ -64,10 +64,7 @@ func (m *Model) handleMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 
 	// Tree row hit. Iterate visible rows; the first that contains the
 	// click wins. Stops at len(m.flatTree) so out-of-range zones from a
-	// previous longer document don't match — also defends against stale
-	// zones left over when the tree pane is hidden (^b or narrow-width
-	// auto-hide), since len(m.flatTree) is bounded by what's currently
-	// rendered.
+	// previous longer document don't match.
 	for i := range m.flatTree {
 		if zone.Get(treeRowZoneID(i)).InBounds(msg) {
 			return m.clickTree(i)
@@ -139,9 +136,7 @@ func (m *Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 
 	// Toggle the tree pane. Synthesize a resize so the renderer and
-	// viewport widths recompute through the existing WindowSizeMsg path,
-	// which also runs normalizeFocus to repair focus if the tree just
-	// disappeared from under it.
+	// viewport widths recompute through the existing WindowSizeMsg path.
 	if key.Matches(msg, m.keys.ToggleTree) {
 		m.treeVisible = !m.treeVisible
 		return m.Update(tea.WindowSizeMsg{Width: m.width, Height: m.height})

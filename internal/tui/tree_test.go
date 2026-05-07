@@ -144,8 +144,8 @@ func TestModel_TreeForceHiddenAt60Cols(t *testing.T) {
 	updated, _ := m.Update(tea.WindowSizeMsg{Width: 60, Height: 30})
 	m = updated.(Model)
 
-	if m.treeShown() {
-		t.Errorf("treeShown() should be false at 60 cols")
+	if m.shouldShowTree() {
+		t.Errorf("shouldShowTree() should be false at 60 cols")
 	}
 	if w := m.treeWidth(); w != 0 {
 		t.Errorf("treeWidth() = %d at 60 cols, want 0", w)
@@ -162,7 +162,7 @@ func TestModel_TreeForceHiddenAt60Cols(t *testing.T) {
 	}
 }
 
-// TestModel_TreeShownAtNarrowWidths checks that treeShown() returns false
+// TestModel_TreeShownAtNarrowWidths checks that shouldShowTree() returns false
 // when the terminal is narrower than twoPaneMinWidth even if the user
 // has the tree visible — the threshold gates effective state.
 func TestModel_TreeShownAtNarrowWidths(t *testing.T) {
@@ -185,15 +185,15 @@ func TestModel_TreeShownAtNarrowWidths(t *testing.T) {
 	for _, tc := range cases {
 		updated, _ := m.Update(tea.WindowSizeMsg{Width: tc.width, Height: 30})
 		mm := updated.(Model)
-		if got := mm.treeShown(); got != tc.want {
-			t.Errorf("width=%d: treeShown() = %v, want %v", tc.width, got, tc.want)
+		if got := mm.shouldShowTree(); got != tc.want {
+			t.Errorf("width=%d: shouldShowTree() = %v, want %v", tc.width, got, tc.want)
 		}
 	}
 }
 
 // TestModel_ToggleTreeNarrowFlipsIntentOnly checks that ^b at a narrow
 // terminal width flips treeVisible (so the user's preference survives
-// resize) but doesn't change effective state — treeShown stays false
+// resize) but doesn't change effective state — shouldShowTree stays false
 // because the width gate fails.
 func TestModel_ToggleTreeNarrowFlipsIntentOnly(t *testing.T) {
 	root := writeFixture(t)
@@ -204,8 +204,8 @@ func TestModel_ToggleTreeNarrowFlipsIntentOnly(t *testing.T) {
 	if !m.treeVisible {
 		t.Fatalf("precondition: treeVisible should still be true after a narrow resize")
 	}
-	if m.treeShown() {
-		t.Fatalf("precondition: treeShown should be false at 60 cols")
+	if m.shouldShowTree() {
+		t.Fatalf("precondition: shouldShowTree should be false at 60 cols")
 	}
 
 	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyCtrlB})
@@ -213,8 +213,8 @@ func TestModel_ToggleTreeNarrowFlipsIntentOnly(t *testing.T) {
 	if m.treeVisible {
 		t.Errorf("treeVisible should be false after ^b")
 	}
-	if m.treeShown() {
-		t.Errorf("treeShown should still be false at 60 cols")
+	if m.shouldShowTree() {
+		t.Errorf("shouldShowTree should still be false at 60 cols")
 	}
 
 	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyCtrlB})
@@ -222,8 +222,8 @@ func TestModel_ToggleTreeNarrowFlipsIntentOnly(t *testing.T) {
 	if !m.treeVisible {
 		t.Errorf("treeVisible should flip back to true on second ^b")
 	}
-	if m.treeShown() {
-		t.Errorf("treeShown should still be false at 60 cols")
+	if m.shouldShowTree() {
+		t.Errorf("shouldShowTree should still be false at 60 cols")
 	}
 }
 
@@ -239,8 +239,8 @@ func TestModel_TreeReturnsOnGrow(t *testing.T) {
 
 	updated, _ := m.Update(tea.WindowSizeMsg{Width: 60, Height: 30})
 	m = updated.(Model)
-	if m.treeShown() {
-		t.Fatalf("precondition: treeShown should be false at 60 cols")
+	if m.shouldShowTree() {
+		t.Fatalf("precondition: shouldShowTree should be false at 60 cols")
 	}
 	if m.focus == focusTree {
 		t.Fatalf("precondition: narrow resize should have snapped focus off the tree")
@@ -248,8 +248,8 @@ func TestModel_TreeReturnsOnGrow(t *testing.T) {
 
 	updated, _ = m.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
 	m = updated.(Model)
-	if !m.treeShown() {
-		t.Errorf("treeShown should be true after growing to 100 cols")
+	if !m.shouldShowTree() {
+		t.Errorf("shouldShowTree should be true after growing to 100 cols")
 	}
 	if w := m.treeWidth(); w == 0 {
 		t.Errorf("treeWidth should be nonzero after growing to 100 cols")

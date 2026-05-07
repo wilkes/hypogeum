@@ -59,7 +59,7 @@ func (m *Model) navigateTo(path string) {
 // from under focusTree, keystrokes would route to an invisible pane;
 // snapping to focusContent keeps them effective.
 func (m *Model) normalizeFocus() {
-	if m.focus == focusTree && !m.treeShown() {
+	if m.focus == focusTree && !m.shouldShowTree() {
 		m.focus = focusContent
 	}
 }
