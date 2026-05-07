@@ -219,19 +219,7 @@ Watcher integration:
 
 ### Wikilink resolution rules
 
-In order of precedence:
-
-1. **Exact basename match, case-insensitive.** `[[Foo]]` matches `Foo.md`, `foo.md`, `notes/FOO.md`.
-2. **Proximity tiebreaker on multiple matches.** Compute the relative path from `fromFile` to each candidate; pick the shortest. Lexical path order breaks ties.
-3. **No-match → unresolved.** Renderer emits the styled placeholder.
-
-Forms:
-- `[[Foo]]` — name is `Foo`, display is `Foo`.
-- `[[Foo|display]]` — name is `Foo`, display is `display`.
-- `[[Foo#Heading]]` — name is `Foo`, anchor is `slug(Heading)`, display is `Foo > Heading` if no alias else alias.
-- `[[Foo^block]]` — name is `Foo`, block is `block`. Phase 1 lands the user at the file; the block ID is recorded but not located. Documented limitation.
-
-The "name" stored in the index for lookups is `strings.ToLower(basenameWithoutExt(path))`. The `names` index is `map[string][]string` (lowercased basename → list of absolute paths), so disambiguation can iterate candidates.
+Basename-only, case-insensitive, with a proximity tiebreaker on multiple matches; no-match emits the broken-style placeholder. Forms: `[[Foo]]`, `[[Foo|display]]`, `[[Foo#Heading]]`, `[[Foo^block]]` — the latter records the block ID but Phase 1 only lands the user at the file. Full rules, internal index layout, and refresh semantics: [[vault-index]].
 
 ## Data flow
 
