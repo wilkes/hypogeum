@@ -76,3 +76,14 @@ func TestModel_OpensInitialFile(t *testing.T) {
 		t.Errorf("expected rendered content to contain 'First'")
 	}
 }
+
+func TestNewBuildsVault(t *testing.T) {
+	dir := t.TempDir()
+	m, err := New(dir, "")
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	if m.vault == nil {
+		t.Fatalf("expected vault to be constructed")
+	}
+}

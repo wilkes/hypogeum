@@ -12,6 +12,7 @@ import (
 	"github.com/wilkes/hypogeum/internal/markdown"
 	"github.com/wilkes/hypogeum/internal/nav"
 	"github.com/wilkes/hypogeum/internal/tree"
+	"github.com/wilkes/hypogeum/internal/vault"
 	"github.com/wilkes/hypogeum/internal/watch"
 )
 
@@ -51,6 +52,9 @@ type Model struct {
 	// watcher observes the tree for live updates. nil if construction
 	// failed (we degrade gracefully — the browser still works without it).
 	watcher *watch.Watcher
+
+	vault *vault.Vault
+	diag  *diagnostics
 }
 
 // linkFooterMarker is rendered into the footer when a link is selected.
@@ -120,6 +124,16 @@ func New(root, initialFile string) (Model, error) {
 	// behavior rather than refusing to start.
 	if w, err := watch.New(root); err == nil {
 		m.watcher = w
+	}
+
+	m.diag = newDiagnostics(diagOpts{LogPath: defaultLogPath()})
+	if v, err := vault.Build(root, m.diag); err == nil {
+		m.vault = v
+	} else {
+		m.diag.Warn("vault build failed: " + err.Error())
+	}
+	if m.watcher == nil {
+		m.diag.Warn("filesystem watcher unavailable; live updates disabled")
 	}
 
 	if initialFile != "" {
