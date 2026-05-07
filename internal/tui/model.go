@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/charmbracelet/bubbles/filepicker"
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	zone "github.com/lrstanley/bubblezone"
@@ -67,7 +66,7 @@ type Model struct {
 
 	modalOpen modalKind
 	modalVP   viewport.Model
-	picker    filepicker.Model
+	picker    pickerState
 
 	width, height int
 	keys          keyMap
@@ -169,7 +168,7 @@ func New(root, initialFile string) (Model, error) {
 	m.backlinksVP = viewport.New(0, 0)
 	m.modalVP = newModalViewport()
 	m.treeVP = viewport.New(0, 0)
-	m.picker = newPicker(root)
+	m.picker = newPicker()
 
 	// A watcher is best-effort: if it fails (e.g. inotify limits hit on
 	// Linux), we silently fall back to the previous reload-on-navigate
@@ -281,14 +280,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 		return m, clearTransientAfter(time.Second)
-	}
-
-	// filepicker dispatches readDirMsg async (from Init); deliver it
-	// while the picker is open.
-	if m.modalOpen == modalPicker {
-		var cmd tea.Cmd
-		m.picker, cmd = m.picker.Update(msg)
-		return m, cmd
 	}
 
 	// Forward other messages to the viewport when content has focus.
