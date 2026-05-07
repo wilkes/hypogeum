@@ -219,3 +219,26 @@ func TestModel_ToggleTreeNarrowFlipsIntentOnly(t *testing.T) {
 		t.Errorf("treeShown should still be false at 60 cols")
 	}
 }
+
+// TestModel_TreeReturnsOnGrow checks that after a narrow resize hides
+// the tree, growing the terminal back above the threshold restores it
+// without any user interaction — m.treeVisible is preserved.
+func TestModel_TreeReturnsOnGrow(t *testing.T) {
+	root := writeFixture(t)
+	m := sized(t, root, "")
+
+	updated, _ := m.Update(tea.WindowSizeMsg{Width: 60, Height: 30})
+	m = updated.(Model)
+	if m.treeShown() {
+		t.Fatalf("precondition: treeShown should be false at 60 cols")
+	}
+
+	updated, _ = m.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
+	m = updated.(Model)
+	if !m.treeShown() {
+		t.Errorf("treeShown should be true after growing to 100 cols")
+	}
+	if w := m.treeWidth(); w == 0 {
+		t.Errorf("treeWidth should be nonzero after growing to 100 cols")
+	}
+}
