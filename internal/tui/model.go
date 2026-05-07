@@ -49,6 +49,9 @@ type Model struct {
 	backlinksVP    viewport.Model
 	backlinkCursor int
 
+	modalOpen modalKind
+	modalVP   viewport.Model
+
 	width, height int
 	keys          keyMap
 	status        string // last error or info message
@@ -137,6 +140,7 @@ func New(root, initialFile string) (Model, error) {
 	}
 	m.flatTree = flatten(rootNode, 0)
 	m.backlinksVP = viewport.New(0, 0)
+	m.modalVP = newModalViewport()
 
 	// A watcher is best-effort: if it fails (e.g. inotify limits hit on
 	// Linux), we silently fall back to the previous reload-on-navigate
@@ -195,6 +199,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.viewport.Height = m.height - 4
 		m.backlinksVP.Width = contentWidth
 		m.backlinksVP.Height = backlinksHeight - 2
+		m.resizeModalVP()
 		// Cap the renderer's wrap width so prose stays readable on wide
 		// terminals; the viewport pane keeps the full available width.
 		renderWidth := min(contentWidth, maxRenderWidth)
