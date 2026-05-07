@@ -17,6 +17,7 @@ const (
 	modalNone modalKind = iota
 	modalBacklinks
 	modalLogs
+	modalPicker
 )
 
 // modalGeometry returns the (x, y, w, h) of the modal frame given the

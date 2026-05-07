@@ -45,7 +45,11 @@ func (m Model) View() string {
 	// each zone's absolute screen position.
 	base := zone.Scan(lipgloss.JoinVertical(lipgloss.Left, body, footer))
 	if m.modalOpen != modalNone {
-		return overlayModal(base, m.renderModal(m.modalVP.View()), m.width, m.height)
+		body := m.modalVP.View()
+		if m.modalOpen == modalPicker {
+			body = m.picker.View()
+		}
+		return overlayModal(base, m.renderModal(body), m.width, m.height)
 	}
 	return base
 }
@@ -82,7 +86,7 @@ func (m Model) renderFooter() string {
 		"tab: switch", "↑↓/jk: move", "enter: open",
 		"n/p: link", "esc: clear",
 		"b: backlinks", "B: modal", "?: logs",
-		"h/←: back", "l/→: forward", "q: quit",
+		"^p: open", "h/←: back", "l/→: forward", "q: quit",
 	}
 	help := strings.Join(keys, "  ")
 

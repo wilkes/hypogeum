@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/charmbracelet/bubbles/filepicker"
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	zone "github.com/lrstanley/bubblezone"
@@ -65,6 +66,7 @@ type Model struct {
 
 	modalOpen modalKind
 	modalVP   viewport.Model
+	picker    filepicker.Model
 
 	width, height int
 	keys          keyMap
@@ -165,6 +167,7 @@ func New(root, initialFile string) (Model, error) {
 	m.flatTree = m.flattenVisible()
 	m.backlinksVP = viewport.New(0, 0)
 	m.modalVP = newModalViewport()
+	m.picker = newPicker(root)
 
 	// A watcher is best-effort: if it fails (e.g. inotify limits hit on
 	// Linux), we silently fall back to the previous reload-on-navigate
@@ -188,11 +191,11 @@ func New(root, initialFile string) (Model, error) {
 }
 
 func (m Model) Init() tea.Cmd {
-	tick := clearTransientAfter(time.Second)
+	cmds := []tea.Cmd{clearTransientAfter(time.Second), m.picker.Init()}
 	if cmd := m.waitForFSEvent(); cmd != nil {
-		return tea.Batch(cmd, tick)
+		cmds = append(cmds, cmd)
 	}
-	return tick
+	return tea.Batch(cmds...)
 }
 
 // waitForFSEvent returns a tea.Cmd that blocks until the watcher emits an
@@ -233,6 +236,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.backlinksVP.Width = contentWidth
 		m.backlinksVP.Height = backlinksHeight - 2
 		m.resizeModalVP()
+		m.resizePicker()
 		// Cap the renderer's wrap width so prose stays readable on wide
 		// terminals; the viewport pane keeps the full available width.
 		renderWidth := min(contentWidth, maxRenderWidth)
@@ -265,6 +269,15 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 		return m, clearTransientAfter(time.Second)
+	}
+
+	// Forward async picker messages (notably readDirMsg from Init) to the
+	// picker while it's open. Without this the picker never receives the
+	// directory listing it queued during open.
+	if m.modalOpen == modalPicker {
+		var cmd tea.Cmd
+		m.picker, cmd = m.picker.Update(msg)
+		return m, cmd
 	}
 
 	// Forward other messages to the viewport when content has focus.
