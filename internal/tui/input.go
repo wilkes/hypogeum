@@ -129,10 +129,9 @@ func (m *Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		})
 	case key.Matches(msg, m.keys.OpenPicker):
 		return *m, m.toggleModal(modalPicker, func() tea.Cmd {
-			// Reset each time so the picker starts at the vault root
-			// regardless of where a previous open left it.
-			m.picker.CurrentDirectory = m.root
-			return m.picker.Init()
+			// Each open starts fresh: cursor at top, all dirs collapsed.
+			m.picker.reset(m.rootNode)
+			return nil
 		})
 	}
 
@@ -148,21 +147,33 @@ func (m *Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	// viewport. Logs modal keeps the viewport-scroll fall-through.
 	if m.modalOpen != modalNone {
 		if m.modalOpen == modalPicker {
-			// Esc at the vault root closes the picker; deeper, filepicker
-			// handles Esc as "go up one directory" via its native keymap.
-			if key.Matches(msg, m.keys.ClearLink) && m.picker.CurrentDirectory == m.root {
+			switch {
+			case key.Matches(msg, m.keys.ClearLink): // Esc closes from any depth
 				m.modalOpen = modalNone
 				m.focus = m.prevFocus
-				return *m, nil
+			case key.Matches(msg, m.keys.Up):
+				if m.picker.cursor > 0 {
+					m.picker.cursor--
+					m.picker.refreshVP()
+				}
+			case key.Matches(msg, m.keys.Down):
+				if m.picker.cursor < len(m.picker.flat)-1 {
+					m.picker.cursor++
+					m.picker.refreshVP()
+				}
+			case key.Matches(msg, m.keys.ToggleFolder):
+				m.picker.toggleAt(m.rootNode)
+			case key.Matches(msg, m.keys.Open):
+				if path, ok := m.picker.selectedFile(); ok {
+					m.modalOpen = modalNone
+					m.focus = m.prevFocus
+					m.navigateTo(path)
+				} else {
+					// On a directory: Enter expands/collapses it, same as space.
+					m.picker.toggleAt(m.rootNode)
+				}
 			}
-			var cmd tea.Cmd
-			m.picker, cmd = m.picker.Update(msg)
-			if did, path := m.picker.DidSelectFile(msg); did {
-				m.modalOpen = modalNone
-				m.focus = m.prevFocus
-				m.navigateTo(path)
-			}
-			return *m, cmd
+			return *m, nil
 		}
 		if key.Matches(msg, m.keys.ClearLink) { // Esc
 			m.modalOpen = modalNone
