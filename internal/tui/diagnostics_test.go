@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -100,5 +101,46 @@ func testDiagOpts(t *testing.T, logPath string) diagOpts {
 	return diagOpts{
 		LogPath: logPath,
 		Now:     time.Now,
+	}
+}
+
+func TestDefaultLogPathHonorsXDG(t *testing.T) {
+	if runtime.GOOS == "darwin" {
+		t.Skip("XDG path is not the default on macOS")
+	}
+	t.Setenv("XDG_STATE_HOME", "/tmp/xdg-test-state")
+	t.Setenv("HOME", "/tmp/home-test")
+
+	got := defaultLogPath()
+	want := "/tmp/xdg-test-state/hypogeum/hypogeum.log"
+	if got != want {
+		t.Fatalf("XDG path: got %q want %q", got, want)
+	}
+}
+
+func TestDefaultLogPathFallsBackToLocalState(t *testing.T) {
+	if runtime.GOOS == "darwin" {
+		t.Skip("Linux fallback is not used on macOS")
+	}
+	t.Setenv("XDG_STATE_HOME", "")
+	t.Setenv("HOME", "/tmp/home-test")
+
+	got := defaultLogPath()
+	want := "/tmp/home-test/.local/state/hypogeum/hypogeum.log"
+	if got != want {
+		t.Fatalf("fallback path: got %q want %q", got, want)
+	}
+}
+
+func TestDefaultLogPathMacOS(t *testing.T) {
+	if runtime.GOOS != "darwin" {
+		t.Skip("macOS-specific test")
+	}
+	t.Setenv("HOME", "/tmp/home-test")
+
+	got := defaultLogPath()
+	want := "/tmp/home-test/Library/Logs/hypogeum/hypogeum.log"
+	if got != want {
+		t.Fatalf("macOS path: got %q want %q", got, want)
 	}
 }

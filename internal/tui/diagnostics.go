@@ -3,6 +3,8 @@ package tui
 import (
 	"encoding/json"
 	"os"
+	"path/filepath"
+	"runtime"
 	"sync"
 	"time"
 )
@@ -75,8 +77,10 @@ func newDiagnostics(opts diagOpts) *diagnostics {
 		// Best-effort file open. Failure leaves logFile nil — diagnostics
 		// continue working in-memory. This is the "no writable path"
 		// branch from the spec.
-		if f, err := os.OpenFile(opts.LogPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644); err == nil {
-			d.logFile = f
+		if err := ensureLogDir(opts.LogPath); err == nil {
+			if f, err := os.OpenFile(opts.LogPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644); err == nil {
+				d.logFile = f
+			}
 		}
 	}
 	return d
@@ -148,4 +152,28 @@ func (d *diagnostics) close() error {
 		return err
 	}
 	return nil
+}
+
+// defaultLogPath returns the platform-conventional path for the
+// hypogeum log file. The directory is *not* created here — the file
+// open will create the directory tree if needed (see ensureLogDir).
+//
+// The path is best-effort: callers should treat any open failure as
+// "file logging disabled" rather than fatal.
+func defaultLogPath() string {
+	home := os.Getenv("HOME")
+	if runtime.GOOS == "darwin" {
+		return filepath.Join(home, "Library", "Logs", "hypogeum", "hypogeum.log")
+	}
+	if xdg := os.Getenv("XDG_STATE_HOME"); xdg != "" {
+		return filepath.Join(xdg, "hypogeum", "hypogeum.log")
+	}
+	return filepath.Join(home, ".local", "state", "hypogeum", "hypogeum.log")
+}
+
+// ensureLogDir creates the directory containing path if it doesn't
+// exist. Errors are returned to the caller, which treats them as
+// "disable file logging."
+func ensureLogDir(path string) error {
+	return os.MkdirAll(filepath.Dir(path), 0o755)
 }
