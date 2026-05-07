@@ -14,13 +14,8 @@ func (m Model) View() string {
 		return "" // wait for first WindowSizeMsg
 	}
 
-	tree := m.renderTree()
 	content := m.viewport.View()
 
-	treeStyled := zone.Mark(zoneTreePane, paneStyle(m.focus == focusTree).
-		Width(m.treeWidth()).
-		Height(m.height-4).
-		Render(tree))
 	contentHeight := m.height - 4
 	if m.shouldShowBacklinks() {
 		contentHeight -= backlinksHeight
@@ -35,7 +30,16 @@ func (m Model) View() string {
 		contentColumn = lipgloss.JoinVertical(lipgloss.Left, contentStyled, bl)
 	}
 
-	body := lipgloss.JoinHorizontal(lipgloss.Top, treeStyled, contentColumn)
+	var body string
+	if m.treeVisible {
+		treeStyled := zone.Mark(zoneTreePane, paneStyle(m.focus == focusTree).
+			Width(m.treeWidth()).
+			Height(m.height-4).
+			Render(m.renderTree()))
+		body = lipgloss.JoinHorizontal(lipgloss.Top, treeStyled, contentColumn)
+	} else {
+		body = contentColumn
+	}
 	footer := m.renderFooter()
 	// Scan must run on the final composed output so BubbleZone records
 	// each zone's absolute screen position.
@@ -56,7 +60,13 @@ func (m Model) renderTree() string {
 		}
 		name := row.node.Name
 		if row.node.IsDir {
-			name = name + "/"
+			chevron := "▾ "
+			if m.isCollapsed(row.node.Path) {
+				chevron = "▸ "
+			}
+			name = chevron + name + "/"
+		} else {
+			name = "  " + name
 		}
 		// Wrap the whole row (minus its trailing newline) in a per-row
 		// zone so a click anywhere on the row routes to that index.
@@ -108,6 +118,9 @@ func (m Model) renderFooter() string {
 }
 
 func (m Model) treeWidth() int {
+	if !m.treeVisible {
+		return 0
+	}
 	w := m.width / 4
 	if w < 20 {
 		w = 20

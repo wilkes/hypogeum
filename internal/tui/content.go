@@ -3,6 +3,7 @@ package tui
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 
 	zone "github.com/lrstanley/bubblezone"
 
@@ -73,12 +74,65 @@ func (m *Model) refreshContent(path string) {
 	m.refreshBacklinks(path)
 }
 
-// selectInTree moves the tree cursor to the row matching path, if present.
+// selectInTree moves the tree cursor to the row matching path, expanding
+// any collapsed ancestors first so a history navigation into a collapsed
+// subtree lands on a visible row.
 func (m *Model) selectInTree(path string) {
+	if m.expandAncestors(path) {
+		m.flatTree = m.flattenVisible()
+	}
+	if i := m.rowIndexByPath(path); i >= 0 {
+		m.treeCursor = i
+	}
+}
+
+// rowIndexByPath returns the index of the visible tree row whose node
+// path equals path, or -1 if no such row is visible.
+func (m *Model) rowIndexByPath(path string) int {
 	for i, row := range m.flatTree {
 		if row.node.Path == path {
-			m.treeCursor = i
-			return
+			return i
+		}
+	}
+	return -1
+}
+
+// cursorRow returns the row under the tree cursor, or zero-value+false
+// when flatTree is empty or the cursor is out of bounds.
+func (m *Model) cursorRow() (treeRow, bool) {
+	if m.treeCursor < 0 || m.treeCursor >= len(m.flatTree) {
+		return treeRow{}, false
+	}
+	return m.flatTree[m.treeCursor], true
+}
+
+// toggleFolder flips the collapsed state of the directory at path,
+// rebuilds flatTree, and keeps the cursor on that directory's row.
+func (m *Model) toggleFolder(path string) {
+	if m.isCollapsed(path) {
+		delete(m.expanded, path) // back to default-expanded
+	} else {
+		m.expanded[path] = false
+	}
+	m.flatTree = m.flattenVisible()
+	if i := m.rowIndexByPath(path); i >= 0 {
+		m.treeCursor = i
+	}
+}
+
+// expandAncestors removes "collapsed" overrides on every directory that
+// contains path, returning true if anything changed.
+func (m *Model) expandAncestors(path string) bool {
+	changed := false
+	for dir := filepath.Dir(path); ; dir = filepath.Dir(dir) {
+		if v, ok := m.expanded[dir]; ok && !v {
+			delete(m.expanded, dir)
+			changed = true
+		}
+		// Stop at the configured root, or at the filesystem root where
+		// filepath.Dir is its own fixed point ("/" on unix, "C:\" on win).
+		if dir == m.root || dir == filepath.Dir(dir) {
+			return changed
 		}
 	}
 }
@@ -122,17 +176,12 @@ func (m *Model) handleFSEvent(ev watch.Event) {
 			return
 		}
 		m.rootNode = newRoot
-		m.flatTree = flatten(newRoot, 0)
+		m.flatTree = m.flattenVisible()
 		// Restore cursor by path; if the previously selected node is gone,
 		// clamp to a valid index rather than dangling past the end.
 		m.treeCursor = 0
-		if selectedPath != "" {
-			for i, row := range m.flatTree {
-				if row.node.Path == selectedPath {
-					m.treeCursor = i
-					break
-				}
-			}
+		if i := m.rowIndexByPath(selectedPath); i >= 0 {
+			m.treeCursor = i
 		}
 		if m.treeCursor >= len(m.flatTree) {
 			m.treeCursor = len(m.flatTree) - 1
@@ -166,17 +215,30 @@ func (m *Model) handleFSEvent(ev watch.Event) {
 	}
 }
 
-// flatten produces a depth-tagged linear list from a tree, used for
-// keyboard navigation. The root itself is included.
-func flatten(n *tree.Node, depth int) []treeRow {
-	if n == nil {
+// flattenVisible produces a depth-tagged linear list of rows, skipping
+// children of collapsed directories. The root is always included.
+func (m *Model) flattenVisible() []treeRow {
+	if m.rootNode == nil {
 		return nil
 	}
-	rows := []treeRow{{node: n, depth: depth}}
-	for _, c := range n.Children {
-		rows = append(rows, flatten(c, depth+1)...)
+	var rows []treeRow
+	var walk func(n *tree.Node, depth int)
+	walk = func(n *tree.Node, depth int) {
+		rows = append(rows, treeRow{node: n, depth: depth})
+		if n.IsDir && !m.isCollapsed(n.Path) {
+			for _, c := range n.Children {
+				walk(c, depth+1)
+			}
+		}
 	}
+	walk(m.rootNode, 0)
 	return rows
+}
+
+// isCollapsed reports whether the directory at path is currently collapsed.
+func (m *Model) isCollapsed(path string) bool {
+	v, ok := m.expanded[path]
+	return ok && !v
 }
 
 // scrollToLine positions line n of the rendered output about 25% from

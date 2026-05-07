@@ -70,6 +70,14 @@ type Model struct {
 	keys          keyMap
 	status        string // last error or info message
 
+	// treeVisible toggles the left tree pane on/off (^b). When false, the
+	// content pane gets the full window width.
+	treeVisible bool
+	// expanded stores deviations from the default-expanded state, keyed by
+	// directory absolute path. expanded[path]==false means collapsed.
+	// Missing keys read as expanded — see isCollapsed.
+	expanded map[string]bool
+
 	// watcher observes the tree for live updates. nil if construction
 	// failed (we degrade gracefully — the browser still works without it).
 	watcher *watch.Watcher
@@ -141,18 +149,20 @@ func New(root, initialFile string) (Model, error) {
 	}
 
 	m := Model{
-		root:       root,
-		rootNode:   rootNode,
-		viewport:   viewport.New(0, 0),
-		renderer:   r,
-		history:    nav.New(),
-		focus:      focusTree,
-		keys:       defaultKeys(),
-		linkCursor: -1,
-		vault:      v,
-		diag:       diag,
+		root:        root,
+		rootNode:    rootNode,
+		viewport:    viewport.New(0, 0),
+		renderer:    r,
+		history:     nav.New(),
+		focus:       focusTree,
+		keys:        defaultKeys(),
+		linkCursor:  -1,
+		vault:       v,
+		diag:        diag,
+		treeVisible: true,
+		expanded:    map[string]bool{},
 	}
-	m.flatTree = flatten(rootNode, 0)
+	m.flatTree = m.flattenVisible()
 	m.backlinksVP = viewport.New(0, 0)
 	m.modalVP = newModalViewport()
 
@@ -209,7 +219,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.width, m.height = msg.Width, msg.Height
 		treeWidth := m.treeWidth()
-		contentWidth := m.width - treeWidth - 2 // borders / padding
+		contentWidth := m.width - treeWidth
+		if treeWidth > 0 {
+			contentWidth -= 2 // pane borders only count when both panes are rendered
+		}
 		if contentWidth < 20 {
 			contentWidth = 20
 		}

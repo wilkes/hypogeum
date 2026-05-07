@@ -143,6 +143,16 @@ func (m *Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return *m, nil
 	}
 
+	// Toggle the tree pane. Synthesize a resize so the renderer and
+	// viewport widths recompute through the existing WindowSizeMsg path.
+	if key.Matches(msg, m.keys.ToggleTree) {
+		m.treeVisible = !m.treeVisible
+		if !m.treeVisible && m.focus == focusTree {
+			m.focus = focusContent
+		}
+		return m.Update(tea.WindowSizeMsg{Width: m.width, Height: m.height})
+	}
+
 	// While a modal is open, Esc closes it. Backlinks modal gets explicit
 	// cursor handling so j/k move the selection rather than scroll the
 	// viewport. Logs modal keeps the viewport-scroll fall-through.
@@ -291,12 +301,19 @@ func (m *Model) handleTreeKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if m.treeCursor < len(m.flatTree)-1 {
 			m.treeCursor++
 		}
+	case key.Matches(msg, m.keys.ToggleFolder):
+		if row, ok := m.cursorRow(); ok && row.node.IsDir {
+			m.toggleFolder(row.node.Path)
+		}
 	case key.Matches(msg, m.keys.Open):
-		if m.treeCursor < len(m.flatTree) {
-			row := m.flatTree[m.treeCursor]
-			if !row.node.IsDir {
-				m.openFile(row.node.Path)
-			}
+		row, ok := m.cursorRow()
+		if !ok {
+			return *m, nil
+		}
+		if row.node.IsDir {
+			m.toggleFolder(row.node.Path)
+		} else {
+			m.openFile(row.node.Path)
 		}
 	}
 	return *m, nil
