@@ -216,7 +216,7 @@ relative/path/to/source.md:42
 
 The basename and line on row 1; one-line snippet (truncated to viewport width with ellipsis) on row 2. The `[[Note Name]]` display text within the snippet is wrapped in bright SGR. Two visible rows per backlink; navigation keys (`j`/`k`) move by *backlink*, not by row.
 
-Following a backlink: `Enter` calls `openFile(SourceFile)` (history records the visit). The link cursor is reset on the new page; we do not auto-scroll to the wikilink occurrence in the source file. (Phase 2 could add that — passing `Line` through to `openFile`. Out of scope here.)
+Following a backlink: `Enter` calls `openFile(SourceFile)` (history records the visit). The link cursor is reset on the new page. Cursor navigation, scroll-to-line, and back-restores-cursor are detailed in the follow-on spec [backlinks-navigation-design](2026-05-07-backlinks-navigation-design.md). Phase 2 still includes pre-selecting the matching inline link in `m.links`.
 
 Watcher integration:
 - `fsEventMsg` handler now also calls `vault.RefreshFile(path)` (on `FileModified`) or `vault.Rebuild()` (on `StructureChanged`) before refreshing content. The refresh is synchronous; vault sizes are small enough that the extra work is invisible to the user. If profiling later proves otherwise, this becomes a `tea.Cmd`.
