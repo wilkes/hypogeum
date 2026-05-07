@@ -240,6 +240,9 @@ func (m *Model) handleBacklinksKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.ensureCursorVisible(&m.backlinksVP)
 		}
 		return *m, nil
+	case key.Matches(msg, m.keys.Open):
+		m.followBacklink()
+		return *m, nil
 	}
 	return *m, nil
 }

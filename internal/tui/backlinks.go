@@ -198,3 +198,30 @@ func (m Model) activeBacklinksSurface() backlinksSurface {
 	}
 	return surfacePane
 }
+
+// followBacklink navigates to the SourceFile of the currently selected
+// backlink, recording return state for a subsequent h (Back) restore.
+// No-op if no backlink is selected (e.g. empty list).
+func (m *Model) followBacklink() {
+	if m.backlinkCursor < 0 || m.backlinkCursor >= len(m.backlinks) {
+		return
+	}
+	bl := m.backlinks[m.backlinkCursor]
+
+	// Save return state BEFORE openFile mutates history.
+	m.returnCursor = &returnCursor{
+		sourceFile: m.history.Current(),
+		cursor:     m.backlinkCursor,
+		surface:    m.activeBacklinksSurface(),
+	}
+
+	// Close modal if active; persistent pane stays open and
+	// re-populates for the new file's own backlinks.
+	if m.modalOpen == modalBacklinks {
+		m.modalOpen = modalNone
+	}
+	m.focus = focusContent
+
+	m.openFile(bl.SourceFile)
+	m.scrollToLine(bl.Line)
+}

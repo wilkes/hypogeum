@@ -154,6 +154,46 @@ func TestFormatBacklinks_HighlightsSelectedRow(t *testing.T) {
 	}
 }
 
+func TestBacklinksPane_EnterFollows(t *testing.T) {
+	dir := t.TempDir()
+	writeTUITestFile(t, dir, "a.md", "blah blah\n\nsee [[c]] in here.\n")
+	writeTUITestFile(t, dir, "c.md", "i am c.")
+
+	m := sized(t, dir, "")
+	cAbs := filepath.Join(dir, "c.md")
+	aAbs := filepath.Join(dir, "a.md")
+	m.openFile(cAbs)
+
+	m = pressRune(t, m, 'b')
+	if len(m.backlinks) != 1 {
+		t.Fatalf("expected 1 backlink, got %d", len(m.backlinks))
+	}
+
+	m = pressKey(t, m, tea.KeyMsg{Type: tea.KeyEnter})
+
+	// Should have navigated to a.md.
+	if m.history.Current() != aAbs {
+		t.Fatalf("expected current=%s, got %s", aAbs, m.history.Current())
+	}
+	// Focus should be on content (we left the backlinks surface).
+	if m.focus != focusContent {
+		t.Fatalf("expected focusContent after Enter, got %v", m.focus)
+	}
+	// returnCursor should be set with sourceFile=cAbs.
+	if m.returnCursor == nil {
+		t.Fatalf("expected returnCursor set, got nil")
+	}
+	if m.returnCursor.sourceFile != cAbs {
+		t.Fatalf("expected returnCursor.sourceFile=%s, got %s", cAbs, m.returnCursor.sourceFile)
+	}
+	if m.returnCursor.cursor != 0 {
+		t.Fatalf("expected returnCursor.cursor=0, got %d", m.returnCursor.cursor)
+	}
+	if m.returnCursor.surface != surfacePane {
+		t.Fatalf("expected returnCursor.surface=surfacePane, got %v", m.returnCursor.surface)
+	}
+}
+
 func TestScrollToLine_PositionsLineNearTop(t *testing.T) {
 	dir := t.TempDir()
 	// Build a 100-paragraph file so the viewport has somewhere to scroll.
