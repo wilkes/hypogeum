@@ -14,11 +14,10 @@ The TUI walks a directory tree and renders the selected file via Glamour. Links 
 
 ## Approach: instrumented render + status-line cursor
 
-Glamour produces ANSI output with no positional metadata, no OSC 8 hyperlinks, and theme-dependent SGR codes for link styling. Three approaches were investigated; the chosen one is **instrument the renderer**: pass a custom style with sentinel byte sequences in `link_text.block_prefix` / `block_suffix`. Glamour writes them literally around every link's visible text. A post-pass over the rendered string finds each sentinel pair and records `(byteStart, byteEnd)`. Order-preserving cross-reference with goldmark's AST attaches the original `href`.
+Two pieces, each with its own concept doc:
 
-Verified working on word-wrapped multi-line links (the wrap splits the span across rows but the sentinels still bracket it).
-
-The "cursor" itself is a single integer index into the link list. Phase 1 surfaces it only in the footer (`[3/7] notes/first.md`) — no inline highlight. Phase 2 adds the inline highlight by re-splicing SGR codes around the active link's byte range. Phase 3 handles external URLs via `os/exec`.
+- **Recovering link positions** from Glamour's ANSI output: the renderer is instrumented with sentinel byte sequences that survive word-wrap. Full design and rationale: [[sentinel-render]].
+- **Selecting and following a link** with `n`/`p`/`Enter`/`Esc`: a single integer cursor into the link list, footer-only in Phase 1. Full design and rationale: [[link-cursor]].
 
 Alternative considered: numbered link picker (modal). Cheaper but less browser-like; rejected once the sentinel trick was proven.
 
