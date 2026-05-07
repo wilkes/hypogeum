@@ -19,6 +19,7 @@ type keyMap struct {
 
 	ToggleBacklinks    key.Binding
 	OpenBacklinksModal key.Binding
+	OpenLogsModal      key.Binding
 }
 
 func defaultKeys() keyMap {
@@ -37,5 +38,6 @@ func defaultKeys() keyMap {
 
 		ToggleBacklinks:    key.NewBinding(key.WithKeys("b"), key.WithHelp("b", "backlinks pane")),
 		OpenBacklinksModal: key.NewBinding(key.WithKeys("B"), key.WithHelp("B", "backlinks modal")),
+		OpenLogsModal:      key.NewBinding(key.WithKeys("?"), key.WithHelp("?", "logs")),
 	}
 }

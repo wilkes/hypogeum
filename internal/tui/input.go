@@ -124,6 +124,16 @@ func (m *Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return *m, nil
 	}
 
+	if key.Matches(msg, m.keys.OpenLogsModal) {
+		if m.modalOpen == modalLogs {
+			m.modalOpen = modalNone
+		} else {
+			m.modalOpen = modalLogs
+			m.refreshLogsModal()
+		}
+		return *m, nil
+	}
+
 	// While a modal is open, Esc closes it; other keys go to the modal viewport.
 	if m.modalOpen != modalNone {
 		if key.Matches(msg, m.keys.ClearLink) { // Esc
