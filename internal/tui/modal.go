@@ -5,6 +5,7 @@ import (
 
 	"github.com/charmbracelet/bubbles/viewport"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/x/ansi"
 )
 
 // modalKind enumerates which modal (if any) is currently visible.
@@ -74,9 +75,6 @@ func newModalViewport() viewport.Model {
 // overlayModal places `modal` in the center of `base`. Both are full
 // width/height strings; this implementation renders `modal` over the
 // corresponding rows of `base`.
-//
-// spliceLine is naive about ANSI escapes inside `base` — Phase 1 modal
-// is opaque enough that this works in practice.
 func overlayModal(base, modal string, termW, termH int) string {
 	x, y, _, _ := modalGeometry(termW, termH)
 
@@ -93,16 +91,29 @@ func overlayModal(base, modal string, termW, termH int) string {
 	return strings.Join(baseLines, "\n")
 }
 
-// spliceLine overlays `over` onto `base` starting at column x.
-// Naive ASCII-aware version (does not handle ANSI escapes inside
-// `base` — modal is opaque so this is acceptable for Phase 1).
+// ansiReset clears any SGR state leaking from the base line so the modal
+// segment renders with its own styling, and prevents the trailing tail of
+// base from inheriting the modal's styling.
+const ansiReset = "\x1b[0m"
+
+// spliceLine overlays `over` onto `base` starting at visible column x.
+// ANSI-aware: uses cell widths (not byte offsets) so SGR escapes in `base`
+// aren't sliced mid-sequence, which would otherwise leak control bytes
+// into the rendered output and corrupt subsequent styling.
 func spliceLine(base, over string, x int) string {
-	if x >= len(base) {
-		return base + strings.Repeat(" ", x-len(base)) + over
+	overWidth := ansi.StringWidth(over)
+	baseWidth := ansi.StringWidth(base)
+
+	if x >= baseWidth {
+		// Modal starts past the end of this base line; pad with spaces.
+		return base + strings.Repeat(" ", x-baseWidth) + ansiReset + over + ansiReset
 	}
-	end := x + len(over)
-	if end > len(base) {
-		return base[:x] + over
+
+	left := ansi.Truncate(base, x, "")
+	end := x + overWidth
+	if end >= baseWidth {
+		return left + ansiReset + over + ansiReset
 	}
-	return base[:x] + over + base[end:]
+	right := ansi.TruncateLeft(base, end, "")
+	return left + ansiReset + over + ansiReset + right
 }
