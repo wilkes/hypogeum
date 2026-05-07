@@ -3,6 +3,7 @@ package tui
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 
 	zone "github.com/lrstanley/bubblezone"
 
@@ -74,13 +75,40 @@ func (m *Model) refreshContent(path string) {
 }
 
 // selectInTree moves the tree cursor to the row matching path, if present.
+// Ancestors of path are expanded first so the row is visible after a
+// history navigation that lands inside a collapsed folder.
 func (m *Model) selectInTree(path string) {
+	if m.expandAncestors(path) {
+		m.flatTree = m.flattenVisible()
+	}
 	for i, row := range m.flatTree {
 		if row.node.Path == path {
 			m.treeCursor = i
 			return
 		}
 	}
+}
+
+// expandAncestors removes any "collapsed" overrides on directories that
+// contain path, returning true if anything changed (so the caller can
+// rebuild flatTree).
+func (m *Model) expandAncestors(path string) bool {
+	if m.expanded == nil {
+		return false
+	}
+	changed := false
+	dir := filepath.Dir(path)
+	for {
+		if v, ok := m.expanded[dir]; ok && !v {
+			delete(m.expanded, dir)
+			changed = true
+		}
+		if dir == m.root || dir == "" || dir == "/" || dir == filepath.Dir(dir) {
+			break
+		}
+		dir = filepath.Dir(dir)
+	}
+	return changed
 }
 
 // firstTopLevelFile returns the first non-directory child of root, or nil if
@@ -122,7 +150,7 @@ func (m *Model) handleFSEvent(ev watch.Event) {
 			return
 		}
 		m.rootNode = newRoot
-		m.flatTree = flatten(newRoot, 0)
+		m.flatTree = m.flattenVisible()
 		// Restore cursor by path; if the previously selected node is gone,
 		// clamp to a valid index rather than dangling past the end.
 		m.treeCursor = 0
@@ -166,17 +194,33 @@ func (m *Model) handleFSEvent(ev watch.Event) {
 	}
 }
 
-// flatten produces a depth-tagged linear list from a tree, used for
-// keyboard navigation. The root itself is included.
-func flatten(n *tree.Node, depth int) []treeRow {
-	if n == nil {
+// flattenVisible produces a depth-tagged linear list from the tree,
+// skipping children of collapsed directories. The root itself is always
+// included.
+func (m *Model) flattenVisible() []treeRow {
+	if m.rootNode == nil {
 		return nil
 	}
-	rows := []treeRow{{node: n, depth: depth}}
-	for _, c := range n.Children {
-		rows = append(rows, flatten(c, depth+1)...)
+	var rows []treeRow
+	var walk func(n *tree.Node, depth int)
+	walk = func(n *tree.Node, depth int) {
+		rows = append(rows, treeRow{node: n, depth: depth})
+		if n.IsDir && !m.isCollapsed(n.Path) {
+			for _, c := range n.Children {
+				walk(c, depth+1)
+			}
+		}
 	}
+	walk(m.rootNode, 0)
 	return rows
+}
+
+// isCollapsed reports whether the directory at path is currently
+// collapsed. Directories default to expanded; the expanded map only
+// stores overrides where the value is false.
+func (m *Model) isCollapsed(path string) bool {
+	v, ok := m.expanded[path]
+	return ok && !v
 }
 
 // scrollToLine positions line n of the rendered output about 25% from

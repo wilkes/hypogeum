@@ -2,6 +2,7 @@ package tui
 
 import (
 	"path/filepath"
+	"strings"
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -45,5 +46,129 @@ func TestModel_TreeNavigationAndOpen(t *testing.T) {
 
 	if got := m.history.Current(); got != want {
 		t.Errorf("after Enter, history.Current = %q, want %q", got, want)
+	}
+}
+
+// TestModel_ToggleTreeHidesPane checks that ^b hides the tree pane: the
+// rendered View() drops tree row names and treeWidth() falls to 0 so the
+// content pane gets the full width.
+func TestModel_ToggleTreeHidesPane(t *testing.T) {
+	root := writeFixture(t)
+	m := sized(t, root, "")
+
+	if !m.treeVisible {
+		t.Fatalf("tree should default to visible")
+	}
+	if w := m.treeWidth(); w == 0 {
+		t.Fatalf("visible tree should have nonzero width, got 0")
+	}
+	beforeView := m.View()
+	if !strings.Contains(beforeView, "notes") {
+		t.Fatalf("expected tree pane to mention 'notes' before hide, got: %q", beforeView)
+	}
+
+	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyCtrlB})
+	m = updated.(Model)
+
+	if m.treeVisible {
+		t.Errorf("treeVisible should be false after ^b")
+	}
+	if w := m.treeWidth(); w != 0 {
+		t.Errorf("hidden tree should have zero width, got %d", w)
+	}
+	if m.focus == focusTree {
+		t.Errorf("focus should leave focusTree when tree is hidden")
+	}
+}
+
+// TestModel_CollapseFolderHidesChildren checks that pressing space on a
+// directory row removes its descendants from flatTree.
+func TestModel_CollapseFolderHidesChildren(t *testing.T) {
+	root := writeFixture(t)
+	m := sized(t, root, "")
+
+	notesDir := filepath.Join(root, "notes")
+	target := -1
+	for i, row := range m.flatTree {
+		if row.node.Path == notesDir && row.node.IsDir {
+			target = i
+			break
+		}
+	}
+	if target < 0 {
+		t.Fatalf("notes/ directory row not found in flatTree")
+	}
+	for m.treeCursor != target {
+		var key tea.KeyMsg
+		if m.treeCursor < target {
+			key = tea.KeyMsg{Type: tea.KeyDown}
+		} else {
+			key = tea.KeyMsg{Type: tea.KeyUp}
+		}
+		prev := m.treeCursor
+		updated, _ := m.Update(key)
+		m = updated.(Model)
+		if m.treeCursor == prev {
+			t.Fatalf("cursor stuck at %d trying to reach %d", prev, target)
+		}
+	}
+
+	before := len(m.flatTree)
+	m = pressKey(t, m, tea.KeyMsg{Type: tea.KeySpace})
+
+	if !m.isCollapsed(notesDir) {
+		t.Fatalf("notes/ should be collapsed after space")
+	}
+	if len(m.flatTree) >= before {
+		t.Errorf("flatTree should shrink on collapse: before=%d after=%d", before, len(m.flatTree))
+	}
+	for _, row := range m.flatTree {
+		if strings.HasPrefix(row.node.Path, notesDir+string(filepath.Separator)) {
+			t.Errorf("collapsed descendant still in flatTree: %s", row.node.Path)
+		}
+	}
+
+	// Toggling again restores the descendants.
+	m = pressKey(t, m, tea.KeyMsg{Type: tea.KeySpace})
+	if m.isCollapsed(notesDir) {
+		t.Fatalf("notes/ should be expanded again")
+	}
+	if len(m.flatTree) != before {
+		t.Errorf("flatTree should restore on re-expand: before=%d after=%d", before, len(m.flatTree))
+	}
+}
+
+// TestModel_SelectInTreeExpandsAncestors checks that navigating to a file
+// inside a collapsed folder auto-expands it so the cursor lands on a
+// visible row.
+func TestModel_SelectInTreeExpandsAncestors(t *testing.T) {
+	root := writeFixture(t)
+	m := sized(t, root, "")
+
+	deep := filepath.Join(root, "notes", "sub", "deep.md")
+	notesDir := filepath.Join(root, "notes")
+	subDir := filepath.Join(root, "notes", "sub")
+
+	// Force both ancestors collapsed.
+	m.expanded[notesDir] = false
+	m.expanded[subDir] = false
+	m.flatTree = m.flattenVisible()
+
+	for _, row := range m.flatTree {
+		if row.node.Path == deep {
+			t.Fatalf("precondition: deep.md should be hidden under collapsed parents")
+		}
+	}
+
+	m.selectInTree(deep)
+
+	if m.isCollapsed(notesDir) {
+		t.Errorf("notes/ should be expanded after selectInTree(deep)")
+	}
+	if m.isCollapsed(subDir) {
+		t.Errorf("notes/sub should be expanded after selectInTree(deep)")
+	}
+	if m.treeCursor >= len(m.flatTree) || m.flatTree[m.treeCursor].node.Path != deep {
+		t.Errorf("cursor should land on deep.md, got row %d in tree of %d", m.treeCursor, len(m.flatTree))
 	}
 }
