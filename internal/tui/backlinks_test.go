@@ -361,3 +361,39 @@ func TestBacklinksModal_BackReopensModal(t *testing.T) {
 		t.Fatalf("expected returnCursor cleared, got %+v", m.returnCursor)
 	}
 }
+
+func TestReturnCursor_ClampsToShrunkList(t *testing.T) {
+	dir := t.TempDir()
+	writeTUITestFile(t, dir, "a.md", "see [[c]].")
+	writeTUITestFile(t, dir, "b.md", "also [[c]].")
+	writeTUITestFile(t, dir, "c.md", "i am c.")
+
+	m := sized(t, dir, "")
+	cAbs := filepath.Join(dir, "c.md")
+	bAbs := filepath.Join(dir, "b.md")
+	m.openFile(cAbs)
+	m = pressRune(t, m, 'b')
+	m = pressRune(t, m, 'j')          // cursor → 1
+	m = pressKey(t, m, tea.KeyMsg{Type: tea.KeyEnter}) // follow
+
+	// Simulate b.md being deleted (and the vault refreshing) while we're
+	// away on the source file. Easiest path: rewrite b.md to drop its
+	// link, then call vault.RefreshFile.
+	if err := os.WriteFile(bAbs, []byte("no link anymore"), 0o644); err != nil {
+		t.Fatalf("rewrite b.md: %v", err)
+	}
+	if err := m.vault.RefreshFile(bAbs); err != nil {
+		t.Fatalf("vault.RefreshFile: %v", err)
+	}
+
+	// Now Back. The vault will report only 1 backlink for c.md; cursor
+	// must clamp from 1 down to 0.
+	m = pressRune(t, m, 'h')
+
+	if m.backlinkCursor != 0 {
+		t.Fatalf("expected cursor clamped to 0 after list shrank, got %d", m.backlinkCursor)
+	}
+	if len(m.backlinks) != 1 {
+		t.Fatalf("expected 1 backlink after refresh, got %d", len(m.backlinks))
+	}
+}
