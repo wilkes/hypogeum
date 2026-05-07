@@ -185,3 +185,16 @@ func truncateOneLine(s string, width int) string {
 	}
 	return s[:width-1] + "…"
 }
+
+// activeBacklinksSurface reports which backlinks surface is currently
+// receiving the user's navigation input. Used at follow time so the
+// returnCursor records where to restore on Back.
+//
+// Modal takes precedence: if both are open and we're following from
+// the modal, we want to come back to the modal.
+func (m Model) activeBacklinksSurface() backlinksSurface {
+	if m.modalOpen == modalBacklinks {
+		return surfaceModal
+	}
+	return surfacePane
+}
