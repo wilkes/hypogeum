@@ -4,6 +4,7 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/bubbles/viewport"
+	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
 )
@@ -19,6 +20,24 @@ const (
 	modalLogs
 	modalPicker
 )
+
+// toggleModal closes the modal of `kind` if it's currently open;
+// otherwise it saves the current focus (unless the persistent backlinks
+// pane has it — that pane stays sticky across modal opens), sets the
+// modal open, and runs onOpen for per-modal init. The returned Cmd is
+// whatever onOpen produced, threaded back to Bubble Tea.
+func (m *Model) toggleModal(kind modalKind, onOpen func() tea.Cmd) tea.Cmd {
+	if m.modalOpen == kind {
+		m.modalOpen = modalNone
+		m.focus = m.prevFocus
+		return nil
+	}
+	if m.modalOpen == modalNone && m.focus != focusBacklinks {
+		m.prevFocus = m.focus
+	}
+	m.modalOpen = kind
+	return onOpen()
+}
 
 // modalGeometry returns the (x, y, w, h) of the modal frame given the
 // current terminal dimensions. The modal is 60% × 60% clamped to a
