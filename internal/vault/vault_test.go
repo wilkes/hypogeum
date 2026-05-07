@@ -57,3 +57,35 @@ func TestBuildIndexesFiles(t *testing.T) {
 		t.Fatalf("fileCount: got %d want 3", got)
 	}
 }
+
+func TestBacklinksFromStandardAndWikilinks(t *testing.T) {
+	dir := t.TempDir()
+	bAbs, _ := filepath.Abs(filepath.Join(dir, "b.md"))
+	writeFile(t, dir, "a.md", "links to [[b]] and [b again](b.md).")
+	writeFile(t, dir, "b.md", "i am b.")
+
+	v, err := Build(dir, NopDiagnostics{})
+	if err != nil {
+		t.Fatalf("Build: %v", err)
+	}
+
+	// We expect 2 backlinks to b.md from a.md (one wikilink, one stdlink).
+	// The stdlink resolves during indexFile; the wikilink resolves in
+	// resolveAllRefs (Task 10).
+	got := v.Backlinks(bAbs)
+	if len(got) != 2 {
+		t.Fatalf("Backlinks(b): got %d want 2 (%+v)", len(got), got)
+	}
+	hasWiki, hasStd := false, false
+	for _, b := range got {
+		if b.Kind == BacklinkWikilink {
+			hasWiki = true
+		}
+		if b.Kind == BacklinkStdLink {
+			hasStd = true
+		}
+	}
+	if !hasWiki || !hasStd {
+		t.Fatalf("expected both wikilink and stdlink backlinks, got %+v", got)
+	}
+}

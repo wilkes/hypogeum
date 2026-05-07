@@ -1,8 +1,10 @@
 package vault
 
 import (
+	"net/url"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 
@@ -91,6 +93,7 @@ func Build(root string, diag Diagnostics) (*Vault, error) {
 	if err := v.walkAndIndex(); err != nil {
 		return nil, err
 	}
+	v.resolveAllRefs()
 	return v, nil
 }
 
@@ -119,8 +122,42 @@ func (v *Vault) Resolve(fromFile, name, heading, block string) (path string, ok 
 // Backlinks returns every reference *to* path in document order across
 // files. Includes both wikilink and standard-markdown-link references.
 func (v *Vault) Backlinks(path string) []Backlink {
-	// Implementation in Stage 4.
-	return nil
+	v.mu.RLock()
+	defer v.mu.RUnlock()
+
+	abs, _ := filepath.Abs(path)
+	var out []Backlink
+	for src, entry := range v.files {
+		for _, ref := range entry.refs {
+			if ref.resolved == "" || ref.resolved != abs {
+				continue
+			}
+			kind := BacklinkStdLink
+			if ref.kind == refWikilink {
+				kind = BacklinkWikilink
+			}
+			out = append(out, Backlink{
+				SourceFile:  src,
+				DisplayText: ref.displayText,
+				Snippet:     ref.snippet,
+				Line:        ref.line,
+				Kind:        kind,
+			})
+		}
+	}
+	// Stable order: sort by source file, then by line, so test fixtures
+	// don't depend on map iteration order.
+	sortBacklinks(out)
+	return out
+}
+
+func sortBacklinks(b []Backlink) {
+	sort.Slice(b, func(i, j int) bool {
+		if b[i].SourceFile != b[j].SourceFile {
+			return b[i].SourceFile < b[j].SourceFile
+		}
+		return b[i].Line < b[j].Line
+	})
 }
 
 // walkAndIndex populates v.files and v.names by walking v.root.
@@ -206,9 +243,11 @@ func extractReferences(src, fromPath string) []reference {
 			})
 			return ast.WalkSkipChildren, nil
 		case *ast.Link:
+			href := string(nn.Destination)
 			refs = append(refs, reference{
 				kind:        refStdLink,
-				target:      string(nn.Destination),
+				target:      href,
+				resolved:    resolveStdLink(fromPath, href),
 				displayText: linkText(nn, []byte(src)),
 			})
 			return ast.WalkSkipChildren, nil
@@ -258,4 +297,40 @@ func (v *Vault) fileCount() int {
 	v.mu.RLock()
 	defer v.mu.RUnlock()
 	return len(v.files)
+}
+
+// resolveStdLink resolves a standard markdown link's href against
+// the file containing it. Returns "" if the href is empty, an
+// external URL, or a same-document anchor — none of which produce
+// a backlink to another file in the vault.
+func resolveStdLink(fromPath, href string) string {
+	href = strings.TrimSpace(href)
+	if href == "" || strings.HasPrefix(href, "#") {
+		return ""
+	}
+	u, err := url.Parse(href)
+	if err == nil && u.Scheme != "" && u.Scheme != "file" {
+		return ""
+	}
+	target := href
+	if u != nil && u.Path != "" {
+		target = u.Path
+	}
+	if !filepath.IsAbs(target) {
+		target = filepath.Join(filepath.Dir(fromPath), target)
+	}
+	abs, err := filepath.Abs(target)
+	if err != nil {
+		return ""
+	}
+	return abs
+}
+
+// resolveAllRefs fills in the `resolved` field for every wikilink
+// reference now that the names index is fully populated. Standard
+// links are already resolved during indexFile.
+//
+// Implemented in Task 10 once Resolve is available.
+func (v *Vault) resolveAllRefs() {
+	// Stub. Wikilink resolution lands in Task 10.
 }
