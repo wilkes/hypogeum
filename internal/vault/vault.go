@@ -110,15 +110,6 @@ func (v *Vault) Rebuild() error {
 	return nil
 }
 
-// Resolve returns the absolute path the wikilink target resolves to,
-// or ("", false) if no file matches. fromFile is the file containing
-// the wikilink (used for proximity tiebreaking when multiple files
-// share a basename).
-func (v *Vault) Resolve(fromFile, name, heading, block string) (path string, ok bool) {
-	// Implementation in Stage 4.
-	return "", false
-}
-
 // Backlinks returns every reference *to* path in document order across
 // files. Includes both wikilink and standard-markdown-link references.
 func (v *Vault) Backlinks(path string) []Backlink {
@@ -329,8 +320,49 @@ func resolveStdLink(fromPath, href string) string {
 // resolveAllRefs fills in the `resolved` field for every wikilink
 // reference now that the names index is fully populated. Standard
 // links are already resolved during indexFile.
-//
-// Implemented in Task 10 once Resolve is available.
 func (v *Vault) resolveAllRefs() {
-	// Stub. Wikilink resolution lands in Task 10.
+	v.mu.Lock()
+	defer v.mu.Unlock()
+	for _, entry := range v.files {
+		for i := range entry.refs {
+			if entry.refs[i].kind != refWikilink {
+				continue
+			}
+			path, ok := v.resolveLocked(entry.path, entry.refs[i].target)
+			if ok {
+				entry.refs[i].resolved = path
+			}
+		}
+	}
+}
+
+// resolveLocked is Resolve without the read lock — used by
+// resolveAllRefs which already holds the write lock.
+func (v *Vault) resolveLocked(fromFile, name string) (string, bool) {
+	candidates := v.names[strings.ToLower(name)]
+	if len(candidates) == 0 {
+		return "", false
+	}
+	if len(candidates) == 1 {
+		return candidates[0], true
+	}
+	type scored struct {
+		path string
+		dist int
+	}
+	scoredCands := make([]scored, 0, len(candidates))
+	for _, c := range candidates {
+		rel, err := filepath.Rel(filepath.Dir(fromFile), c)
+		if err != nil {
+			rel = c
+		}
+		scoredCands = append(scoredCands, scored{path: c, dist: len(rel)})
+	}
+	sort.Slice(scoredCands, func(i, j int) bool {
+		if scoredCands[i].dist != scoredCands[j].dist {
+			return scoredCands[i].dist < scoredCands[j].dist
+		}
+		return scoredCands[i].path < scoredCands[j].path
+	})
+	return scoredCands[0].path, true
 }
