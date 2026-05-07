@@ -89,3 +89,19 @@ func leftClick(x, y int) tea.MouseMsg {
 		Button: tea.MouseButtonLeft,
 	}
 }
+
+// pressKey sends a single character key (or a special key for non-rune
+// keys) through the model's Update loop and returns the new model.
+// For a rune like 'b' or 'j': pass `tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{r}}`.
+// For special keys: use Type: tea.KeyEnter, tea.KeyEsc, tea.KeyTab, etc.
+func pressKey(t *testing.T, m Model, msg tea.KeyMsg) Model {
+	t.Helper()
+	updated, _ := m.Update(msg)
+	return updated.(Model)
+}
+
+// pressRune is shorthand for pressKey with a single rune.
+func pressRune(t *testing.T, m Model, r rune) Model {
+	t.Helper()
+	return pressKey(t, m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{r}})
+}
