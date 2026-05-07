@@ -470,3 +470,27 @@ func TestTab_TwoWayWhenPaneClosed(t *testing.T) {
 		t.Fatalf("expected focusTree (skipping invisible backlinks), got %v", m.focus)
 	}
 }
+
+func TestFocus_NoBacklinksLeakAfterPaneCycleViaModal(t *testing.T) {
+	dir := t.TempDir()
+	writeTUITestFile(t, dir, "a.md", "see [[c]].")
+	writeTUITestFile(t, dir, "c.md", "i am c.")
+
+	m := sized(t, dir, "")
+	m.openFile(filepath.Join(dir, "c.md"))
+	if m.focus != focusTree {
+		t.Fatalf("setup: expected focusTree, got %v", m.focus)
+	}
+
+	m = pressRune(t, m, 'b')                            // pane open, focus=backlinks, prevFocus=tree
+	m = pressRune(t, m, 'B')                            // modal opens (BUG: prevFocus stomped to backlinks)
+	m = pressKey(t, m, tea.KeyMsg{Type: tea.KeyEsc})    // modal closes
+	m = pressRune(t, m, 'b')                            // pane closes
+
+	if m.backlinksOpen {
+		t.Fatalf("expected pane closed after second b, got open")
+	}
+	if m.focus == focusBacklinks {
+		t.Fatalf("focus should NOT be focusBacklinks after closing pane (pane is gone), got focusBacklinks")
+	}
+}

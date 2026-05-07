@@ -119,7 +119,7 @@ func (m *Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.modalOpen = modalNone
 			m.focus = m.prevFocus
 		} else {
-			if m.modalOpen == modalNone {
+			if m.modalOpen == modalNone && m.focus != focusBacklinks {
 				m.prevFocus = m.focus
 			}
 			m.modalOpen = modalBacklinks
@@ -134,7 +134,7 @@ func (m *Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.modalOpen = modalNone
 			m.focus = m.prevFocus
 		} else {
-			if m.modalOpen == modalNone {
+			if m.modalOpen == modalNone && m.focus != focusBacklinks {
 				m.prevFocus = m.focus
 			}
 			m.modalOpen = modalLogs
