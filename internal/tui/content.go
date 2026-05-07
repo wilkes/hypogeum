@@ -53,6 +53,17 @@ func (m *Model) navigateTo(path string) {
 	m.selectInTree(path)
 }
 
+// normalizeFocus repairs focus when it points at a pane that isn't
+// rendered. Called from anywhere that might hide the tree (resize,
+// ^b toggle, startup on a narrow terminal). When the tree disappears
+// from under focusTree, keystrokes would route to an invisible pane;
+// snapping to focusContent keeps them effective.
+func (m *Model) normalizeFocus() {
+	if m.focus == focusTree && !m.treeShown() {
+		m.focus = focusContent
+	}
+}
+
 // refreshContent re-renders the file at path into the viewport without
 // touching history. Used by back/forward and on resize. Also refreshes
 // the link list and clears any active link selection.

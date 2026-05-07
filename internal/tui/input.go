@@ -139,12 +139,11 @@ func (m *Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 
 	// Toggle the tree pane. Synthesize a resize so the renderer and
-	// viewport widths recompute through the existing WindowSizeMsg path.
+	// viewport widths recompute through the existing WindowSizeMsg path,
+	// which also runs normalizeFocus to repair focus if the tree just
+	// disappeared from under it.
 	if key.Matches(msg, m.keys.ToggleTree) {
 		m.treeVisible = !m.treeVisible
-		if !m.treeVisible && m.focus == focusTree {
-			m.focus = focusContent
-		}
 		return m.Update(tea.WindowSizeMsg{Width: m.width, Height: m.height})
 	}
 

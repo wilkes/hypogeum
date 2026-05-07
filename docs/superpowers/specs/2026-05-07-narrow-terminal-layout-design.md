@@ -61,6 +61,8 @@ The `View()` body conditional changes from `if m.treeVisible` to `if m.treeShown
 
 **`input.go`:** `^b` continues to flip `m.treeVisible` and synthesize a `WindowSizeMsg`. When the terminal is too narrow the flip has no visible effect, which mirrors how `b` (backlinks) flips `backlinksOpen` under `backlinksMinTotalHeight`. No diagnostic emitted — silent flip preserves user intent for when the terminal grows back.
 
+**`content.go`:** new `m.normalizeFocus()` helper enforces the invariant *focus may not point at a pane that isn't shown*. Called from the `WindowSizeMsg` handler so resize paths repair focus consistently — covers both the user dragging the terminal narrower (auto-hide) and `^b` (which routes through a synthetic resize). Focus on grow is intentionally *not* restored: snapping focus back to the tree as soon as it reappears would yank the cursor away from whatever the user is reading.
+
 **`CLAUDE.md`:** add a gotcha note explaining the `treeVisible` (intent) / `treeShown()` (effective) split and the 80-col threshold; cross-reference the parallel `backlinksOpen` / `shouldShowBacklinks()` pair.
 
 ## UX behavior

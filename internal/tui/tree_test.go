@@ -131,11 +131,15 @@ func TestModel_SelectInTreeExpandsAncestors(t *testing.T) {
 }
 
 // TestModel_TreeForceHiddenAt60Cols checks that below twoPaneMinWidth
-// the tree pane is rendered as 0 cells wide and its row text doesn't
-// appear in the View output, regardless of treeVisible.
+// the tree pane is rendered as 0 cells wide, its row text doesn't
+// appear in the View output, and focus snaps off the (now invisible)
+// tree onto the content pane so keystrokes route somewhere visible.
 func TestModel_TreeForceHiddenAt60Cols(t *testing.T) {
 	root := writeFixture(t)
 	m := sized(t, root, "")
+	if m.focus != focusTree {
+		t.Fatalf("precondition: model defaults to focusTree, got %v", m.focus)
+	}
 
 	updated, _ := m.Update(tea.WindowSizeMsg{Width: 60, Height: 30})
 	m = updated.(Model)
@@ -145,6 +149,9 @@ func TestModel_TreeForceHiddenAt60Cols(t *testing.T) {
 	}
 	if w := m.treeWidth(); w != 0 {
 		t.Errorf("treeWidth() = %d at 60 cols, want 0", w)
+	}
+	if m.focus == focusTree {
+		t.Errorf("focus should snap off focusTree when the tree is force-hidden")
 	}
 	// The tree pane renders directory rows with a chevron prefix; the
 	// rendered content of index.md may contain "notes/" inside link
@@ -222,7 +229,10 @@ func TestModel_ToggleTreeNarrowFlipsIntentOnly(t *testing.T) {
 
 // TestModel_TreeReturnsOnGrow checks that after a narrow resize hides
 // the tree, growing the terminal back above the threshold restores it
-// without any user interaction — m.treeVisible is preserved.
+// without any user interaction — m.treeVisible is preserved. Focus
+// stays on content (where it was snapped during the narrow window);
+// restoring it to the tree on grow would yank focus away from whatever
+// the user was reading.
 func TestModel_TreeReturnsOnGrow(t *testing.T) {
 	root := writeFixture(t)
 	m := sized(t, root, "")
@@ -232,6 +242,9 @@ func TestModel_TreeReturnsOnGrow(t *testing.T) {
 	if m.treeShown() {
 		t.Fatalf("precondition: treeShown should be false at 60 cols")
 	}
+	if m.focus == focusTree {
+		t.Fatalf("precondition: narrow resize should have snapped focus off the tree")
+	}
 
 	updated, _ = m.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
 	m = updated.(Model)
@@ -240,5 +253,8 @@ func TestModel_TreeReturnsOnGrow(t *testing.T) {
 	}
 	if w := m.treeWidth(); w == 0 {
 		t.Errorf("treeWidth should be nonzero after growing to 100 cols")
+	}
+	if m.focus == focusTree {
+		t.Errorf("focus should not be restored to tree on grow; stays where the user left it")
 	}
 }
