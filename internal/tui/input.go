@@ -195,6 +195,7 @@ func (m *Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if path, ok := m.history.Back(); ok {
 			m.refreshContent(path)
 			m.selectInTree(path)
+			m.maybeRestoreReturnCursor(path)
 		}
 		return *m, nil
 

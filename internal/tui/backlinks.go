@@ -225,3 +225,30 @@ func (m *Model) followBacklink() {
 	m.openFile(bl.SourceFile)
 	m.scrollToLine(bl.Line)
 }
+
+// maybeRestoreReturnCursor checks if a returnCursor was set and the
+// path we just navigated to matches it. If so, restores the cursor
+// position and the surface (focus on pane, or reopen modal). Consumes
+// the slot regardless of the surface restore actually being possible
+// (e.g. the user closed the pane while away).
+func (m *Model) maybeRestoreReturnCursor(path string) {
+	if m.returnCursor == nil || path != m.returnCursor.sourceFile {
+		return
+	}
+	rc := m.returnCursor
+	m.returnCursor = nil
+
+	m.refreshBacklinks(path)
+	m.backlinkCursor = clamp(rc.cursor, 0, len(m.backlinks)-1)
+
+	switch rc.surface {
+	case surfacePane:
+		if m.shouldShowBacklinks() {
+			m.focus = focusBacklinks
+		}
+		m.refreshBacklinks(path) // re-render with cursor highlighted
+	case surfaceModal:
+		m.modalOpen = modalBacklinks
+		m.refreshBacklinksModal(path)
+	}
+}

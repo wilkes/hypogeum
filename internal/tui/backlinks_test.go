@@ -271,3 +271,33 @@ func TestScrollToLine_PositionsLineNearTop(t *testing.T) {
 		t.Fatalf("expected YOffset clamped to max %d, got %d", maxYOffset, m.viewport.YOffset)
 	}
 }
+
+func TestBacklinksPane_BackRestoresCursor(t *testing.T) {
+	dir := t.TempDir()
+	writeTUITestFile(t, dir, "a.md", "see [[c]].")
+	writeTUITestFile(t, dir, "b.md", "also [[c]].")
+	writeTUITestFile(t, dir, "c.md", "i am c.")
+
+	m := sized(t, dir, "")
+	cAbs := filepath.Join(dir, "c.md")
+	m.openFile(cAbs)
+	m = pressRune(t, m, 'b')          // open pane
+	m = pressRune(t, m, 'j')          // cursor → 1
+	m = pressKey(t, m, tea.KeyMsg{Type: tea.KeyEnter}) // follow
+
+	// Now we're on a.md or b.md. Press h.
+	m = pressRune(t, m, 'h')
+
+	if m.history.Current() != cAbs {
+		t.Fatalf("expected back at c.md, got %s", m.history.Current())
+	}
+	if m.backlinkCursor != 1 {
+		t.Fatalf("expected backlinkCursor restored to 1, got %d", m.backlinkCursor)
+	}
+	if m.focus != focusBacklinks {
+		t.Fatalf("expected focusBacklinks restored, got %v", m.focus)
+	}
+	if m.returnCursor != nil {
+		t.Fatalf("expected returnCursor cleared, got %+v", m.returnCursor)
+	}
+}
