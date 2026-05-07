@@ -2,6 +2,7 @@ package markdown
 
 import (
 	"fmt"
+	"regexp"
 	"strings"
 )
 
@@ -39,6 +40,7 @@ type LinkMarker func(linkIndex int) (open, close string)
 // They flow through downstream styling without changing visible width
 // (caller's responsibility — typically zero-width sentinel sequences).
 func (r *Renderer) RenderWithLinks(src, base string, marker LinkMarker) (string, []Link, error) {
+	src = r.preprocessWikilinks(src)
 	raw, err := r.instrumented.Render(src)
 	if err != nil {
 		return "", nil, fmt.Errorf("render markdown: %w", err)
@@ -59,6 +61,95 @@ func (r *Renderer) RenderWithLinks(src, base string, marker LinkMarker) (string,
 		links = append(links, l)
 	}
 	return cleaned, links, nil
+}
+
+// wikilinkRegex matches the wikilink syntax for the source-rewrite pass.
+// We use a regex rather than goldmark for the rewrite because goldmark's
+// AST → source round-trip is lossy; rewriting strings preserves
+// everything else about the source unchanged.
+var wikilinkRegex = regexp.MustCompile(`\[\[([^\]\n]+)\]\]`)
+
+// preprocessWikilinks rewrites [[...]] occurrences in src into either
+// standard markdown links (resolved) or styled placeholder text
+// (unresolved). The resulting string is then handed to Glamour as
+// normal markdown.
+func (r *Renderer) preprocessWikilinks(src string) string {
+	if r.resolver == nil {
+		return src
+	}
+	return wikilinkRegex.ReplaceAllStringFunc(src, func(match string) string {
+		body := match[2 : len(match)-2]
+		w := parseWikilinkBodyForRender(body)
+		if w == nil {
+			return match
+		}
+		display := w.alias
+		if display == "" {
+			display = w.name
+			if w.heading != "" {
+				display = w.name + " > " + w.heading
+			}
+		}
+		path, ok := r.resolver.Resolve(r.fromFile, w.name, w.heading, w.block)
+		if !ok {
+			return display + "?"
+		}
+		href := path
+		if w.heading != "" {
+			href = path + "#" + slugify(w.heading)
+		}
+		return "[" + display + "](" + href + ")"
+	})
+}
+
+// parsedWikilink mirrors the vault's wikilinkNode without depending on
+// it (markdown does not import vault). Names are kept lowercase here
+// to make the source-rewrite logic readable.
+type parsedWikilink struct {
+	name    string
+	heading string
+	block   string
+	alias   string
+}
+
+func parseWikilinkBodyForRender(body string) *parsedWikilink {
+	body = strings.TrimSpace(body)
+	if body == "" {
+		return nil
+	}
+	w := &parsedWikilink{}
+	if i := strings.IndexByte(body, '|'); i >= 0 {
+		w.alias = strings.TrimSpace(body[i+1:])
+		body = body[:i]
+	}
+	if i := strings.IndexByte(body, '^'); i >= 0 {
+		w.block = strings.TrimSpace(body[i+1:])
+		body = body[:i]
+	}
+	if i := strings.IndexByte(body, '#'); i >= 0 {
+		w.heading = strings.TrimSpace(body[i+1:])
+		body = body[:i]
+	}
+	w.name = strings.TrimSpace(body)
+	if w.name == "" {
+		return nil
+	}
+	return w
+}
+
+// slugify is the same heading-slug rule used by anchor-style links.
+func slugify(s string) string {
+	s = strings.ToLower(s)
+	var b strings.Builder
+	for _, r := range s {
+		switch {
+		case r >= 'a' && r <= 'z', r >= '0' && r <= '9':
+			b.WriteRune(r)
+		case r == ' ' || r == '-' || r == '_':
+			b.WriteByte('-')
+		}
+	}
+	return b.String()
 }
 
 // sentinelSpan records where a sentinel-bracketed link landed in the
