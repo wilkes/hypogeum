@@ -64,7 +64,10 @@ func (m *Model) handleMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 
 	// Tree row hit. Iterate visible rows; the first that contains the
 	// click wins. Stops at len(m.flatTree) so out-of-range zones from a
-	// previous longer document don't match.
+	// previous longer document don't match — also defends against stale
+	// zones left over when the tree pane is hidden (^b or narrow-width
+	// auto-hide), since len(m.flatTree) is bounded by what's currently
+	// rendered.
 	for i := range m.flatTree {
 		if zone.Get(treeRowZoneID(i)).InBounds(msg) {
 			return m.clickTree(i)
