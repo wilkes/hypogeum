@@ -178,3 +178,37 @@ func flatten(n *tree.Node, depth int) []treeRow {
 	}
 	return rows
 }
+
+// scrollToLine positions line n of the rendered output about 25% from
+// the top of the viewport. n is 1-indexed and matches what
+// vault.Backlink.Line carries (a source-file line number).
+//
+// Caveat: source-file line numbers don't perfectly correspond to
+// rendered-output line numbers (Glamour adjusts for headings, code
+// fences, etc.). The user lands "near" the reference, not exactly on
+// it; the snippet shown in the backlinks pane gives them a visual
+// landmark to confirm.
+func (m *Model) scrollToLine(n int) {
+	if n < 1 {
+		n = 1
+	}
+	total := m.viewport.TotalLineCount()
+	if n > total {
+		n = total
+	}
+	// Position the target line ~25% from the top of the viewport so the
+	// user sees the lines preceding the reference for context.
+	pad := m.viewport.Height / 4
+	target := n - 1 - pad
+	if target < 0 {
+		target = 0
+	}
+	maxOffset := total - m.viewport.Height
+	if maxOffset < 0 {
+		maxOffset = 0
+	}
+	if target > maxOffset {
+		target = maxOffset
+	}
+	m.viewport.SetYOffset(target)
+}

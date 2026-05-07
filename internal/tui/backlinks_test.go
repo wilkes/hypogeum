@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -150,5 +151,42 @@ func TestFormatBacklinks_HighlightsSelectedRow(t *testing.T) {
 	}
 	if !sawMarkerOnB {
 		t.Fatalf("marker SHOULD be on b.md row")
+	}
+}
+
+func TestScrollToLine_PositionsLineNearTop(t *testing.T) {
+	dir := t.TempDir()
+	// Build a 100-paragraph file so the viewport has somewhere to scroll.
+	// Paragraphs (blank-line separated) are needed because Glamour folds
+	// consecutive non-blank lines into a single wrapped paragraph.
+	var sb strings.Builder
+	for i := 1; i <= 100; i++ {
+		fmt.Fprintf(&sb, "line %d\n\n", i)
+	}
+	writeTUITestFile(t, dir, "long.md", sb.String())
+
+	m := sized(t, dir, filepath.Join(dir, "long.md"))
+	// Initially YOffset = 0.
+	if m.viewport.YOffset != 0 {
+		t.Fatalf("expected YOffset=0 initially, got %d", m.viewport.YOffset)
+	}
+
+	// Scroll to line 60. Expect YOffset to leave ~25% padding above:
+	//   target = 60 - viewportHeight*0.25
+	// With viewportHeight ≈ 32 (height 40 - 4 for borders/footer - 4 misc),
+	// target ≈ 60 - 8 = 52. Be lenient: assert YOffset is in [40, 56].
+	m.scrollToLine(60)
+	if m.viewport.YOffset < 40 || m.viewport.YOffset > 56 {
+		t.Fatalf("expected YOffset in [40, 56] after scrollToLine(60), got %d", m.viewport.YOffset)
+	}
+
+	// scrollToLine(huge) clamps to last line.
+	m.scrollToLine(99999)
+	maxYOffset := m.viewport.TotalLineCount() - m.viewport.Height
+	if maxYOffset < 0 {
+		maxYOffset = 0
+	}
+	if m.viewport.YOffset > maxYOffset {
+		t.Fatalf("expected YOffset clamped to max %d, got %d", maxYOffset, m.viewport.YOffset)
 	}
 }
