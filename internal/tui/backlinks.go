@@ -74,11 +74,13 @@ func (m Model) shouldShowBacklinks() bool {
 // currently-open file. Called on file change and on toggle.
 func (m *Model) refreshBacklinks(currentPath string) {
 	if m.vault == nil || currentPath == "" {
+		m.backlinks = nil
 		m.backlinksVP.SetContent("")
 		return
 	}
 	links := m.vault.Backlinks(currentPath)
-	m.backlinksVP.SetContent(formatBacklinks(links, m.root, m.viewport.Width))
+	m.backlinks = links
+	m.backlinksVP.SetContent(formatBacklinks(links, m.root, m.viewport.Width, m.backlinkCursor))
 }
 
 // renderBacklinks returns the rendered string of the persistent pane,
@@ -94,20 +96,31 @@ func (m Model) renderBacklinks() string {
 		Render(m.backlinksVP.View())
 }
 
+// cursorMarkerStyle is the left-edge highlight for the selected entry.
+// Distinct from the snippet's yellow highlight (which marks the matched
+// display text) — this one signals structural position in the list.
+var cursorMarkerStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("62")).Bold(true)
+
 // formatBacklinks renders a slice of vault.Backlink as the two-row-per-
-// entry text used in both the persistent pane and the modal.
-func formatBacklinks(links []vault.Backlink, root string, width int) string {
+// entry text used in both the persistent pane and the modal. If
+// cursor is in [0, len(links)), the row at that index gets a left-edge
+// marker; pass -1 for no selection.
+func formatBacklinks(links []vault.Backlink, root string, width, cursor int) string {
 	if len(links) == 0 {
 		return lipgloss.NewStyle().Faint(true).Render("(no backlinks)")
 	}
 	var b strings.Builder
-	for _, l := range links {
+	for i, l := range links {
 		rel, err := filepath.Rel(root, l.SourceFile)
 		if err != nil {
 			rel = l.SourceFile
 		}
-		fmt.Fprintf(&b, "%s:%d\n", rel, l.Line)
-		fmt.Fprintf(&b, "  %s\n", truncateOneLine(applyHighlight(l.Snippet), width-2))
+		marker := "  "
+		if i == cursor {
+			marker = cursorMarkerStyle.Render("▌") + " "
+		}
+		fmt.Fprintf(&b, "%s%s:%d\n", marker, rel, l.Line)
+		fmt.Fprintf(&b, "%s  %s\n", marker, truncateOneLine(applyHighlight(l.Snippet), width-4))
 	}
 	return b.String()
 }
@@ -132,12 +145,14 @@ func applyHighlight(s string) string {
 // currently-open file. Called when opening the backlinks modal.
 func (m *Model) refreshBacklinksModal(currentPath string) {
 	if m.vault == nil || currentPath == "" {
+		m.backlinks = nil
 		m.modalVP.SetContent("")
 		return
 	}
 	m.resizeModalVP()
 	links := m.vault.Backlinks(currentPath)
-	m.modalVP.SetContent(formatBacklinks(links, m.root, m.modalVP.Width))
+	m.backlinks = links
+	m.modalVP.SetContent(formatBacklinks(links, m.root, m.modalVP.Width, m.backlinkCursor))
 }
 
 // truncateOneLine collapses internal newlines into spaces and clips

@@ -7,6 +7,8 @@ import (
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
+
+	"github.com/wilkes/hypogeum/internal/vault"
 )
 
 func writeTUITestFile(t *testing.T, dir, rel, content string) {
@@ -74,5 +76,32 @@ func TestBacklinksModalToggleAndEsc(t *testing.T) {
 	out2, _ := out.(Model).Update(tea.KeyMsg{Type: tea.KeyEsc})
 	if out2.(Model).modalOpen != modalNone {
 		t.Fatalf("after Esc: expected modalNone, got %v", out2.(Model).modalOpen)
+	}
+}
+
+func TestFormatBacklinks_HighlightsSelectedRow(t *testing.T) {
+	links := []vault.Backlink{
+		{SourceFile: "/r/a.md", DisplayText: "x", Snippet: "hello", Line: 1},
+		{SourceFile: "/r/b.md", DisplayText: "x", Snippet: "world", Line: 2},
+	}
+	rendered := formatBacklinks(links, "/r", 80, 1)
+	if !strings.Contains(rendered, "▌") {
+		t.Fatalf("expected cursor marker '▌' in output, got %q", rendered)
+	}
+	lines := strings.Split(rendered, "\n")
+	var sawMarkerOnA, sawMarkerOnB bool
+	for _, line := range lines {
+		if strings.Contains(line, "a.md") && strings.Contains(line, "▌") {
+			sawMarkerOnA = true
+		}
+		if strings.Contains(line, "b.md") && strings.Contains(line, "▌") {
+			sawMarkerOnB = true
+		}
+	}
+	if sawMarkerOnA {
+		t.Fatalf("marker should NOT be on a.md row")
+	}
+	if !sawMarkerOnB {
+		t.Fatalf("marker SHOULD be on b.md row")
 	}
 }
