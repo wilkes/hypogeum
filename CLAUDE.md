@@ -49,14 +49,22 @@ The packages are layered: `tui` depends on `tree`, `markdown`, `nav`, `watch`; t
 - **Glamour renderer is per-width.** It's recreated on every `WindowSizeMsg`. Don't cache it across width changes or wrapping breaks silently.
 - **The watcher is best-effort.** If `watch.New` fails (e.g. inotify limits exhausted), `tui.New` swallows the error and the browser runs without live updates rather than refusing to start. Consumers must tolerate `m.watcher == nil`.
 - **Watcher events are debounced and coarse.** `internal/watch` collapses fsnotify ops into `StructureChanged` (re-walk the tree) or `FileModified` (re-read the open file). Don't try to plumb finer-grained ops through; the TUI doesn't need them and editors save in bursts that mean per-op handling would re-walk redundantly.
+- **Vault is best-effort.** If `vault.Build` fails, `tui.New` continues with a nil vault — wikilinks render as broken (with a `?` suffix), backlinks pane stays empty. Same graceful-degradation rule as the watcher.
+- **`?`, `B`, and `b` are mutually aware.** `b` toggles the persistent backlinks pane. `B` and `?` open modals; opening one while another is open swaps content (single-modal invariant). `Esc` closes whichever modal is up before falling through to the link cursor's clear behavior.
+- **Snippet highlight uses ASCII control chars (`\x11` / `\x12`).** Don't use these bytes in user content (extremely unlikely) and don't rewrite snippets through any pipeline that would strip control chars.
+- **Unresolved wikilinks aren't in the link cycler.** They render as plain text with a `?` suffix — visible to the user but not selectable with `n`/`p`. This is intentional: a broken link can't be followed, so adding it to the cycler would be a confusing no-op.
 
 ## What's not built yet
 
-Link following is partially built. **Phase 1 done:** `n`/`p` cycle through every link in the current document, `Enter` follows the selected one (local files only — externals surface in the status bar), `Esc` clears the selection. The cursor is footer-only — nothing visible changes in the rendered text when a link is selected. Implementation lives in `internal/markdown` (`ExtractLinks`, `RenderWithLinks`) and the content-key handler in `internal/tui/model.go`.
+**Link following — Phase 1 shipped:** `n`/`p` cycle through every link in the current document, `Enter` follows the selected one (local files only — externals surface in the status bar), `Esc` clears the selection. The cursor is footer-only — nothing visible changes in the rendered text when a link is selected. Implementation lives in `internal/markdown` (`ExtractLinks`, `RenderWithLinks`) and the content-key handler in `internal/tui/model.go`.
 
-**Phase 2 (not started):** inline highlight of the active link by re-splicing SGR codes around its byte range; multi-segment cursor for word-wrapped links. **Phase 3 (not started):** actually launching external URLs via `xdg-open`/`open`, gated behind a one-keystroke confirm.
+**Link following — Phase 2 (not started):** inline highlight of the active link by re-splicing SGR codes around its byte range; multi-segment cursor for word-wrapped links. **Phase 3 (not started):** actually launching external URLs via `xdg-open`/`open`, gated behind a one-keystroke confirm.
 
 Full plan and design rationale (including why we picked the sentinel-instrumented render approach over OSC 8 or coordinate mapping) lives in [docs/link-following.md](docs/link-following.md).
+
+**Wikilinks and backlinks — Phase 1 shipped:** `[[wikilinks]]` resolve via vault index, backlinks pane (`b`), backlinks modal (`B`), log viewer (`?`). Implementation lives in `internal/vault/` and the modal/pane logic in `internal/tui/`.
+
+**Wikilinks and backlinks — Phase 2 (not started):** block references (`[[note#^blockid]]`), broken-link tally in the status bar, and configurable vault root. Design outlined in [docs/superpowers/specs/2026-05-07-wikilinks-and-backlinks-design.md](docs/superpowers/specs/2026-05-07-wikilinks-and-backlinks-design.md).
 
 ## Documentation and plans
 
