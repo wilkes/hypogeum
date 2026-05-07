@@ -150,27 +150,7 @@ func (m *Model) followBacklink() {
 
 **Return flow (`h` / Back):**
 
-`h` already calls `m.history.Back()` and `m.refreshContent(path)`. We add a check after the refresh:
-
-```go
-if m.returnCursor != nil && path == m.returnCursor.sourceFile {
-    m.refreshBacklinks(path)
-    m.backlinkCursor = clamp(m.returnCursor.cursor, 0, len(m.backlinks)-1)
-
-    switch m.returnCursor.surface {
-    case surfacePane:
-        if m.shouldShowBacklinks() {
-            m.focus = focusBacklinks
-        }
-    case surfaceModal:
-        m.modalOpen = modalBacklinks
-        m.refreshBacklinksModal(path)
-    }
-    m.returnCursor = nil
-}
-```
-
-The single-slot `returnCursor` is consumed on use. If the user navigates Back twice, Forward, or to an unrelated file via the tree before returning, the slot is discarded — no stale cursor restoration.
+After `m.history.Back()` and `m.refreshContent(path)`, if the slot's `sourceFile` matches `path`, the cached `backlinkCursor` is restored (clamped to the current list length) and the recorded surface — pane focus or modal — is reopened. The slot is single-slot and path-keyed: navigating Back twice, Forward, or to an unrelated file before returning leaves the slot in place but harmless (it'll only fire if the user ever lands back on the recorded `sourceFile`). Full design and rationale: [[return-cursor]].
 
 ### Visual feedback for the cursor
 
