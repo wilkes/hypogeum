@@ -15,3 +15,6 @@
 *.test
 *.out
 coverage.txt
+
+# Claude Code (local-only overrides)
+.claude/settings.local.json
