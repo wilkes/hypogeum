@@ -37,6 +37,7 @@ type focus int
 const (
 	focusTree focus = iota
 	focusContent
+	focusBacklinks
 )
 
 // Model is the top-level Bubble Tea model.
