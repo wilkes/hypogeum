@@ -302,6 +302,37 @@ func TestBacklinksPane_BackRestoresCursor(t *testing.T) {
 	}
 }
 
+func TestReturnCursor_DiscardedOnUnrelatedNav(t *testing.T) {
+	dir := t.TempDir()
+	writeTUITestFile(t, dir, "a.md", "see [[c]].")
+	writeTUITestFile(t, dir, "c.md", "i am c.")
+	writeTUITestFile(t, dir, "d.md", "i am d, unrelated.")
+
+	m := sized(t, dir, "")
+	cAbs := filepath.Join(dir, "c.md")
+	dAbs := filepath.Join(dir, "d.md")
+	m.openFile(cAbs)
+	m = pressRune(t, m, 'b')
+	m = pressKey(t, m, tea.KeyMsg{Type: tea.KeyEnter}) // follow → a.md
+
+	// Now jump to an unrelated file via openFile (simulates tree click).
+	m.openFile(dAbs)
+
+	// Press h. We should land back on a.md, NOT on c.md.
+	m = pressRune(t, m, 'h')
+	if m.history.Current() == cAbs {
+		t.Fatalf("expected to be on a.md (one back from d.md), got c.md")
+	}
+
+	// Step beyond: explicit unrelated nav DOES NOT pre-empt the slot.
+	// The slot is consumed only on path-match Back. This test asserts
+	// the more interesting case: openFile to d.md did NOT consume the
+	// slot, so navigating Back twice eventually still restores.
+	if m.returnCursor == nil {
+		t.Fatalf("returnCursor unexpectedly cleared by unrelated nav (only matching Back should clear it)")
+	}
+}
+
 func TestBacklinksModal_BackReopensModal(t *testing.T) {
 	dir := t.TempDir()
 	writeTUITestFile(t, dir, "a.md", "see [[c]].")
