@@ -9,6 +9,21 @@ import (
 	zone "github.com/lrstanley/bubblezone"
 )
 
+// twoPaneMinWidth is the minimum terminal width at which the two-pane
+// (tree + content) layout is shown. Below this, the tree pane is force-
+// hidden regardless of user intent — content gets the full window so
+// prose has room to wrap. Mirrors backlinksMinTotalHeight on the height
+// axis. Tunable; if 80 turns out to be wrong, change here.
+const twoPaneMinWidth = 80
+
+// treeShown returns true when the tree pane is currently rendered.
+// Combines user intent (m.treeVisible, toggled by ^b) with terminal
+// width: even with treeVisible=true, narrow terminals force-hide the
+// pane. Same intent/effective-state pattern as shouldShowBacklinks.
+func (m Model) treeShown() bool {
+	return m.treeVisible && m.width >= twoPaneMinWidth
+}
+
 func (m Model) View() string {
 	if m.width == 0 {
 		return "" // wait for first WindowSizeMsg

@@ -129,3 +129,32 @@ func TestModel_SelectInTreeExpandsAncestors(t *testing.T) {
 		t.Errorf("cursor should land on deep.md, got row %d in tree of %d", m.treeCursor, len(m.flatTree))
 	}
 }
+
+// TestModel_TreeShownAtNarrowWidths checks that treeShown() returns false
+// when the terminal is narrower than twoPaneMinWidth even if the user
+// has the tree visible — the threshold gates effective state.
+func TestModel_TreeShownAtNarrowWidths(t *testing.T) {
+	root := writeFixture(t)
+	m := sized(t, root, "")
+
+	if !m.treeVisible {
+		t.Fatalf("tree should default to visible")
+	}
+
+	cases := []struct {
+		width int
+		want  bool
+	}{
+		{60, false},
+		{79, false},
+		{80, true},
+		{120, true},
+	}
+	for _, tc := range cases {
+		updated, _ := m.Update(tea.WindowSizeMsg{Width: tc.width, Height: 30})
+		mm := updated.(Model)
+		if got := mm.treeShown(); got != tc.want {
+			t.Errorf("width=%d: treeShown() = %v, want %v", tc.width, got, tc.want)
+		}
+	}
+}
