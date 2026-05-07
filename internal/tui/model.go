@@ -4,6 +4,7 @@ package tui
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
@@ -20,6 +21,15 @@ import (
 // Bubble Tea update loop. It is the only TUI-side reference to internal/watch
 // so that tests can synthesize one without spinning up a real watcher.
 type fsEventMsg watch.Event
+
+// transientClearMsg is delivered ~1s after each tick, asking the model
+// to clear the footer transient if it's older than 3s. The handler
+// re-issues the tick so the loop keeps going.
+type transientClearMsg struct{}
+
+func clearTransientAfter(d time.Duration) tea.Cmd {
+	return tea.Tick(d, func(time.Time) tea.Msg { return transientClearMsg{} })
+}
 
 // Focus indicates which pane currently receives keyboard input for movement.
 type focus int
@@ -163,7 +173,13 @@ func New(root, initialFile string) (Model, error) {
 	return m, nil
 }
 
-func (m Model) Init() tea.Cmd { return m.waitForFSEvent() }
+func (m Model) Init() tea.Cmd {
+	tick := clearTransientAfter(time.Second)
+	if cmd := m.waitForFSEvent(); cmd != nil {
+		return tea.Batch(cmd, tick)
+	}
+	return tick
+}
 
 // waitForFSEvent returns a tea.Cmd that blocks until the watcher emits an
 // event, then surfaces it as fsEventMsg. The Update path re-issues this
@@ -224,6 +240,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case fsEventMsg:
 		m.handleFSEvent(watch.Event(msg))
 		return m, m.waitForFSEvent()
+
+	case transientClearMsg:
+		if m.diag != nil {
+			if e, ok := m.diag.transientStatus(); ok && time.Since(e.Timestamp) > 3*time.Second {
+				m.diag.clearTransient()
+			}
+		}
+		return m, clearTransientAfter(time.Second)
 	}
 
 	// Forward other messages to the viewport when content has focus.
