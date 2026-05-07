@@ -74,41 +74,67 @@ func (m *Model) refreshContent(path string) {
 	m.refreshBacklinks(path)
 }
 
-// selectInTree moves the tree cursor to the row matching path, if present.
-// Ancestors of path are expanded first so the row is visible after a
-// history navigation that lands inside a collapsed folder.
+// selectInTree moves the tree cursor to the row matching path, expanding
+// any collapsed ancestors first so a history navigation into a collapsed
+// subtree lands on a visible row.
 func (m *Model) selectInTree(path string) {
 	if m.expandAncestors(path) {
 		m.flatTree = m.flattenVisible()
 	}
-	for i, row := range m.flatTree {
-		if row.node.Path == path {
-			m.treeCursor = i
-			return
-		}
+	if i := m.rowIndexByPath(path); i >= 0 {
+		m.treeCursor = i
 	}
 }
 
-// expandAncestors removes any "collapsed" overrides on directories that
-// contain path, returning true if anything changed (so the caller can
-// rebuild flatTree).
-func (m *Model) expandAncestors(path string) bool {
-	if m.expanded == nil {
-		return false
+// rowIndexByPath returns the index of the visible tree row whose node
+// path equals path, or -1 if no such row is visible.
+func (m *Model) rowIndexByPath(path string) int {
+	for i, row := range m.flatTree {
+		if row.node.Path == path {
+			return i
+		}
 	}
+	return -1
+}
+
+// cursorRow returns the row under the tree cursor, or zero-value+false
+// when flatTree is empty or the cursor is out of bounds.
+func (m *Model) cursorRow() (treeRow, bool) {
+	if m.treeCursor < 0 || m.treeCursor >= len(m.flatTree) {
+		return treeRow{}, false
+	}
+	return m.flatTree[m.treeCursor], true
+}
+
+// toggleFolder flips the collapsed state of the directory at path,
+// rebuilds flatTree, and keeps the cursor on that directory's row.
+func (m *Model) toggleFolder(path string) {
+	if m.isCollapsed(path) {
+		delete(m.expanded, path) // back to default-expanded
+	} else {
+		m.expanded[path] = false
+	}
+	m.flatTree = m.flattenVisible()
+	if i := m.rowIndexByPath(path); i >= 0 {
+		m.treeCursor = i
+	}
+}
+
+// expandAncestors removes "collapsed" overrides on every directory that
+// contains path, returning true if anything changed.
+func (m *Model) expandAncestors(path string) bool {
 	changed := false
-	dir := filepath.Dir(path)
-	for {
+	for dir := filepath.Dir(path); ; dir = filepath.Dir(dir) {
 		if v, ok := m.expanded[dir]; ok && !v {
 			delete(m.expanded, dir)
 			changed = true
 		}
-		if dir == m.root || dir == "" || dir == "/" || dir == filepath.Dir(dir) {
-			break
+		// Stop at the configured root, or at the filesystem root where
+		// filepath.Dir is its own fixed point ("/" on unix, "C:\" on win).
+		if dir == m.root || dir == filepath.Dir(dir) {
+			return changed
 		}
-		dir = filepath.Dir(dir)
 	}
-	return changed
 }
 
 // firstTopLevelFile returns the first non-directory child of root, or nil if
@@ -154,13 +180,8 @@ func (m *Model) handleFSEvent(ev watch.Event) {
 		// Restore cursor by path; if the previously selected node is gone,
 		// clamp to a valid index rather than dangling past the end.
 		m.treeCursor = 0
-		if selectedPath != "" {
-			for i, row := range m.flatTree {
-				if row.node.Path == selectedPath {
-					m.treeCursor = i
-					break
-				}
-			}
+		if i := m.rowIndexByPath(selectedPath); i >= 0 {
+			m.treeCursor = i
 		}
 		if m.treeCursor >= len(m.flatTree) {
 			m.treeCursor = len(m.flatTree) - 1
@@ -194,9 +215,8 @@ func (m *Model) handleFSEvent(ev watch.Event) {
 	}
 }
 
-// flattenVisible produces a depth-tagged linear list from the tree,
-// skipping children of collapsed directories. The root itself is always
-// included.
+// flattenVisible produces a depth-tagged linear list of rows, skipping
+// children of collapsed directories. The root is always included.
 func (m *Model) flattenVisible() []treeRow {
 	if m.rootNode == nil {
 		return nil
@@ -215,9 +235,7 @@ func (m *Model) flattenVisible() []treeRow {
 	return rows
 }
 
-// isCollapsed reports whether the directory at path is currently
-// collapsed. Directories default to expanded; the expanded map only
-// stores overrides where the value is false.
+// isCollapsed reports whether the directory at path is currently collapsed.
 func (m *Model) isCollapsed(path string) bool {
 	v, ok := m.expanded[path]
 	return ok && !v

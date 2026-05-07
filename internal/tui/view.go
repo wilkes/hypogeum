@@ -66,7 +66,6 @@ func (m Model) renderTree() string {
 			}
 			name = chevron + name + "/"
 		} else {
-			// Align file rows under the chevron column.
 			name = "  " + name
 		}
 		// Wrap the whole row (minus its trailing newline) in a per-row

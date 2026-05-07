@@ -302,38 +302,18 @@ func (m *Model) handleTreeKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.treeCursor++
 		}
 	case key.Matches(msg, m.keys.ToggleFolder):
-		if m.treeCursor < len(m.flatTree) {
-			row := m.flatTree[m.treeCursor]
-			if row.node.IsDir {
-				m.expanded[row.node.Path] = m.isCollapsed(row.node.Path)
-				curPath := row.node.Path
-				m.flatTree = m.flattenVisible()
-				for i, r := range m.flatTree {
-					if r.node.Path == curPath {
-						m.treeCursor = i
-						break
-					}
-				}
-			}
+		if row, ok := m.cursorRow(); ok && row.node.IsDir {
+			m.toggleFolder(row.node.Path)
 		}
 	case key.Matches(msg, m.keys.Open):
-		if m.treeCursor < len(m.flatTree) {
-			row := m.flatTree[m.treeCursor]
-			if row.node.IsDir {
-				// Enter on a directory toggles it too — convenient when the
-				// hand is already on the row keys.
-				m.expanded[row.node.Path] = m.isCollapsed(row.node.Path)
-				curPath := row.node.Path
-				m.flatTree = m.flattenVisible()
-				for i, r := range m.flatTree {
-					if r.node.Path == curPath {
-						m.treeCursor = i
-						break
-					}
-				}
-			} else {
-				m.openFile(row.node.Path)
-			}
+		row, ok := m.cursorRow()
+		if !ok {
+			return *m, nil
+		}
+		if row.node.IsDir {
+			m.toggleFolder(row.node.Path)
+		} else {
+			m.openFile(row.node.Path)
 		}
 	}
 	return *m, nil

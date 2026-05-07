@@ -221,7 +221,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		treeWidth := m.treeWidth()
 		contentWidth := m.width - treeWidth
 		if treeWidth > 0 {
-			contentWidth -= 2 // borders / padding only when tree pane is shown
+			contentWidth -= 2 // pane borders only count when both panes are rendered
 		}
 		if contentWidth < 20 {
 			contentWidth = 20
