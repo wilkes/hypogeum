@@ -54,6 +54,7 @@ Three trade-offs worth knowing because they look like accidents otherwise:
 - **History semantics** live in `nav`. Browser-style: visiting truncates forward history; visiting the same path is a no-op.
 - **Hidden-entry filtering** lives in `tree`. Anything starting with `.` is skipped — `.git`, dotfile note dirs, etc.
 - **Empty-directory pruning** lives in `tree`. A directory with no `.md` anywhere underneath doesn't appear in the tree at all.
+- **Cross-cutting concepts** that span multiple packages or specs (the sentinel-render trick, the vault index, diagnostics, modal geometry, the return cursor, the link cursor) live in [`docs/concepts/`](concepts/). The docs index lists them; package docs and specs link to them by name.
 
 When you add a new concern, decide its owner first. The packages are small enough that the right home is usually obvious; pick wrong and the layering inverts.
 
