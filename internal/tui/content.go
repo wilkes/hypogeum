@@ -56,6 +56,7 @@ func (m *Model) refreshContent(path string) {
 		m.linkCursor = -1
 		return
 	}
+	m.renderer.SetFromFile(path)
 	out, links, err := m.renderer.RenderWithLinks(string(src), path, linkZoneMarker)
 	if err != nil {
 		m.status = err.Error()

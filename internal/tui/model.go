@@ -102,7 +102,19 @@ func New(root, initialFile string) (Model, error) {
 		return Model{}, fmt.Errorf("walk %s: %w", root, err)
 	}
 
-	r, err := markdown.NewRenderer(80)
+	diag := newDiagnostics(diagOpts{LogPath: defaultLogPath()})
+	var v *vault.Vault
+	if vv, err := vault.Build(root, diag); err == nil {
+		v = vv
+	} else {
+		diag.Warn("vault build failed: " + err.Error())
+	}
+
+	var rOpts []markdown.Option
+	if v != nil {
+		rOpts = append(rOpts, markdown.WithResolver(v))
+	}
+	r, err := markdown.NewRenderer(80, rOpts...)
 	if err != nil {
 		return Model{}, err
 	}
@@ -116,6 +128,8 @@ func New(root, initialFile string) (Model, error) {
 		focus:      focusTree,
 		keys:       defaultKeys(),
 		linkCursor: -1,
+		vault:      v,
+		diag:       diag,
 	}
 	m.flatTree = flatten(rootNode, 0)
 
@@ -125,15 +139,8 @@ func New(root, initialFile string) (Model, error) {
 	if w, err := watch.New(root); err == nil {
 		m.watcher = w
 	}
-
-	m.diag = newDiagnostics(diagOpts{LogPath: defaultLogPath()})
-	if v, err := vault.Build(root, m.diag); err == nil {
-		m.vault = v
-	} else {
-		m.diag.Warn("vault build failed: " + err.Error())
-	}
 	if m.watcher == nil {
-		m.diag.Warn("filesystem watcher unavailable; live updates disabled")
+		diag.Warn("filesystem watcher unavailable; live updates disabled")
 	}
 
 	if initialFile != "" {
@@ -184,7 +191,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Cap the renderer's wrap width so prose stays readable on wide
 		// terminals; the viewport pane keeps the full available width.
 		renderWidth := min(contentWidth, maxRenderWidth)
-		if r, err := markdown.NewRenderer(renderWidth); err == nil {
+		var rOpts []markdown.Option
+		if m.vault != nil {
+			rOpts = append(rOpts, markdown.WithResolver(m.vault))
+		}
+		if r, err := markdown.NewRenderer(renderWidth, rOpts...); err == nil {
 			m.renderer = r
 		}
 		if cur := m.history.Current(); cur != "" {
