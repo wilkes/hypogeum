@@ -103,6 +103,7 @@ func (m *Model) selectInTree(path string) {
 	if i := m.rowIndexByPath(path); i >= 0 {
 		m.treeCursor = i
 	}
+	m.refreshTreeVP()
 }
 
 // rowIndexByPath returns the index of the visible tree row whose node
@@ -137,6 +138,7 @@ func (m *Model) toggleFolder(path string) {
 	if i := m.rowIndexByPath(path); i >= 0 {
 		m.treeCursor = i
 	}
+	m.refreshTreeVP()
 }
 
 // expandAncestors removes "collapsed" overrides on every directory that
@@ -208,6 +210,7 @@ func (m *Model) handleFSEvent(ev watch.Event) {
 		if m.treeCursor < 0 {
 			m.treeCursor = 0
 		}
+		m.refreshTreeVP()
 
 	case watch.FileModified:
 		if m.vault != nil {

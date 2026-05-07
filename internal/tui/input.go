@@ -103,6 +103,7 @@ func (m *Model) clickTree(row int) (tea.Model, tea.Cmd) {
 	}
 	m.focus = focusTree
 	m.treeCursor = row
+	m.refreshTreeVP()
 	if !m.flatTree[row].node.IsDir {
 		m.openFile(m.flatTree[row].node.Path)
 	}
@@ -302,10 +303,12 @@ func (m *Model) handleTreeKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case key.Matches(msg, m.keys.Up):
 		if m.treeCursor > 0 {
 			m.treeCursor--
+			m.refreshTreeVP()
 		}
 	case key.Matches(msg, m.keys.Down):
 		if m.treeCursor < len(m.flatTree)-1 {
 			m.treeCursor++
+			m.refreshTreeVP()
 		}
 	case key.Matches(msg, m.keys.ToggleFolder):
 		if row, ok := m.cursorRow(); ok && row.node.IsDir {

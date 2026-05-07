@@ -47,7 +47,7 @@ func (m Model) View() string {
 		treeStyled := zone.Mark(zoneTreePane, paneStyle(m.focus == focusTree).
 			Width(m.treeWidth()).
 			Height(m.height-4).
-			Render(m.renderTree()))
+			Render(m.treeVP.View()))
 		body = lipgloss.JoinHorizontal(lipgloss.Top, treeStyled, contentColumn)
 	} else {
 		body = contentColumn
@@ -64,6 +64,18 @@ func (m Model) View() string {
 		return overlayModal(base, m.renderModal(body), m.width, m.height)
 	}
 	return base
+}
+
+// refreshTreeVP populates the tree viewport with the current rendered
+// rows and scrolls so that m.treeCursor is within the visible window.
+// Call after every write to m.flatTree or m.treeCursor.
+func (m *Model) refreshTreeVP() {
+	m.treeVP.SetContent(m.renderTree())
+	if m.treeCursor < m.treeVP.YOffset {
+		m.treeVP.SetYOffset(m.treeCursor)
+	} else if last := m.treeVP.YOffset + m.treeVP.Height - 1; m.treeCursor > last {
+		m.treeVP.SetYOffset(m.treeCursor - m.treeVP.Height + 1)
+	}
 }
 
 func (m Model) renderTree() string {

@@ -36,6 +36,7 @@ The packages are layered: `tui` depends on `tree`, `markdown`, `nav`, `watch`; t
 
 - **One package, one job.** `nav` is a pure stack — adding filesystem awareness to it is the wrong move; resolve paths in `markdown` or `tui` instead.
 - **Pre-flatten for keystroke performance.** The tree is walked into `[]treeRow` once in `New`; cursor movement just updates an index. Don't re-walk the tree on keystrokes.
+- **Tree pane is scrolled by `m.treeVP`, not lipgloss.** `renderTree()` produces all rows; `m.treeVP.View()` clips them to a visible window and scrolls so `m.treeCursor` stays in view. Any code path that writes `m.flatTree` or `m.treeCursor` must call `m.refreshTreeVP()` afterward; otherwise the rendered viewport stays stale or the cursor can scroll out of frame.
 - **Re-render on resize.** `WindowSizeMsg` rebuilds the Glamour renderer at the new wrap width and re-renders the current file. Anything that changes content width must do the same.
 - **CLI argument shape:** zero args = cwd; one dir = browse it; one file = open it with the tree rooted at its parent. Anything else is a usage error.
 - **Tests live next to the code they test** (`internal/nav/history_test.go`, `internal/tui/model_test.go`).

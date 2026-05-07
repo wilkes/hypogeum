@@ -49,6 +49,7 @@ type Model struct {
 	treeCursor int
 
 	viewport viewport.Model
+	treeVP   viewport.Model // scrolls the tree pane when flatTree exceeds pane height
 	renderer *markdown.Renderer
 
 	history *nav.History
@@ -167,6 +168,7 @@ func New(root, initialFile string) (Model, error) {
 	m.flatTree = m.flattenVisible()
 	m.backlinksVP = viewport.New(0, 0)
 	m.modalVP = newModalViewport()
+	m.treeVP = viewport.New(0, 0)
 	m.picker = newPicker(root)
 
 	// A watcher is best-effort: if it fails (e.g. inotify limits hit on
@@ -234,6 +236,17 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.viewport.Height = m.height - 4
 		m.backlinksVP.Width = contentWidth
 		m.backlinksVP.Height = backlinksHeight - 2
+		// The tree viewport gets the inside of the tree pane: width
+		// minus its border (2), height minus border + footer (4).
+		m.treeVP.Width = treeWidth - 2
+		if m.treeVP.Width < 0 {
+			m.treeVP.Width = 0
+		}
+		m.treeVP.Height = m.height - 4 - 2 // pane border (2) on top of viewport's own
+		if m.treeVP.Height < 1 {
+			m.treeVP.Height = 1
+		}
+		m.refreshTreeVP()
 		m.resizeModalVP()
 		m.resizePicker()
 		// Cap the renderer's wrap width so prose stays readable on wide

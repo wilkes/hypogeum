@@ -162,6 +162,56 @@ func TestModel_TreeForceHiddenAt60Cols(t *testing.T) {
 	}
 }
 
+// TestModel_TreeScrollsToCursorOnTallTree checks that when the tree has
+// more rows than the pane is tall, moving the cursor down past the
+// visible window scrolls the tree pane so the cursor row stays visible.
+// Without scrolling, lipgloss truncates from the top and the cursor
+// disappears below the fold.
+func TestModel_TreeScrollsToCursorOnTallTree(t *testing.T) {
+	root := writeTallFixture(t, 60)
+	m := sized(t, root, "")
+
+	if got := len(m.flatTree); got <= m.treeVP.Height {
+		t.Fatalf("precondition: flatTree (%d rows) should exceed pane height (%d)", got, m.treeVP.Height)
+	}
+
+	// Drive the cursor down to a row well past the initial visible window.
+	target := m.treeVP.Height + 10
+	if target >= len(m.flatTree) {
+		t.Fatalf("test setup: target row %d out of range (flatTree=%d)", target, len(m.flatTree))
+	}
+	m = driveCursorTo(t, m, target)
+
+	if m.treeCursor != target {
+		t.Fatalf("cursor at %d, expected %d", m.treeCursor, target)
+	}
+	visibleTop := m.treeVP.YOffset
+	visibleBot := visibleTop + m.treeVP.Height - 1
+	if m.treeCursor < visibleTop || m.treeCursor > visibleBot {
+		t.Errorf("cursor row %d outside visible window [%d, %d]", m.treeCursor, visibleTop, visibleBot)
+	}
+}
+
+// TestModel_TreeScrollsBackUp checks that scrolling the cursor back up
+// past the top of the visible window scrolls the viewport back. Without
+// this, only the down direction scrolls and the cursor would go invisible
+// above the viewport.
+func TestModel_TreeScrollsBackUp(t *testing.T) {
+	root := writeTallFixture(t, 60)
+	m := sized(t, root, "")
+
+	// Drive far down then back to row 0.
+	m = driveCursorTo(t, m, m.treeVP.Height+10)
+	if m.treeVP.YOffset == 0 {
+		t.Fatalf("precondition: viewport should have scrolled down before this test")
+	}
+	m = driveCursorTo(t, m, 0)
+
+	if m.treeVP.YOffset != 0 {
+		t.Errorf("YOffset should be 0 after scrolling back to row 0, got %d", m.treeVP.YOffset)
+	}
+}
+
 // TestModel_TreeShownAtNarrowWidths checks that shouldShowTree() returns false
 // when the terminal is narrower than twoPaneMinWidth even if the user
 // has the tree visible — the threshold gates effective state.
