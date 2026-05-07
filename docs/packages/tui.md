@@ -49,7 +49,7 @@ Everything else is package-private. The Bubble Tea runtime drives the model thro
 - **Auto-open is top-level only.** When `initialFile == ""`, `firstTopLevelFile` picks the first non-directory child of the root. *Don't* descend into subdirectories — earlier versions did, and the result was landing on the deepest leaf alphabetically because directories sort first. ([model.go:319](../../internal/tui/model.go))
 - **Resize rebuilds the renderer.** `WindowSizeMsg` recreates `markdown.Renderer` at the new wrap width and re-renders the current file. Anything that changes content width must do the same.
 - **`refreshContent` resets the link cursor to `-1`.** History navigation, file open, and resize all go through it. The link cursor is per-document; it doesn't survive a navigation.
-- **Link bindings are content-pane scoped.** `n`/`p`/`Esc` and link-aware `Enter` only fire when `focus == focusContent`. The tree pane's bindings are unaffected.
+- **Link bindings are content-pane scoped.** `n`/`p`/`Esc` and link-aware `Enter` only fire when `focus == focusContent`. The tree pane's bindings are unaffected. Full state model: [[link-cursor]].
 
 ## Key dispatch shape
 
@@ -80,3 +80,13 @@ Update(KeyMsg)
 ## Footer rendering
 
 `renderFooter` always shows the current file path (relative to the tree root) plus the help string. When a link is selected, it prepends `"→ "` and appends `[k/n] <target>`. The marker constant (`linkFooterMarker`) is package-public for tests to assert on.
+
+## Backlinks and modal surfaces
+
+The TUI hosts three additional surfaces beyond the two-pane core: the persistent backlinks pane (`b`), the backlinks modal (`B`), and the log viewer modal (`?`). They share input rules, geometry, and a single `prevFocus` slot. Each has its own concept doc:
+
+- [[modal-geometry]] — single-modal invariant, layout recompute on open, auto-collapse below height 20, `Esc` priority chain.
+- [[diagnostics]] — the warn/error stream that feeds the footer transient and the `?` modal.
+- [[return-cursor]] — single-slot cursor restoration that survives `Enter`-follow → `h`-back round trips on backlinks.
+
+The vault that powers backlinks is documented at [[vault-index]].
