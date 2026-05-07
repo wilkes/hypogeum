@@ -194,6 +194,47 @@ func TestBacklinksPane_EnterFollows(t *testing.T) {
 	}
 }
 
+func TestBacklinksModal_CursorAndEnter(t *testing.T) {
+	dir := t.TempDir()
+	writeTUITestFile(t, dir, "a.md", "see [[c]].")
+	writeTUITestFile(t, dir, "b.md", "also [[c]].")
+	writeTUITestFile(t, dir, "c.md", "i am c.")
+
+	m := sized(t, dir, "")
+	cAbs := filepath.Join(dir, "c.md")
+	m.openFile(cAbs)
+
+	// Open backlinks modal.
+	m = pressRune(t, m, 'B')
+	if m.modalOpen != modalBacklinks {
+		t.Fatalf("expected modalBacklinks, got %v", m.modalOpen)
+	}
+	if len(m.backlinks) != 2 {
+		t.Fatalf("expected 2 backlinks, got %d", len(m.backlinks))
+	}
+	if m.backlinkCursor != 0 {
+		t.Fatalf("expected cursor=0, got %d", m.backlinkCursor)
+	}
+
+	// j moves cursor in modal.
+	m = pressRune(t, m, 'j')
+	if m.backlinkCursor != 1 {
+		t.Fatalf("expected cursor=1 after j in modal, got %d", m.backlinkCursor)
+	}
+
+	// Enter follows AND closes the modal.
+	m = pressKey(t, m, tea.KeyMsg{Type: tea.KeyEnter})
+	if m.modalOpen != modalNone {
+		t.Fatalf("expected modal closed after Enter, got %v", m.modalOpen)
+	}
+	if m.focus != focusContent {
+		t.Fatalf("expected focusContent after Enter, got %v", m.focus)
+	}
+	if m.returnCursor == nil || m.returnCursor.surface != surfaceModal {
+		t.Fatalf("expected returnCursor.surface=surfaceModal, got %+v", m.returnCursor)
+	}
+}
+
 func TestScrollToLine_PositionsLineNearTop(t *testing.T) {
 	dir := t.TempDir()
 	// Build a 100-paragraph file so the viewport has somewhere to scroll.

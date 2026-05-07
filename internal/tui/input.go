@@ -117,8 +117,13 @@ func (m *Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if key.Matches(msg, m.keys.OpenBacklinksModal) {
 		if m.modalOpen == modalBacklinks {
 			m.modalOpen = modalNone
+			m.focus = m.prevFocus
 		} else {
+			if m.modalOpen == modalNone {
+				m.prevFocus = m.focus
+			}
 			m.modalOpen = modalBacklinks
+			m.backlinkCursor = 0
 			m.refreshBacklinksModal(m.history.Current())
 		}
 		return *m, nil
@@ -127,18 +132,47 @@ func (m *Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if key.Matches(msg, m.keys.OpenLogsModal) {
 		if m.modalOpen == modalLogs {
 			m.modalOpen = modalNone
+			m.focus = m.prevFocus
 		} else {
+			if m.modalOpen == modalNone {
+				m.prevFocus = m.focus
+			}
 			m.modalOpen = modalLogs
 			m.refreshLogsModal()
 		}
 		return *m, nil
 	}
 
-	// While a modal is open, Esc closes it; other keys go to the modal viewport.
+	// While a modal is open, Esc closes it. Backlinks modal gets explicit
+	// cursor handling so j/k move the selection rather than scroll the
+	// viewport. Logs modal keeps the viewport-scroll fall-through.
 	if m.modalOpen != modalNone {
 		if key.Matches(msg, m.keys.ClearLink) { // Esc
 			m.modalOpen = modalNone
+			m.focus = m.prevFocus
 			return *m, nil
+		}
+		if m.modalOpen == modalBacklinks {
+			switch {
+			case key.Matches(msg, m.keys.Down):
+				if m.backlinkCursor < len(m.backlinks)-1 {
+					m.backlinkCursor++
+					m.refreshBacklinksModal(m.history.Current())
+					m.ensureCursorVisible(&m.modalVP)
+				}
+				return *m, nil
+			case key.Matches(msg, m.keys.Up):
+				if m.backlinkCursor > 0 {
+					m.backlinkCursor--
+					m.refreshBacklinksModal(m.history.Current())
+					m.ensureCursorVisible(&m.modalVP)
+				}
+				return *m, nil
+			case key.Matches(msg, m.keys.Open):
+				m.followBacklink()
+				return *m, nil
+			}
+			// Fall through to viewport scroll for any other key.
 		}
 		var cmd tea.Cmd
 		m.modalVP, cmd = m.modalVP.Update(msg)
