@@ -114,33 +114,25 @@ func (m *Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	// of which pane has focus. They must run before the modal-forwarding
 	// block below so that pressing a toggle while a modal is open swaps
 	// or closes it.
-	if key.Matches(msg, m.keys.OpenBacklinksModal) {
-		if m.modalOpen == modalBacklinks {
-			m.modalOpen = modalNone
-			m.focus = m.prevFocus
-		} else {
-			if m.modalOpen == modalNone && m.focus != focusBacklinks {
-				m.prevFocus = m.focus
-			}
-			m.modalOpen = modalBacklinks
+	switch {
+	case key.Matches(msg, m.keys.OpenBacklinksModal):
+		return *m, m.toggleModal(modalBacklinks, func() tea.Cmd {
 			m.backlinkCursor = 0
 			m.refreshBacklinksModal(m.history.Current())
-		}
-		return *m, nil
-	}
-
-	if key.Matches(msg, m.keys.OpenLogsModal) {
-		if m.modalOpen == modalLogs {
-			m.modalOpen = modalNone
-			m.focus = m.prevFocus
-		} else {
-			if m.modalOpen == modalNone && m.focus != focusBacklinks {
-				m.prevFocus = m.focus
-			}
-			m.modalOpen = modalLogs
+			return nil
+		})
+	case key.Matches(msg, m.keys.OpenLogsModal):
+		return *m, m.toggleModal(modalLogs, func() tea.Cmd {
 			m.refreshLogsModal()
-		}
-		return *m, nil
+			return nil
+		})
+	case key.Matches(msg, m.keys.OpenPicker):
+		return *m, m.toggleModal(modalPicker, func() tea.Cmd {
+			// Reset each time so the picker starts at the vault root
+			// regardless of where a previous open left it.
+			m.picker.CurrentDirectory = m.root
+			return m.picker.Init()
+		})
 	}
 
 	// Toggle the tree pane. Synthesize a resize so the renderer and
@@ -157,6 +149,23 @@ func (m *Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	// cursor handling so j/k move the selection rather than scroll the
 	// viewport. Logs modal keeps the viewport-scroll fall-through.
 	if m.modalOpen != modalNone {
+		if m.modalOpen == modalPicker {
+			// Esc at the vault root closes the picker; deeper, filepicker
+			// handles Esc as "go up one directory" via its native keymap.
+			if key.Matches(msg, m.keys.ClearLink) && m.picker.CurrentDirectory == m.root {
+				m.modalOpen = modalNone
+				m.focus = m.prevFocus
+				return *m, nil
+			}
+			var cmd tea.Cmd
+			m.picker, cmd = m.picker.Update(msg)
+			if did, path := m.picker.DidSelectFile(msg); did {
+				m.modalOpen = modalNone
+				m.focus = m.prevFocus
+				m.navigateTo(path)
+			}
+			return *m, cmd
+		}
 		if key.Matches(msg, m.keys.ClearLink) { // Esc
 			m.modalOpen = modalNone
 			m.focus = m.prevFocus

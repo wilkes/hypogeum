@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/charmbracelet/bubbles/filepicker"
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	zone "github.com/lrstanley/bubblezone"
@@ -65,6 +66,7 @@ type Model struct {
 
 	modalOpen modalKind
 	modalVP   viewport.Model
+	picker    filepicker.Model
 
 	width, height int
 	keys          keyMap
@@ -165,6 +167,7 @@ func New(root, initialFile string) (Model, error) {
 	m.flatTree = m.flattenVisible()
 	m.backlinksVP = viewport.New(0, 0)
 	m.modalVP = newModalViewport()
+	m.picker = newPicker(root)
 
 	// A watcher is best-effort: if it fails (e.g. inotify limits hit on
 	// Linux), we silently fall back to the previous reload-on-navigate
@@ -177,11 +180,9 @@ func New(root, initialFile string) (Model, error) {
 	}
 
 	if initialFile != "" {
-		m.openFile(initialFile)
-		m.selectInTree(initialFile)
+		m.navigateTo(initialFile)
 	} else if first := firstTopLevelFile(rootNode); first != nil {
-		m.openFile(first.Path)
-		m.selectInTree(first.Path)
+		m.navigateTo(first.Path)
 	}
 
 	return m, nil
@@ -233,6 +234,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.backlinksVP.Width = contentWidth
 		m.backlinksVP.Height = backlinksHeight - 2
 		m.resizeModalVP()
+		m.resizePicker()
 		// Cap the renderer's wrap width so prose stays readable on wide
 		// terminals; the viewport pane keeps the full available width.
 		renderWidth := min(contentWidth, maxRenderWidth)
@@ -265,6 +267,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 		return m, clearTransientAfter(time.Second)
+	}
+
+	// filepicker dispatches readDirMsg async (from Init); deliver it
+	// while the picker is open.
+	if m.modalOpen == modalPicker {
+		var cmd tea.Cmd
+		m.picker, cmd = m.picker.Update(msg)
+		return m, cmd
 	}
 
 	// Forward other messages to the viewport when content has focus.

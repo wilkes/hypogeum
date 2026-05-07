@@ -20,14 +20,19 @@ type Node struct {
 	Children []*Node // populated for directories only
 }
 
-// Markdown extensions recognized by the walker. The TUI ignores everything
-// else. Adding more is fine; just be sure Glamour can render them.
-var markdownExts = map[string]struct{}{
-	".md":       {},
-	".markdown": {},
-	".mdown":    {},
-	".mkd":      {},
-}
+// MarkdownExts lists the file extensions hypogeum treats as markdown.
+// Sibling packages (watch, vault, tui) consult this list via IsMarkdown
+// or read it directly when an API needs the raw slice (e.g. filepicker's
+// AllowedTypes).
+var MarkdownExts = []string{".md", ".markdown", ".mdown", ".mkd"}
+
+var markdownExts = func() map[string]struct{} {
+	m := make(map[string]struct{}, len(MarkdownExts))
+	for _, ext := range MarkdownExts {
+		m[ext] = struct{}{}
+	}
+	return m
+}()
 
 // Walk builds a Node tree rooted at root, including only directories that
 // (transitively) contain at least one markdown file.
@@ -78,7 +83,7 @@ func walk(dir string) (*Node, error) {
 		if isHidden(entry.Name()) {
 			continue
 		}
-		if !isMarkdown(entry.Name()) {
+		if !IsMarkdown(entry.Name()) {
 			continue
 		}
 		node.Children = append(node.Children, &Node{
@@ -95,7 +100,8 @@ func walk(dir string) (*Node, error) {
 	return node, nil
 }
 
-func isMarkdown(name string) bool {
+// IsMarkdown reports whether name has a recognized markdown extension.
+func IsMarkdown(name string) bool {
 	_, ok := markdownExts[strings.ToLower(filepath.Ext(name))]
 	return ok
 }

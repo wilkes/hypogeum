@@ -15,6 +15,8 @@ import (
 	"time"
 
 	"github.com/fsnotify/fsnotify"
+
+	"github.com/wilkes/hypogeum/internal/tree"
 )
 
 // EventKind tells callers what kind of refresh the change requires.
@@ -50,16 +52,6 @@ type Watcher struct {
 	// being emitted. Editors often write via rename-over-temp, producing
 	// 2–4 events for a single save.
 	debounceWindow time.Duration
-}
-
-// markdown extensions recognized for FileModified events. Kept in sync with
-// internal/tree.markdownExts — duplicated rather than imported to keep this
-// package leaf-level.
-var markdownExts = map[string]struct{}{
-	".md":       {},
-	".markdown": {},
-	".mdown":    {},
-	".mkd":      {},
 }
 
 // New starts watching the tree rooted at root. The returned Watcher emits
@@ -202,7 +194,7 @@ func (w *Watcher) classify(ev fsnotify.Event, pendingStruct, pendingWrite map[st
 			pendingStruct[ev.Name] = struct{}{}
 			return
 		}
-		if isMarkdown(ev.Name) {
+		if tree.IsMarkdown(ev.Name) {
 			pendingStruct[ev.Name] = struct{}{}
 		}
 
@@ -213,7 +205,7 @@ func (w *Watcher) classify(ev fsnotify.Event, pendingStruct, pendingWrite map[st
 		pendingStruct[ev.Name] = struct{}{}
 
 	case ev.Op&fsnotify.Write != 0:
-		if isMarkdown(ev.Name) {
+		if tree.IsMarkdown(ev.Name) {
 			pendingWrite[ev.Name] = struct{}{}
 		}
 	}
@@ -226,11 +218,6 @@ func drainSet(m map[string]struct{}) []string {
 		delete(m, k)
 	}
 	return out
-}
-
-func isMarkdown(name string) bool {
-	_, ok := markdownExts[strings.ToLower(filepath.Ext(name))]
-	return ok
 }
 
 func isHiddenPath(p string) bool {

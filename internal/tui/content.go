@@ -45,6 +45,14 @@ func (m *Model) openFile(path string) {
 	m.refreshContent(path)
 }
 
+// navigateTo opens path and moves the tree cursor to its row. Used
+// anywhere a file is opened by user action other than Back/Forward
+// (those have their own path because they don't push history).
+func (m *Model) navigateTo(path string) {
+	m.openFile(path)
+	m.selectInTree(path)
+}
+
 // refreshContent re-renders the file at path into the viewport without
 // touching history. Used by back/forward and on resize. Also refreshes
 // the link list and clears any active link selection.
