@@ -1,7 +1,7 @@
 # Wikilinks and backlinks — design
 
 **Status:** spec — not yet implemented.
-**Scope:** add Obsidian-style `[[wikilinks]]` and a backlinks index to hypogeum, surfaced as a persistent bottom pane and a modal overlay.
+**Scope:** add Obsidian-style `[[wikilinks]]` and a backlinks index to hypogeum, surfaced as a persistent bottom pane and a modal overlay. The backlinks index also covers standard markdown links (`[text](path.md)`) so a vault that uses GitHub-compatible links gets the same backlinks coverage.
 **Out of scope:** tags, frontmatter views, full-text search, graph view, wikilink autocomplete, rename-and-rewrite. These are independent designs.
 
 See also: [docs index](../../index.md), [architecture](../../architecture.md), [link-following](../../link-following.md).
@@ -15,9 +15,18 @@ The use case is asymmetric: an LLM (Claude) generates and maintains the content;
 - Broken `[[links]]` are a feedback signal *to* the content generator, not a UX flow to design around. Surface them; don't hide them.
 - Lenient name matching matters less than it would for a human writer — Claude can produce exact names. We still implement Obsidian's canonical resolution rules so vaults written for Obsidian work without modification.
 
+### Multi-tool compatibility
+
+Vaults written for `hypogeum` are also expected to be readable in GitHub's web UI and in Obsidian without modification. This shapes the cross-reference strategy:
+
+- **Standard markdown links (`[text](path.md)`)** work everywhere — GitHub, hypogeum, Obsidian. Claude is expected to prefer this syntax for most cross-references.
+- **Wikilinks (`[[Note]]`)** work in hypogeum and Obsidian, but render as literal text on GitHub. Useful where name-based lookup is more natural than path-based.
+
+The indexer covers both syntaxes uniformly: a backlink to `notes/foo.md` shows up regardless of whether the linking file used `[[Foo]]` or `[Foo](notes/foo.md)`. This means a vault that sticks to standard links gets full hypogeum backlinks coverage *and* full GitHub navigation, while a vault that mixes both gets the same backlinks coverage with the wikilink subset surviving in Obsidian.
+
 ## Architecture
 
-A new `internal/vault` package becomes a peer of `tree`, `markdown`, `nav`, `watch`. It owns wikilink parsing, the forward and reverse indexes, and watcher integration for incremental maintenance. `internal/markdown` gains a small `Resolver` dependency it uses to turn `[[Name]]` AST nodes into either a real link (resolved) or a styled placeholder (unresolved). `internal/tui` consumes the vault for the backlinks UI.
+A new `internal/vault` package becomes a peer of `tree`, `markdown`, `nav`, `watch`. It owns wikilink parsing, the forward and reverse indexes (covering both wikilinks *and* standard markdown links), and watcher integration for incremental maintenance. `internal/markdown` gains a small `Resolver` dependency it uses to turn `[[Name]]` AST nodes into either a real link (resolved) or a styled placeholder (unresolved). `internal/tui` consumes the vault for the backlinks UI.
 
 ```
 cmd/hypogeum
@@ -50,11 +59,23 @@ Public surface:
 ```go
 type Vault struct { /* private */ }
 
-// Build walks root and indexes every .md file's wikilinks.
-// Returns a Vault with both indexes populated.
-func Build(root string) (*Vault, error)
+// Diagnostics is the interface vault uses to surface non-fatal issues
+// (parse failures, refresh races, etc.) to the user. Implemented by the TUI;
+// see "Diagnostics" under Error handling.
+type Diagnostics interface {
+    Info(msg string)
+    Warn(msg string)
+    Error(msg string)
+}
 
-// RefreshFile re-parses one file's outgoing wikilinks and updates both indexes.
+// Build walks root and indexes every .md file's wikilinks and standard
+// markdown links. The diag sink receives non-fatal issues (e.g. parse
+// failures); pass a no-op implementation for tests that don't care.
+// Returns a Vault with both indexes populated.
+func Build(root string, diag Diagnostics) (*Vault, error)
+
+// RefreshFile re-parses one file's outgoing references (wikilinks and
+// standard markdown links) and updates both indexes.
 // Called on watch.FileModified.
 func (v *Vault) RefreshFile(path string) error
 
@@ -67,16 +88,26 @@ func (v *Vault) Rebuild() error
 func (v *Vault) Resolve(fromFile, name, heading, block string) (path string, ok bool)
 
 // Backlinks returns every reference *to* path in document order
-// across files. Used by the TUI backlinks pane.
+// across files. Used by the TUI backlinks pane. Includes both
+// wikilink and standard-markdown-link references uniformly.
 func (v *Vault) Backlinks(path string) []Backlink
 
 type Backlink struct {
     SourceFile  string // absolute path of the linking file
-    DisplayText string // alias if present, otherwise resolved name
+    DisplayText string // alias/wikilink target, or standard link's [text]
     Snippet     string // smallest enclosing block, plain text, with the
                        // link's display text wrapped in SGR for highlight
     Line        int    // 1-indexed line in SourceFile where the link appears
+    Kind        BacklinkKind // wikilink or stdlink — exposed so the UI
+                             // can optionally render a small badge
 }
+
+type BacklinkKind int
+
+const (
+    BacklinkWikilink BacklinkKind = iota
+    BacklinkStdLink
+)
 ```
 
 Internal state:
@@ -91,15 +122,24 @@ type Vault struct {
 
 type fileEntry struct {
     path string
-    refs []reference  // outgoing wikilinks parsed from this file
+    refs []reference  // outgoing references (wikilinks + standard markdown links)
 }
 
+type referenceKind int
+
+const (
+    refWikilink referenceKind = iota // [[Target]] — name-based lookup
+    refStdLink                       // [text](path.md) — path-based lookup
+)
+
 type reference struct {
-    target      string // raw [[Target]] name as written
-    heading     string // [[Target#Heading]]
-    block       string // [[Target^block-id]]
-    alias       string // [[Target|alias]]
-    displayText string // alias if present, else target
+    kind        referenceKind
+    target      string // raw [[Target]] name (wikilink) or href (stdlink)
+    resolved    string // absolute path of the target file, "" if unresolved
+    heading     string // [[Target#Heading]] or [text](path.md#heading)
+    block       string // [[Target^block-id]] (wikilinks only)
+    alias       string // [[Target|alias]] (wikilinks only)
+    displayText string // wikilink: alias if present else target; stdlink: link text
     snippet     string // pre-rendered nearest-enclosing-block plain text
     line        int
 }
@@ -133,18 +173,39 @@ The renderer needs the calling file's path because resolution is proximity-aware
 State additions:
 
 ```go
-backlinksOpen bool          // persistent bottom-split toggled by 'b'
-modalOpen     bool          // backlinks modal toggled by 'B'
-backlinksVP   viewport.Model // independent scroll for the bottom split
-modalVP       viewport.Model // independent scroll for the modal
-backlinkCursor int          // selected row in whichever surface is active
-vault         *vault.Vault  // injected at New time
+backlinksOpen   bool           // persistent bottom-split toggled by 'b'
+modalOpen       modalKind      // none | backlinks | logs (single-modal invariant)
+backlinksVP     viewport.Model // independent scroll for the backlinks bottom split
+modalVP         viewport.Model // independent scroll for whichever modal is open
+backlinkCursor  int            // selected row in whichever backlinks surface is active
+vault           *vault.Vault   // injected at New time
+
+// Diagnostic sink — owned by the TUI, passed to vault.Build via the
+// vault.Diagnostics interface. Pushes to a 200-entry ring buffer
+// (read by the log viewer modal) and to the footer transient status
+// (cleared after ~3s via a tea.Tick).
+diag            *diagnostics
+status          string  // existing field; now also driven by transient diag
 ```
+
+Modal kinds:
+
+```go
+type modalKind int
+const (
+    modalNone modalKind = iota
+    modalBacklinks
+    modalLogs
+)
+```
+
+The single-modal invariant means `B` and `?` are mutually exclusive: opening one closes the other. This keeps geometry simple (one modal viewport, swap content) and avoids stacking semantics.
 
 Geometry:
 - `b` toggles `backlinksOpen`. When open *and* `m.height >= 20`, the content viewport's height is reduced by `backlinksHeight` (8 rows including its border). When `m.height < 20`, `backlinksOpen` is honored as state but the pane is suppressed in `View()` — when the terminal grows again, the pane reappears.
-- `B` toggles `modalOpen`. While `modalOpen`, geometry is recomputed as if `backlinksOpen` were false — the content viewport reclaims the bottom-split's space, and the modal renders centered on top. When the modal is dismissed, if `backlinksOpen` is still true, the bottom split reappears. The modal is fixed at 60% width × 60% height (clamped to min 40 cols × 12 rows, max 120 cols × 40 rows).
-- `Esc` dismisses the modal first, then clears the link cursor as today, then is a no-op.
+- `B` toggles the backlinks modal (`modalOpen = modalBacklinks` ↔ `modalNone`). While any modal is open, geometry is recomputed as if `backlinksOpen` were false — the content viewport reclaims the bottom-split's space, and the modal renders centered on top. When the modal is dismissed, if `backlinksOpen` is still true, the bottom split reappears. Modal size is fixed at 60% width × 60% height (clamped to min 40 cols × 12 rows, max 120 cols × 40 rows).
+- `?` toggles the log viewer modal (`modalOpen = modalLogs` ↔ `modalNone`). Same modal infrastructure and geometry as the backlinks modal. Mutually exclusive with the backlinks modal — pressing `?` while backlinks modal is open swaps the modal's content; pressing `B` while logs modal is open does the same.
+- `Esc` dismisses the modal (any kind) first, then clears the link cursor as today, then is a no-op.
 
 Backlink row rendering (used by both surfaces):
 
@@ -180,7 +241,7 @@ The "name" stored in the index for lookups is `strings.ToLower(basenameWithoutEx
 
 **Startup:**
 1. `tree.Walk(root)` produces the tree (existing).
-2. `vault.Build(root)` walks the same root, parses each `.md` file's wikilinks via the goldmark extension, populates `files` and `names`.
+2. `vault.Build(root)` walks the same root and, for each `.md` file, runs *one* goldmark parse (with the wikilink extension registered) and walks the resulting AST collecting *both* `wikilinkNode`s and standard `ast.Link` nodes. Each becomes a `reference` entry tagged with its `kind`. Standard links resolve via `markdown.ResolveLink` (existing); wikilinks resolve via the basename index. Populates `files` and `names`.
 3. `markdown.NewRenderer(width, WithResolver(vault))` wires the resolver in.
 4. `tui.New` stores the vault on the model.
 
@@ -197,9 +258,14 @@ The "name" stored in the index for lookups is `strings.ToLower(basenameWithoutEx
 3. Re-layout: viewport heights recomputed.
 
 **`B` pressed:**
-1. `m.modalOpen = !m.modalOpen`.
-2. Same `refreshBacklinks` populates the modal viewport.
+1. `m.modalOpen` toggles between `modalBacklinks` and `modalNone`. If currently `modalLogs`, it switches to `modalBacklinks` (single-modal swap).
+2. `refreshBacklinks` populates the shared modal viewport.
 3. View renders modal as the top layer; all other input except modal nav and `Esc` is dropped while modal is open.
+
+**`?` pressed:**
+1. `m.modalOpen` toggles between `modalLogs` and `modalNone`. If currently `modalBacklinks`, it switches to `modalLogs`.
+2. `refreshLogs` populates the shared modal viewport from the diagnostic ring buffer.
+3. Same modal rendering and input rules as `B`.
 
 **Filesystem event:**
 1. `watch.FileModified(p)` arrives.
@@ -211,13 +277,26 @@ The "name" stored in the index for lookups is `strings.ToLower(basenameWithoutEx
 
 | Failure | Behavior |
 |---|---|
-| Goldmark parse failure on one file during `Build` | Skip that file's references; log a warning; continue. Index is still built. |
+| Goldmark parse failure on one file during `Build` | Emit a `warn` diagnostic with the file path and parse error. Skip that file's references. Index is still built. |
 | `vault.Build` returns error (e.g. root unreadable) | Propagate to `tui.New` which fatals — same as today. |
-| `RefreshFile` fails (file deleted between event and read) | Drop the file's entry from indexes; no error to caller. |
-| Watcher `nil` | Vault built once at startup, never refreshed. Same graceful-degradation as the rest of the TUI. |
+| `RefreshFile` fails (file deleted between event and read) | Emit an `info` diagnostic. Drop the file's entry from indexes; no error to caller. |
+| Watcher `nil` | Emit a `warn` diagnostic at startup. Vault built once, never refreshed. Same graceful-degradation as the rest of the TUI. |
 | Wikilink target unresolved | Inline styled placeholder (dim red, `?` suffix). No footer message unless the user selects the link. Selecting shows `broken: [[Name]]`. |
 | Wikilink resolved but anchor missing | File opens; anchor scroll is a no-op (same as a regular link). |
 | Multiple basename matches | Proximity rule (above). Resolution is deterministic given the vault state. |
+| Diagnostic log path unwritable | File logging silently disabled. In-memory ring buffer and footer still work. |
+
+### Diagnostics
+
+Errors and warnings during indexing (parse failures, `RefreshFile` races, watcher errors) feed a single internal diagnostic stream with three observers:
+
+1. **Transient footer status.** The most recent diagnostic appears in the footer for ~3 seconds, then clears. Surfaces problems in real time without requiring the user to know to look.
+2. **Log file.** Appended to `$XDG_STATE_HOME/hypogeum/hypogeum.log` (Linux) or `~/Library/Logs/hypogeum/hypogeum.log` (macOS), one JSON line per entry (`{ts, severity, source, message}`). Path resolution falls back to `~/.local/state/hypogeum/` if `XDG_STATE_HOME` isn't set. If no path is writable, file logging is silently disabled (the in-memory buffer and footer still work).
+3. **In-app log viewer.** Key `?` opens a modal showing the last 200 diagnostic entries from an in-memory ring buffer. Reuses the modal infrastructure built for backlinks. Severity is shown via color cue (warn = yellow, error = red, info = dim). `Esc` closes; `j`/`k` scroll.
+
+Severity levels: `info`, `warn`, `error`. Phase 1 emits only `warn` and `error` (and the one `info` for `RefreshFile` races). Severity is plumbed through so future diagnostics (render times, rebuild durations) can land at `info` without changing the API.
+
+Diagnostic emission point lives in `internal/vault` (`v.warn(format, args...)`, `v.errorf(...)`, etc.) and in `internal/tui` for UI-side issues. Both push to a shared diagnostic sink owned by the TUI model — the TUI hands the sink to the vault during `Build`. This keeps the diagnostic stream a TUI concern (which it is — it's user-facing) without coupling `vault` to the TUI; `vault` accepts a `Diagnostics` interface (`Warn(string)`, `Error(string)`, `Info(string)`) that the TUI implements.
 
 ## Testing
 
@@ -226,9 +305,11 @@ The "name" stored in the index for lookups is `strings.ToLower(basenameWithoutEx
 - `snippet_test.go`: AST fixtures for paragraph, list item, blockquote, nested list-in-blockquote → snippet text matches expected (link's display text wrapped in marker bytes for the highlight).
 - `vault_test.go`:
   - Build on fixture tree → indexes match.
+  - Build with mixed-syntax fixture (some wikilinks, some standard markdown links pointing at the same target) → backlinks include both, with `Kind` correctly set.
   - `RefreshFile` after editing one file → forward index updated, reverse-side derivation correct.
   - `Resolve` with case differences, disambiguation by proximity.
   - `Resolve` on miss returns `false`.
+  - Parse failure on one file emits a `warn` diagnostic via the injected sink; Build still returns a populated vault.
 
 `internal/markdown`:
 - Golden test: a file with `[[Foo]]` where the resolver returns a real path produces the same byte structure as `[Foo](path/to/foo.md)`.
@@ -241,16 +322,24 @@ The "name" stored in the index for lookups is `strings.ToLower(basenameWithoutEx
   - `Enter` on a selected backlink calls `openFile` and records history.
   - Modal: `B` opens; `Esc` closes; navigation works.
   - Auto-collapse: persistent pane suppressed when `m.height < 20`.
+  - Single-modal invariant: pressing `?` while backlinks modal is open swaps content (logs modal renders, backlinks modal does not); pressing `B` while logs modal is open swaps the other way. Both never render simultaneously.
+- `diagnostics_test.go`:
+  - Footer transient: emitting a diagnostic populates the footer status; status clears after the timeout.
+  - Log viewer: pressing `?` opens the modal, lists ring-buffer entries, `Esc` closes.
+  - File logging falls back gracefully when the log path is unwritable.
 - Existing tests must continue to pass (no regressions to tree-pane behavior).
 
 ## Phasing
 
 **Phase 1 (this spec):**
-- Wikilink parser, name index, resolver.
-- Renderer integration (resolved + unresolved).
-- Vault build at startup, watcher-driven refresh.
-- Backlinks pane (`b`) and modal (`B`).
-- Snippet extraction, in-snippet highlight.
+- Wikilink parser, basename index, forward + on-demand reverse indexes.
+- Mixed-syntax indexing: standard markdown links contribute to the same indexes as wikilinks.
+- `Resolver` interface in `internal/markdown`; `vault.Vault` implements it.
+- Renderer integration: resolved wikilinks render as standard links; unresolved get the broken-style SGR with `?` suffix.
+- Vault build at startup, watcher-driven refresh (`RefreshFile` on `FileModified`, `Rebuild` on `StructureChanged`).
+- Backlinks: persistent bottom pane (`b`) + modal (`B`).
+- Snippet extraction (smallest enclosing block) with in-snippet highlight on the link's display text.
+- Diagnostic infrastructure: `Diagnostics` interface, footer transient (~3s), JSON-line log file, in-app log viewer modal (`?`), single-modal invariant.
 
 **Phase 2 (separate spec):**
 - Block reference (`^block-id`) actual position resolution.
@@ -267,3 +356,4 @@ The "name" stored in the index for lookups is `strings.ToLower(basenameWithoutEx
 - **Reverse index is computed on demand.** O(total references) per `Backlinks(path)` call. At 1000 files × 20 refs/file = 20k iterations per backlinks-pane refresh. Fine for terminal latency. If we ever support 100k-file vaults, materialize the reverse index.
 - **Case-insensitive matching is locale-naive.** Uses `strings.ToLower` (ASCII-aware in practice for Go). Vaults with non-ASCII filenames may have surprising matches. Documented; acceptable for now.
 - **Renames are not auto-rewritten.** Per the use case framing — Claude owns content, hypogeum is a viewer — a rename that breaks `[[Old Name]]` in other files surfaces as broken links rather than being silently fixed. This is the desired feedback loop.
+- **Log file is unbounded.** No rotation in Phase 1. Volume should be low (only `warn` and `error` during normal operation, plus the occasional `info` for refresh races); long-running sessions over many days could still grow the file. If this ever becomes a problem, add a 10MB cap with single-file rotation. The user can also `rm` the log file at any time without affecting the running session — the in-memory ring buffer is independent.
