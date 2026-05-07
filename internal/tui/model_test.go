@@ -4,6 +4,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	tea "github.com/charmbracelet/bubbletea"
 )
 
 func TestModel_BootsAndRendersFirstFile(t *testing.T) {
@@ -85,5 +87,24 @@ func TestNewBuildsVault(t *testing.T) {
 	}
 	if m.vault == nil {
 		t.Fatalf("expected vault to be constructed")
+	}
+}
+
+func TestKeyBTogglesBacklinksOpen(t *testing.T) {
+	dir := t.TempDir()
+	m, err := New(dir, "")
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	if m.backlinksOpen {
+		t.Fatalf("expected backlinksOpen=false initially")
+	}
+	out, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'b'}})
+	if !out.(Model).backlinksOpen {
+		t.Fatalf("after b: expected backlinksOpen=true")
+	}
+	out2, _ := out.(Model).Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'b'}})
+	if out2.(Model).backlinksOpen {
+		t.Fatalf("after second b: expected backlinksOpen=false")
 	}
 }

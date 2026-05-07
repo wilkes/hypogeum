@@ -16,6 +16,8 @@ type keyMap struct {
 	NextLink  key.Binding
 	PrevLink  key.Binding
 	ClearLink key.Binding
+
+	ToggleBacklinks key.Binding
 }
 
 func defaultKeys() keyMap {
@@ -31,5 +33,7 @@ func defaultKeys() keyMap {
 		NextLink:  key.NewBinding(key.WithKeys("n"), key.WithHelp("n", "next link")),
 		PrevLink:  key.NewBinding(key.WithKeys("p"), key.WithHelp("p", "prev link")),
 		ClearLink: key.NewBinding(key.WithKeys("esc"), key.WithHelp("esc", "clear link")),
+
+		ToggleBacklinks: key.NewBinding(key.WithKeys("b"), key.WithHelp("b", "backlinks pane")),
 	}
 }

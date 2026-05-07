@@ -45,6 +45,10 @@ type Model struct {
 	links      []markdown.Link // links extracted from the currently rendered file
 	linkCursor int             // -1 when no link is selected (Phase 1: always -1)
 
+	backlinksOpen  bool
+	backlinksVP    viewport.Model
+	backlinkCursor int
+
 	width, height int
 	keys          keyMap
 	status        string // last error or info message

@@ -135,6 +135,10 @@ func (m *Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.selectInTree(path)
 		}
 		return *m, nil
+
+	case key.Matches(msg, m.keys.ToggleBacklinks):
+		m.backlinksOpen = !m.backlinksOpen
+		return *m, nil
 	}
 
 	if m.focus == focusTree {
