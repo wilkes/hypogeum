@@ -172,17 +172,27 @@ func (m *Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return *m, nil
 
 	case key.Matches(msg, m.keys.ToggleBacklinks):
-		m.backlinksOpen = !m.backlinksOpen
 		if m.backlinksOpen {
+			m.backlinksOpen = false
+			m.focus = m.prevFocus
+		} else {
+			m.backlinksOpen = true
+			m.prevFocus = m.focus
+			m.focus = focusBacklinks
+			m.backlinkCursor = 0
 			m.refreshBacklinks(m.history.Current())
 		}
 		return *m, nil
 	}
 
-	if m.focus == focusTree {
+	switch m.focus {
+	case focusTree:
 		return m.handleTreeKey(msg)
+	case focusBacklinks:
+		return m.handleBacklinksKey(msg)
+	default:
+		return m.handleContentKey(msg)
 	}
-	return m.handleContentKey(msg)
 }
 
 // handleContentKey routes keystrokes received while the content pane has
@@ -209,6 +219,29 @@ func (m *Model) handleContentKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
 	m.viewport, cmd = m.viewport.Update(msg)
 	return *m, cmd
+}
+
+// handleBacklinksKey routes keystrokes received while the persistent
+// backlinks pane has focus. j/k move the cursor; Enter follows
+// (added in Task 9); Esc returns focus to prevFocus.
+func (m *Model) handleBacklinksKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch {
+	case key.Matches(msg, m.keys.Down):
+		if m.backlinkCursor < len(m.backlinks)-1 {
+			m.backlinkCursor++
+			m.refreshBacklinks(m.history.Current())
+			m.ensureCursorVisible(&m.backlinksVP)
+		}
+		return *m, nil
+	case key.Matches(msg, m.keys.Up):
+		if m.backlinkCursor > 0 {
+			m.backlinkCursor--
+			m.refreshBacklinks(m.history.Current())
+			m.ensureCursorVisible(&m.backlinksVP)
+		}
+		return *m, nil
+	}
+	return *m, nil
 }
 
 func (m *Model) handleTreeKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {

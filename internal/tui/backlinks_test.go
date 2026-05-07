@@ -79,6 +79,53 @@ func TestBacklinksModalToggleAndEsc(t *testing.T) {
 	}
 }
 
+func TestBacklinksPane_CursorMovement(t *testing.T) {
+	dir := t.TempDir()
+	writeTUITestFile(t, dir, "a.md", "see [[c]].")
+	writeTUITestFile(t, dir, "b.md", "also [[c]].")
+	writeTUITestFile(t, dir, "c.md", "i am c.")
+
+	m := sized(t, dir, "")
+	m.openFile(filepath.Join(dir, "c.md"))
+
+	// Open backlinks pane (b). Subsequent task wires focus; for now we
+	// only need backlinks populated and the input router to dispatch
+	// j/k to the pane handler when focus is focusBacklinks.
+	m = pressRune(t, m, 'b')
+	if m.focus != focusBacklinks {
+		t.Fatalf("expected focusBacklinks after b, got %v", m.focus)
+	}
+	if len(m.backlinks) != 2 {
+		t.Fatalf("expected 2 backlinks, got %d", len(m.backlinks))
+	}
+	if m.backlinkCursor != 0 {
+		t.Fatalf("expected cursor to start at 0, got %d", m.backlinkCursor)
+	}
+
+	m = pressRune(t, m, 'j')
+	if m.backlinkCursor != 1 {
+		t.Fatalf("expected cursor=1 after j, got %d", m.backlinkCursor)
+	}
+
+	// j past the end clamps.
+	m = pressRune(t, m, 'j')
+	if m.backlinkCursor != 1 {
+		t.Fatalf("expected cursor=1 (clamped) after j at end, got %d", m.backlinkCursor)
+	}
+
+	// k moves up.
+	m = pressRune(t, m, 'k')
+	if m.backlinkCursor != 0 {
+		t.Fatalf("expected cursor=0 after k, got %d", m.backlinkCursor)
+	}
+
+	// k past the start clamps.
+	m = pressRune(t, m, 'k')
+	if m.backlinkCursor != 0 {
+		t.Fatalf("expected cursor=0 (clamped) after k at start, got %d", m.backlinkCursor)
+	}
+}
+
 func TestFormatBacklinks_HighlightsSelectedRow(t *testing.T) {
 	links := []vault.Backlink{
 		{SourceFile: "/r/a.md", DisplayText: "x", Snippet: "hello", Line: 1},

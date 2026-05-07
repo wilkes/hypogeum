@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/charmbracelet/bubbles/viewport"
 	"github.com/charmbracelet/lipgloss"
 
 	"github.com/wilkes/hypogeum/internal/vault"
@@ -153,6 +154,23 @@ func (m *Model) refreshBacklinksModal(currentPath string) {
 	links := m.vault.Backlinks(currentPath)
 	m.backlinks = links
 	m.modalVP.SetContent(formatBacklinks(links, m.root, m.modalVP.Width, m.backlinkCursor))
+}
+
+// ensureCursorVisible adjusts vp's YOffset so the two-row entry at
+// m.backlinkCursor is fully on-screen. Called after every cursor
+// mutation. Each backlink takes 2 visible rows.
+func (m *Model) ensureCursorVisible(vp *viewport.Model) {
+	const rowsPerEntry = 2
+	cursorTop := m.backlinkCursor * rowsPerEntry
+	cursorBottom := cursorTop + rowsPerEntry - 1
+
+	if cursorTop < vp.YOffset {
+		vp.SetYOffset(cursorTop)
+		return
+	}
+	if cursorBottom >= vp.YOffset+vp.Height {
+		vp.SetYOffset(cursorBottom - vp.Height + 1)
+	}
 }
 
 // truncateOneLine collapses internal newlines into spaces and clips
