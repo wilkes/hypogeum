@@ -89,3 +89,33 @@ func TestBacklinksFromStandardAndWikilinks(t *testing.T) {
 		t.Fatalf("expected both wikilink and stdlink backlinks, got %+v", got)
 	}
 }
+
+type recordingDiag struct {
+	infos, warns, errors []string
+}
+
+func (r *recordingDiag) Info(m string)  { r.infos = append(r.infos, m) }
+func (r *recordingDiag) Warn(m string)  { r.warns = append(r.warns, m) }
+func (r *recordingDiag) Error(m string) { r.errors = append(r.errors, m) }
+
+func TestBuildEmitsWarnOnUnreadableFile(t *testing.T) {
+	dir := t.TempDir()
+	writeFile(t, dir, "ok.md", "fine")
+	bad := writeFile(t, dir, "bad.md", "fine")
+	if err := os.Chmod(bad, 0o000); err != nil {
+		t.Skipf("chmod 000 not supported: %v", err)
+	}
+	defer os.Chmod(bad, 0o644)
+
+	r := &recordingDiag{}
+	v, err := Build(dir, r)
+	if err != nil {
+		t.Fatalf("Build: %v", err)
+	}
+	if v == nil {
+		t.Fatalf("Build returned nil")
+	}
+	if len(r.warns) == 0 {
+		t.Fatalf("expected a Warn diagnostic for unreadable file, got none")
+	}
+}
