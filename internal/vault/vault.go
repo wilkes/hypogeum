@@ -100,14 +100,55 @@ func Build(root string, diag Diagnostics) (*Vault, error) {
 // RefreshFile re-parses one file's outgoing references and updates
 // both indexes. Called on watch.FileModified.
 func (v *Vault) RefreshFile(path string) error {
-	// Implementation in Stage 6.
+	abs, err := filepath.Abs(path)
+	if err != nil {
+		return err
+	}
+
+	// If the file is gone, drop its entry. The watcher will follow
+	// up with a StructureChanged for the directory, which calls
+	// Rebuild — so getting Resolve right here is best-effort.
+	if _, statErr := os.Stat(abs); statErr != nil {
+		v.mu.Lock()
+		delete(v.files, abs)
+		key := nameKey(abs)
+		v.names[key] = removePath(v.names[key], abs)
+		if len(v.names[key]) == 0 {
+			delete(v.names, key)
+		}
+		v.mu.Unlock()
+		v.diag.Info("vault: file vanished before refresh: " + abs)
+		return nil
+	}
+
+	v.indexFile(abs)
+	// Re-resolve all wikilinks in case this file's appearance/change
+	// affects resolution (e.g. it newly satisfies a name lookup).
+	v.resolveAllRefs()
 	return nil
 }
 
 // Rebuild re-walks the entire root. Called on watch.StructureChanged.
 func (v *Vault) Rebuild() error {
-	// Implementation in Stage 6.
+	v.mu.Lock()
+	v.files = make(map[string]*fileEntry)
+	v.names = make(map[string][]string)
+	v.mu.Unlock()
+	if err := v.walkAndIndex(); err != nil {
+		return err
+	}
+	v.resolveAllRefs()
 	return nil
+}
+
+func removePath(s []string, p string) []string {
+	out := s[:0]
+	for _, x := range s {
+		if x != p {
+			out = append(out, x)
+		}
+	}
+	return out
 }
 
 // Backlinks returns every reference *to* path in document order across

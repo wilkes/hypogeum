@@ -119,3 +119,63 @@ func TestBuildEmitsWarnOnUnreadableFile(t *testing.T) {
 		t.Fatalf("expected a Warn diagnostic for unreadable file, got none")
 	}
 }
+
+func TestRefreshFileUpdatesIndex(t *testing.T) {
+	dir := t.TempDir()
+	a := writeFile(t, dir, "a.md", "links to [[b]].")
+	writeFile(t, dir, "b.md", "i am b")
+
+	v, err := Build(dir, NopDiagnostics{})
+	if err != nil {
+		t.Fatalf("Build: %v", err)
+	}
+	bAbs, _ := filepath.Abs(filepath.Join(dir, "b.md"))
+	if got := len(v.Backlinks(bAbs)); got != 1 {
+		t.Fatalf("initial Backlinks: got %d want 1", got)
+	}
+
+	if err := os.WriteFile(a, []byte("no more links."), 0o644); err != nil {
+		t.Fatalf("rewrite a: %v", err)
+	}
+	if err := v.RefreshFile(a); err != nil {
+		t.Fatalf("RefreshFile: %v", err)
+	}
+	if got := len(v.Backlinks(bAbs)); got != 0 {
+		t.Fatalf("post-refresh Backlinks: got %d want 0", got)
+	}
+}
+
+func TestRefreshFileDeletedFileDropsEntry(t *testing.T) {
+	dir := t.TempDir()
+	a := writeFile(t, dir, "a.md", "links to [[b]].")
+	writeFile(t, dir, "b.md", "i am b")
+
+	v, _ := Build(dir, NopDiagnostics{})
+	bAbs, _ := filepath.Abs(filepath.Join(dir, "b.md"))
+	os.Remove(a)
+	if err := v.RefreshFile(a); err != nil {
+		t.Fatalf("RefreshFile on deleted: %v", err)
+	}
+	if got := len(v.Backlinks(bAbs)); got != 0 {
+		t.Fatalf("after delete-and-refresh: got %d want 0", got)
+	}
+}
+
+func TestRebuildPicksUpNewFile(t *testing.T) {
+	dir := t.TempDir()
+	writeFile(t, dir, "a.md", "links to [[b]].")
+	v, _ := Build(dir, NopDiagnostics{})
+
+	from, _ := filepath.Abs(filepath.Join(dir, "a.md"))
+	if _, ok := v.Resolve(from, "b", "", ""); ok {
+		t.Fatalf("b should not resolve before it exists")
+	}
+
+	writeFile(t, dir, "b.md", "i am b")
+	if err := v.Rebuild(); err != nil {
+		t.Fatalf("Rebuild: %v", err)
+	}
+	if _, ok := v.Resolve(from, "b", "", ""); !ok {
+		t.Fatalf("b should resolve after Rebuild")
+	}
+}
