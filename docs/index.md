@@ -15,6 +15,7 @@ Index of everything in `docs/`. Browse this folder by running `hypogeum docs/` f
 
 - [Link following](link-following.md) — Phase 1 shipped (cursor-based selection). Phase 2 (inline highlight) and Phase 3 (external URL launch) outlined.
 - [Wikilinks and backlinks](superpowers/specs/2026-05-07-wikilinks-and-backlinks-design.md) — Phase 1 shipped: wikilinks resolve via vault index, backlinks pane (`b`), backlinks modal (`B`), log viewer (`?`). Phase 2 outlined in the spec.
+- [Backlinks navigation](superpowers/specs/2026-05-07-backlinks-navigation-design.md) — spec — adds cursor, `Enter`-to-follow, scroll-to-reference, and back-restores-cursor on top of the existing backlinks display.
 
 ## Conventions for adding to this folder
 
