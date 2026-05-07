@@ -14,6 +14,7 @@ Index of everything in `docs/`. Browse this folder by running `hypogeum docs/` f
 ## Active feature work
 
 - [Link following](link-following.md) — Phase 1 shipped (cursor-based selection). Phase 2 (inline highlight) and Phase 3 (external URL launch) outlined.
+- [Wikilinks and backlinks](superpowers/specs/2026-05-07-wikilinks-and-backlinks-design.md) — design spec for Obsidian-style `[[wikilinks]]` and a backlinks pane (persistent + modal). Not yet implemented.
 
 ## Conventions for adding to this folder
 
