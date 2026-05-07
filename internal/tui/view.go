@@ -46,7 +46,7 @@ func (m Model) View() string {
 	}
 
 	var body string
-	if m.treeVisible {
+	if m.treeShown() {
 		treeStyled := zone.Mark(zoneTreePane, paneStyle(m.focus == focusTree).
 			Width(m.treeWidth()).
 			Height(m.height-4).
@@ -137,12 +137,12 @@ func (m Model) renderFooter() string {
 }
 
 func (m Model) treeWidth() int {
-	if !m.treeVisible {
+	if !m.treeShown() {
 		return 0
 	}
 	w := m.width / 4
-	if w < 20 {
-		w = 20
+	if w < 16 {
+		w = 16
 	}
 	if w > 40 {
 		w = 40

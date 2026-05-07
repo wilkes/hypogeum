@@ -130,6 +130,31 @@ func TestModel_SelectInTreeExpandsAncestors(t *testing.T) {
 	}
 }
 
+// TestModel_TreeForceHiddenAt60Cols checks that below twoPaneMinWidth
+// the tree pane is rendered as 0 cells wide and its row text doesn't
+// appear in the View output, regardless of treeVisible.
+func TestModel_TreeForceHiddenAt60Cols(t *testing.T) {
+	root := writeFixture(t)
+	m := sized(t, root, "")
+
+	updated, _ := m.Update(tea.WindowSizeMsg{Width: 60, Height: 30})
+	m = updated.(Model)
+
+	if m.treeShown() {
+		t.Errorf("treeShown() should be false at 60 cols")
+	}
+	if w := m.treeWidth(); w != 0 {
+		t.Errorf("treeWidth() = %d at 60 cols, want 0", w)
+	}
+	// The tree pane renders directory rows with a chevron prefix; the
+	// rendered content of index.md may contain "notes/" inside link
+	// text, so we match the chevron+name shape that only appears in the
+	// tree pane.
+	if strings.Contains(m.View(), "▾ notes/") || strings.Contains(m.View(), "▸ notes/") {
+		t.Errorf("View() should not contain tree row 'notes/' at 60 cols")
+	}
+}
+
 // TestModel_TreeShownAtNarrowWidths checks that treeShown() returns false
 // when the terminal is narrower than twoPaneMinWidth even if the user
 // has the tree visible — the threshold gates effective state.
