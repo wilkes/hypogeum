@@ -21,12 +21,21 @@ func (m Model) View() string {
 		Width(m.treeWidth()).
 		Height(m.height-4).
 		Render(tree))
+	contentHeight := m.height - 4
+	if m.shouldShowBacklinks() {
+		contentHeight -= backlinksHeight
+	}
 	contentStyled := zone.Mark(zoneContentPane, paneStyle(m.focus == focusContent).
 		Width(m.viewport.Width).
-		Height(m.height-4).
+		Height(contentHeight).
 		Render(content))
 
-	body := lipgloss.JoinHorizontal(lipgloss.Top, treeStyled, contentStyled)
+	contentColumn := contentStyled
+	if bl := m.renderBacklinks(); bl != "" {
+		contentColumn = lipgloss.JoinVertical(lipgloss.Left, contentStyled, bl)
+	}
+
+	body := lipgloss.JoinHorizontal(lipgloss.Top, treeStyled, contentColumn)
 	footer := m.renderFooter()
 	// Scan must run on the final composed output so BubbleZone records
 	// each zone's absolute screen position.

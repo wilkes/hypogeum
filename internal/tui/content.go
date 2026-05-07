@@ -70,6 +70,7 @@ func (m *Model) refreshContent(path string) {
 	m.viewport.GotoTop()
 	m.links = links
 	m.linkCursor = -1
+	m.refreshBacklinks(path)
 }
 
 // selectInTree moves the tree cursor to the row matching path, if present.

@@ -138,6 +138,9 @@ func (m *Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	case key.Matches(msg, m.keys.ToggleBacklinks):
 		m.backlinksOpen = !m.backlinksOpen
+		if m.backlinksOpen {
+			m.refreshBacklinks(m.history.Current())
+		}
 		return *m, nil
 	}
 

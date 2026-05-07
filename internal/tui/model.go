@@ -136,6 +136,7 @@ func New(root, initialFile string) (Model, error) {
 		diag:       diag,
 	}
 	m.flatTree = flatten(rootNode, 0)
+	m.backlinksVP = viewport.New(0, 0)
 
 	// A watcher is best-effort: if it fails (e.g. inotify limits hit on
 	// Linux), we silently fall back to the previous reload-on-navigate
@@ -192,6 +193,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Leave room for the pane's top+bottom borders (2) and the
 		// two-line footer (2) so View() fits within m.height.
 		m.viewport.Height = m.height - 4
+		m.backlinksVP.Width = contentWidth
+		m.backlinksVP.Height = backlinksHeight - 2
 		// Cap the renderer's wrap width so prose stays readable on wide
 		// terminals; the viewport pane keeps the full available width.
 		renderWidth := min(contentWidth, maxRenderWidth)
