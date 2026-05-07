@@ -288,15 +288,7 @@ The "name" stored in the index for lookups is `strings.ToLower(basenameWithoutEx
 
 ### Diagnostics
 
-Errors and warnings during indexing (parse failures, `RefreshFile` races, watcher errors) feed a single internal diagnostic stream with three observers:
-
-1. **Transient footer status.** The most recent diagnostic appears in the footer for ~3 seconds, then clears. Surfaces problems in real time without requiring the user to know to look.
-2. **Log file.** Appended to `$XDG_STATE_HOME/hypogeum/hypogeum.log` (Linux) or `~/Library/Logs/hypogeum/hypogeum.log` (macOS), one JSON line per entry (`{ts, severity, source, message}`). Path resolution falls back to `~/.local/state/hypogeum/` if `XDG_STATE_HOME` isn't set. If no path is writable, file logging is silently disabled (the in-memory buffer and footer still work).
-3. **In-app log viewer.** Key `?` opens a modal showing the last 200 diagnostic entries from an in-memory ring buffer. Reuses the modal infrastructure built for backlinks. Severity is shown via color cue (warn = yellow, error = red, info = dim). `Esc` closes; `j`/`k` scroll.
-
-Severity levels: `info`, `warn`, `error`. Phase 1 emits only `warn` and `error` (and the one `info` for `RefreshFile` races). Severity is plumbed through so future diagnostics (render times, rebuild durations) can land at `info` without changing the API.
-
-Diagnostic emission point lives in `internal/vault` (`v.warn(format, args...)`, `v.errorf(...)`, etc.) and in `internal/tui` for UI-side issues. Both push to a shared diagnostic sink owned by the TUI model — the TUI hands the sink to the vault during `Build`. This keeps the diagnostic stream a TUI concern (which it is — it's user-facing) without coupling `vault` to the TUI; `vault` accepts a `Diagnostics` interface (`Warn(string)`, `Error(string)`, `Info(string)`) that the TUI implements.
+Errors and warnings during indexing feed a single internal stream with three observers: a transient footer status, an append-only log file, and an in-app log viewer modal (`?`). Severity levels are `info`/`warn`/`error`; Phase 1 emits only `warn` and `error` (plus one `info` for `RefreshFile` races). The vault accepts a `Diagnostics` interface (`Warn(string)`, `Error(string)`, `Info(string)`) implemented by the TUI, so the stream is a TUI concern without coupling `vault` to the UI. Full design and rationale: [[diagnostics]].
 
 ## Testing
 
