@@ -44,6 +44,19 @@ type Link struct {
 // the markdown package to a specific zone library.
 type LinkMarker func(linkIndex int) (open, close string)
 
+// HighlightMarker returns a LinkMarker that wraps the link at index
+// selected in SGR reverse-video (terminal-native selection highlight).
+// All other links get empty open/close strings. Pass selected=-1 to
+// highlight nothing (same as nil marker but explicit).
+func HighlightMarker(selected int) LinkMarker {
+	return func(i int) (string, string) {
+		if i == selected {
+			return "\x1b[7m", "\x1b[27m" // reverse-video on / off
+		}
+		return "", ""
+	}
+}
+
 // RenderWithLinks renders src and returns both the rendered string and a
 // list of every followable link in document order. base is the path of
 // the file the source came from; it's used to resolve relative link

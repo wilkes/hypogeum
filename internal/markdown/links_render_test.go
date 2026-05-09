@@ -325,3 +325,31 @@ func TestRender_LinkTextUnderlined(t *testing.T) {
 	}
 }
 
+func TestHighlightMarker_SelectedLinkGetsReverseVideo(t *testing.T) {
+	// Two sentinel-bracketed spans: link 0 and link 1.
+	// HighlightMarker(1) should wrap link 1 in reverse-video SGR and
+	// leave link 0 unwrapped.
+	in := "\x1cfoo\x1e and \x1cbar\x1e"
+	marker := HighlightMarker(1)
+	cleaned, _ := stripSentinels(in, marker)
+
+	if strings.Contains(cleaned, "\x1b[7m") && strings.HasPrefix(cleaned, "\x1b[7m") {
+		t.Errorf("link 0 (foo) should NOT be highlighted; got: %q", cleaned)
+	}
+	if !strings.Contains(cleaned, "\x1b[7mbar\x1b[27m") {
+		t.Errorf("link 1 (bar) should be wrapped in reverse-video SGR; got: %q", cleaned)
+	}
+	if strings.ContainsRune(cleaned, sentinelStart) || strings.ContainsRune(cleaned, sentinelEnd) {
+		t.Errorf("sentinels leaked into output: %q", cleaned)
+	}
+}
+
+func TestHighlightMarker_NoneSelectedWhenIndexNegative(t *testing.T) {
+	in := "\x1cfoo\x1e and \x1cbar\x1e"
+	marker := HighlightMarker(-1)
+	cleaned, _ := stripSentinels(in, marker)
+	if strings.Contains(cleaned, "\x1b[7m") {
+		t.Errorf("no link should be highlighted when selected=-1; got: %q", cleaned)
+	}
+}
+
