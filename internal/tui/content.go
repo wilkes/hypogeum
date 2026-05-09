@@ -103,7 +103,24 @@ func (m *Model) refreshContent(path string) {
 	m.content.viewport.SetContent(out)
 	m.content.viewport.GotoTop()
 	m.content.links = links
+
+	target := m.pendingPreselectTarget
+	m.pendingPreselectTarget = "" // single-shot — always clear
+
 	m.content.linkCursor = -1
+	if target != "" {
+		for i, l := range links {
+			if l.Resolved.Kind == markdown.LinkLocalFile && l.Resolved.Target == target {
+				m.content.linkCursor = i
+				break
+			}
+		}
+	}
+	if m.content.linkCursor >= 0 {
+		m.scrollToLink(m.content.links[m.content.linkCursor])
+		m.applyLinkHighlight()
+	}
+
 	m.refreshBacklinks(path)
 }
 
