@@ -58,7 +58,18 @@ type ASTLink struct {
 
 ## The sentinel trick
 
-The instrumented renderer injects two ASCII separator characters (`\x1c` FS, `\x1e` RS) into Glamour's `link_text` style. Glamour writes them around every link's visible text; a post-pass strips them and records `(row, text)`. The cleaned output is byte-equivalent to a plain `Render` on the same terminal — verified by `TestRenderWithLinks_OutputIsCleanRender`. Full design and rationale (including the alternatives we rejected): [[sentinel-render]].
+Two sentinel pairs are grafted onto Glamour's link primitives:
+
+- `\x1c` / `\x1e` (FS / RS) bracket `link_text`. Post-render the strip pass records each pair as a `(row, text)` span and (in `RenderWithLinks`) splices BubbleZone Mark/Close pairs in their place.
+- `\x1d` / `\x1f` (GS / US) bracket `link` (the URL Glamour writes after every link). The strip pass discards the bytes between, plus the leading space Glamour hardcodes — so rendered prose reads as `[text]` instead of `[text] /path/to/target.md`.
+
+The cleaned output is byte-equivalent to a plain `Render` on the same terminal after stripping ANSI — verified by `TestRenderWithLinks_OutputIsCleanRender`. Full design and rationale (including the alternatives we rejected): [[sentinel-render]].
+
+## Link styling
+
+`LinkText` carries an underline (`Underline: &yes` on the Glamour style primitive). Glamour's dark theme puts the underline on `Link` (the URL portion), not `LinkText` — once we hide the URL the visible text loses that cue, so we move it onto `LinkText` explicitly.
+
+OSC 8 hyperlinks were investigated and rejected: BubbleZone's `Scan` measures cell coordinates with `muesli/ansi.PrintableRuneWidth`, which terminates any escape on an ASCII letter. An OSC 8 sequence's URL contains letters, so the scanner exits escape mode mid-URL and counts the rest as visible width. Result: zone bounds shift far to the right of where the link actually rendered, and mouse-click hit-testing breaks. External-URL launching belongs in Phase 3 of [link-following](../link-following.md) via `xdg-open`/`open` on `Enter`.
 
 ## Why goldmark is a direct dependency
 

@@ -250,3 +250,78 @@ func TestStripSentinels_MarkerBracketsLink(t *testing.T) {
 		t.Fatalf("spans: got %d want 2", len(spans))
 	}
 }
+
+// TestStripSentinels_URLSuppression covers the urlSuppressStart/End pair
+// that hides Glamour's trailing "[text] /url" form. The leading space
+// must come off too so prose reads as "[text]" without a hanging blank.
+func TestStripSentinels_URLSuppression(t *testing.T) {
+	in := "see \x1cdocs\x1e \x1d/path/to/file.md\x1f for more"
+	cleaned, spans := stripSentinels(in, nil)
+	want := "see docs for more"
+	if cleaned != want {
+		t.Errorf("cleaned = %q, want %q", cleaned, want)
+	}
+	if len(spans) != 1 || spans[0].text != "docs" {
+		t.Errorf("spans = %+v, want one span with text %q", spans, "docs")
+	}
+}
+
+// TestStripSentinels_URLSuppression_SpaceInsideSGR covers the real-world
+// case: Glamour writes the space between LinkText and Link's content
+// using the parent style, so the bytes are "<space>\x1b[0m\x1d...".
+// The trim must walk back past the trailing SGR reset to find and
+// remove the space, but must preserve the SGR (it's a valid reset
+// that the terminal will honor).
+func TestStripSentinels_URLSuppression_SpaceInsideSGR(t *testing.T) {
+	in := "see \x1cdocs\x1e \x1b[0m\x1d/path\x1f, more"
+	cleaned, _ := stripSentinels(in, nil)
+	// stripANSI for visual comparison (the SGR survives, but no extra
+	// spaces between "docs" and ",").
+	visible := stripANSI(cleaned)
+	want := "see docs, more"
+	if visible != want {
+		t.Errorf("visible(cleaned) = %q, want %q (raw: %q)", visible, want, cleaned)
+	}
+	if strings.ContainsRune(cleaned, urlSuppressStart) || strings.ContainsRune(cleaned, urlSuppressEnd) {
+		t.Errorf("url-suppress sentinels leaked: %q", cleaned)
+	}
+}
+
+// TestRender_HidesURLs confirms the plain renderer also honors the
+// hidden-URL house style — Render runs through stripURLSentinels so a
+// caller piping output to a file gets the same prose the TUI does.
+func TestRender_HidesURLs(t *testing.T) {
+	r := rendererForTest(t)
+	out, err := r.Render("See [docs](https://example.com/long/path) for more.\n")
+	if err != nil {
+		t.Fatalf("Render: %v", err)
+	}
+	if strings.Contains(out, "example.com") || strings.Contains(out, "/long/path") {
+		t.Errorf("URL leaked into plain Render output: %q", out)
+	}
+	if !strings.Contains(out, "docs") {
+		t.Errorf("link text missing from plain Render output: %q", out)
+	}
+	if strings.ContainsRune(out, urlSuppressStart) || strings.ContainsRune(out, urlSuppressEnd) {
+		t.Errorf("url-suppress sentinels leaked: %q", out)
+	}
+}
+
+// TestRender_LinkTextUnderlined confirms the LinkText primitive carries
+// the underline attribute (Glamour's dark theme puts it on Link, not
+// LinkText, so we layer it on explicitly to compensate for hiding the
+// URL portion).
+func TestRender_LinkTextUnderlined(t *testing.T) {
+	r := rendererForTest(t)
+	out, err := r.Render("See [docs](https://example.com).\n")
+	if err != nil {
+		t.Fatalf("Render: %v", err)
+	}
+	// termenv emits ";4" as a sub-parameter when underline is requested
+	// alongside other attributes (color, bold). Look for either ";4m"
+	// or "[4m" — both are valid SGR underline indicators.
+	if !strings.Contains(out, ";4m") && !strings.Contains(out, "[4m") {
+		t.Errorf("expected underline SGR (;4 or [4) in output: %q", out)
+	}
+}
+

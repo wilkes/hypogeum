@@ -132,9 +132,25 @@ func applyHypogeumOverrides(cfg *ansi.StyleConfig, width int) {
 	cbBg := "235"
 	cfg.CodeBlock.BackgroundColor = &cbBg
 
-	// Link: kept loud (color + underline) because links are clickable
-	// targets — the one element we WANT the eye to find. Already set
-	// by the base theme; no override needed.
+	// LinkText (the visible text of a hyperlink): underline. Glamour's
+	// dark theme puts the underline on Link (the URL), not LinkText, so
+	// once we hide the URL the visible text loses its underline cue.
+	// Move it onto LinkText. We use the standard underline flag (which
+	// termenv emits as SGR 4) rather than a dotted-underline SGR via
+	// BlockPrefix because Glamour's BaseElement writes a separate
+	// \x1b[0m reset between BlockPrefix and the styled token, which
+	// would erase any preceding SGR. The flag-based path survives
+	// because termenv applies it inside the styled span.
+	cfg.LinkText.Underline = &yes
+
+	// Link (the URL of a hyperlink): bracket with URL-suppression
+	// sentinels so stripSentinels can drop the URL plus the leading
+	// space Glamour hardcodes between LinkText and Link. We keep the
+	// URL out of the rendered prose because it adds noise; the
+	// destination is communicated via OSC 8 (in the instrumented
+	// renderer) and the footer.
+	cfg.Link.BlockPrefix = string(urlSuppressStart) + cfg.Link.BlockPrefix
+	cfg.Link.BlockSuffix = cfg.Link.BlockSuffix + string(urlSuppressEnd)
 }
 
 // defaultStyleConfig mirrors Glamour's WithAutoStyle resolution: pick
