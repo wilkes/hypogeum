@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"os"
 	"path/filepath"
 
 	"github.com/wilkes/hypogeum/internal/markdown"
@@ -22,6 +23,33 @@ func (m *Model) cycleLink(step int) {
 		m.content.linkCursor = (m.content.linkCursor + step + len(m.content.links)) % len(m.content.links)
 	}
 	m.scrollToLink(m.content.links[m.content.linkCursor])
+	m.applyLinkHighlight()
+}
+
+// applyLinkHighlight re-renders the current file with a reverse-video
+// highlight around the selected link and updates the viewport content.
+// The scroll position set by scrollToLink is preserved. On read or
+// render failure, the status bar is updated and the existing viewport
+// content is left unchanged.
+func (m *Model) applyLinkHighlight() {
+	path := m.history.Current()
+	if path == "" {
+		return
+	}
+	src, err := os.ReadFile(path)
+	if err != nil {
+		m.status = err.Error()
+		return
+	}
+	m.content.renderer.SetFromFile(path)
+	out, _, err := m.content.renderer.RenderWithLinks(string(src), path, markdown.HighlightMarker(m.content.linkCursor))
+	if err != nil {
+		m.status = err.Error()
+		return
+	}
+	offset := m.content.viewport.YOffset
+	m.content.viewport.SetContent(out)
+	m.content.viewport.SetYOffset(offset)
 }
 
 // followLink performs whatever navigation a link's kind warrants.

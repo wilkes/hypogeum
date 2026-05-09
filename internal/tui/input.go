@@ -275,7 +275,10 @@ func (m *Model) handleContentKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.cycleLink(-1)
 		return *m, nil
 	case key.Matches(msg, m.keys.ClearLink):
+		offset := m.content.viewport.YOffset
 		m.content.linkCursor = -1
+		m.refreshContent(m.history.Current())
+		m.content.viewport.SetYOffset(offset)
 		return *m, nil
 	case key.Matches(msg, m.keys.Open):
 		if sel := m.selectedLink(); sel != nil {
