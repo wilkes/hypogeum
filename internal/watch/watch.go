@@ -10,7 +10,6 @@ package watch
 import (
 	"os"
 	"path/filepath"
-	"strings"
 	"sync"
 	"time"
 
@@ -98,7 +97,7 @@ func addDirsRecursive(fsw *fsnotify.Watcher, dir string) error {
 		if !d.IsDir() {
 			return nil
 		}
-		if path != dir && strings.HasPrefix(d.Name(), ".") {
+		if path != dir && tree.IsHidden(d.Name()) {
 			return filepath.SkipDir
 		}
 		_ = fsw.Add(path)
@@ -181,7 +180,7 @@ func (w *Watcher) run() {
 // Hidden paths are ignored. Newly created directories are added to the
 // underlying watcher so their contents are observed too.
 func (w *Watcher) classify(ev fsnotify.Event, pendingStruct, pendingWrite map[string]struct{}) {
-	if isHiddenPath(ev.Name) {
+	if tree.IsHiddenPath(ev.Name) {
 		return
 	}
 
@@ -220,14 +219,3 @@ func drainSet(m map[string]struct{}) []string {
 	return out
 }
 
-func isHiddenPath(p string) bool {
-	for _, part := range strings.Split(filepath.ToSlash(p), "/") {
-		if part == "" || part == "." || part == ".." {
-			continue
-		}
-		if strings.HasPrefix(part, ".") {
-			return true
-		}
-	}
-	return false
-}
