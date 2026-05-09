@@ -173,11 +173,11 @@ func New(root, initialFile string) (Model, error) {
 	// A watcher is best-effort: if it fails (e.g. inotify limits hit on
 	// Linux), we silently fall back to the previous reload-on-navigate
 	// behavior rather than refusing to start.
-	if w, err := watch.New(root); err == nil {
+	w, werr := watch.New(root)
+	if werr == nil {
 		m.watcher = w
-	}
-	if m.watcher == nil {
-		diag.Warn("filesystem watcher unavailable; live updates disabled")
+	} else {
+		diag.Warn("filesystem watcher unavailable; live updates disabled: " + werr.Error())
 	}
 
 	if initialFile != "" {

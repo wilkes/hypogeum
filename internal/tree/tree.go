@@ -68,7 +68,7 @@ func walk(dir string) (*Node, error) {
 	for _, entry := range entries {
 		full := filepath.Join(dir, entry.Name())
 		if entry.IsDir() {
-			if isHidden(entry.Name()) {
+			if IsHidden(entry.Name()) {
 				continue
 			}
 			child, err := walk(full)
@@ -80,7 +80,7 @@ func walk(dir string) (*Node, error) {
 			}
 			continue
 		}
-		if isHidden(entry.Name()) {
+		if IsHidden(entry.Name()) {
 			continue
 		}
 		if !IsMarkdown(entry.Name()) {
@@ -106,8 +106,26 @@ func IsMarkdown(name string) bool {
 	return ok
 }
 
-func isHidden(name string) bool {
+// IsHidden reports whether name (a single path component) is hidden by the
+// dotfile convention. Used by sibling packages to apply the same filter as
+// the tree walker.
+func IsHidden(name string) bool {
 	return strings.HasPrefix(name, ".")
+}
+
+// IsHiddenPath reports whether any component of p is hidden. Leading and
+// "." / ".." components are skipped so absolute paths and relative paths
+// behave the same.
+func IsHiddenPath(p string) bool {
+	for _, part := range strings.Split(filepath.ToSlash(p), "/") {
+		if part == "" || part == "." || part == ".." {
+			continue
+		}
+		if strings.HasPrefix(part, ".") {
+			return true
+		}
+	}
+	return false
 }
 
 func sortChildren(n *Node) {
