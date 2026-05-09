@@ -227,8 +227,17 @@ func (m *Model) followBacklink() {
 	}
 	m.focus = focusContent
 
+	// Pre-select the inline link in the source file that points back to
+	// the file we're leaving. Consumed by refreshContent during openFile.
+	m.pendingPreselectTarget = m.history.Current()
+
 	m.openFile(bl.SourceFile)
-	m.scrollToLine(bl.Line)
+
+	// If the pre-select succeeded, scrollToLink already placed the link
+	// in view; skip the source-line scroll which would scroll away.
+	if m.content.linkCursor < 0 {
+		m.scrollToLine(bl.Line)
+	}
 }
 
 // maybeRestoreReturnCursor checks if a returnCursor was set and the
