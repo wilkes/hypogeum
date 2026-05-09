@@ -1,6 +1,6 @@
 # Link following
 
-**Status:** Phase 1 shipped. Phase 2 and 3 not started.
+**Status:** Phase 1 and Phase 2 shipped. Phase 3 not started. Phase 2 added the inline reverse-video highlight around the selected link's bytes via `markdown.HighlightMarker`; design and rationale at [link-following-phase-2-design](superpowers/specs/2026-05-09-link-following-phase-2-design.md).
 
 Plan and design notes for following links inside rendered markdown documents.
 

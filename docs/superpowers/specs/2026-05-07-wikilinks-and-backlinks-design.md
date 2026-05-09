@@ -317,10 +317,11 @@ Errors and warnings during indexing feed a single internal stream with three obs
 - Snippet extraction (smallest enclosing block) with in-snippet highlight on the link's display text.
 - Diagnostic infrastructure: `Diagnostics` interface, footer transient (~3s), JSON-line log file, in-app log viewer modal (`?`), single-modal invariant.
 
-**Phase 2 (separate spec):**
-- Block reference (`^block-id`) actual position resolution.
-- Auto-scroll to wikilink occurrence in source file when following a backlink.
-- "Broken links" tally view aggregating across the vault.
+**Phase 2 (separate specs, shipped piecewise):**
+- ✅ Auto-scroll to wikilink occurrence in source file when following a backlink — shipped via [backlinks-navigation-design](2026-05-07-backlinks-navigation-design.md).
+- ✅ Pre-select the matching inline link on backlink-follow / Back / Forward — shipped via [pre-select-inline-link-design](2026-05-09-pre-select-inline-link-design.md).
+- Block reference (`^block-id`) actual position resolution — not started.
+- "Broken links" tally view aggregating across the vault — not started.
 
 **Phase 3 (separate spec):**
 - Tags, frontmatter views, full-text search, graph view — each its own spec.

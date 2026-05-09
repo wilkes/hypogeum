@@ -61,11 +61,11 @@ The packages are layered: `tui` depends on `tree`, `markdown`, `nav`, `watch`; t
 
 ## What's not built yet
 
-**Link following — Phase 1 shipped:** `n`/`p` cycle through every link in the current document, `Enter` follows the selected one (local files only — externals surface in the status bar), `Esc` clears the selection. The cursor is footer-only — nothing visible changes in the rendered text when a link is selected. Implementation lives in `internal/markdown` (`ExtractLinks`, `RenderWithLinks`) and the content-key handler in `internal/tui/model.go`.
+**Link following — Phases 1 and 2 shipped:** `n`/`p` cycle through every link in the current document, `Enter` follows the selected one (local files only — externals surface in the status bar), `Esc` clears the selection. The selected link is highlighted in reverse-video on the rendered page via `markdown.HighlightMarker` (Phase 2). Implementation lives in `internal/markdown` (`ExtractLinks`, `RenderWithLinks`, `HighlightMarker`) and the content-key handler in `internal/tui/`.
 
-**Link following — Phase 2 (not started):** inline highlight of the active link by re-splicing SGR codes around its byte range; multi-segment cursor for word-wrapped links. **Phase 3 (not started):** actually launching external URLs via `xdg-open`/`open`, gated behind a one-keystroke confirm.
+**Link following — Phase 3 (not started):** actually launching external URLs via `xdg-open`/`open`, gated behind a one-keystroke confirm. Multi-segment cursor for word-wrapped links is also still open.
 
-Full plan and design rationale (including why we picked the sentinel-instrumented render approach over OSC 8 or coordinate mapping) lives in [docs/link-following.md](docs/link-following.md).
+Full plan and design rationale (including why we picked the sentinel-instrumented render approach over OSC 8 or coordinate mapping) lives in [docs/link-following.md](docs/link-following.md). Phase 2 design notes: [docs/superpowers/specs/2026-05-09-link-following-phase-2-design.md](docs/superpowers/specs/2026-05-09-link-following-phase-2-design.md).
 
 **Wikilinks and backlinks — Phase 1 shipped:** `[[wikilinks]]` resolve via vault index, backlinks pane (`b`), backlinks modal (`B`), log viewer (`^l`), and backlinks navigation (cursor `j`/`k`, `Enter` to follow with scroll-to-line, `h` restores cursor). Implementation lives in `internal/vault/` and the modal/pane logic in `internal/tui/`.
 

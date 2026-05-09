@@ -52,7 +52,7 @@ Everything else is package-private. The Bubble Tea runtime drives the model thro
 - **The tree is flattened once.** `New` builds `[]treeRow` in dependency-of-cursor order (depth-first, dirs first). Cursor moves are O(1) index updates, not tree walks. Don't re-walk on keystrokes.
 - **Auto-open is top-level only.** When `initialFile == ""`, `firstTopLevelFile` picks the first non-directory child of the root. *Don't* descend into subdirectories — earlier versions did, and the result was landing on the deepest leaf alphabetically because directories sort first. ([model.go:319](../../internal/tui/model.go))
 - **Resize rebuilds the renderer.** `WindowSizeMsg` recreates `markdown.Renderer` at the new wrap width and re-renders the current file. Anything that changes content width must do the same.
-- **`refreshContent` resets the link cursor to `-1`.** History navigation, file open, and resize all go through it. The link cursor is per-document; it doesn't survive a navigation.
+- **`refreshContent` resets the link cursor to `-1`, except when `m.pendingPreselectTarget` is set.** Most refreshes (file open, resize, watcher events) reset the cursor. But navigation sources — `followBacklink`, Back (`h`), Forward (`l`) — set `m.pendingPreselectTarget` to the path being left, and `refreshContent` consumes it: scans the new document's link list for the first `LinkLocalFile` whose `Resolved.Target` matches and selects it. The field is single-shot and is cleared on every `refreshContent`. Full rules: [[link-cursor]].
 - **Link bindings are content-pane scoped.** `n`/`p`/`Esc` and link-aware `Enter` only fire when `focus == focusContent`. The tree pane's bindings are unaffected. Full state model: [[link-cursor]].
 
 ## Key dispatch shape
@@ -85,7 +85,7 @@ The cursor-move-and-refresh pattern and the viewport-clamp pattern are extracted
 
 ## Why `contentUIState` holds both `links` and `linkCursor`
 
-`content.links` is the document's link list, refreshed every render. `content.linkCursor` is the user's selection within it. Resetting on refresh keeps the two consistent — a link list from a document the user is no longer viewing would create a footer pointing at a dead row. Pair them or accept stale UI.
+`content.links` is the document's link list, refreshed every render. `content.linkCursor` is the user's selection within it. Refreshing them together keeps the two consistent — a link list from a document the user is no longer viewing would create a footer pointing at a dead row. The default is `linkCursor = -1` after a refresh; the `pendingPreselectTarget` carry-over is the only way to land on a non-default cursor and lives outside `contentUIState` so that the consistency contract between `links` and `linkCursor` stays simple.
 
 ## Footer rendering
 
