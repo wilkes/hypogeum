@@ -132,9 +132,22 @@ func applyHypogeumOverrides(cfg *ansi.StyleConfig, width int) {
 	cbBg := "235"
 	cfg.CodeBlock.BackgroundColor = &cbBg
 
-	// Link: kept loud (color + underline) because links are clickable
-	// targets — the one element we WANT the eye to find. Already set
-	// by the base theme; no override needed.
+	// LinkText (the visible text of a hyperlink): bracket with dotted-
+	// underline SGR. Most modern terminals (kitty, wezterm, foot, ghostty,
+	// alacritty, iTerm2 3.5+, Konsole, gnome-terminal vte 0.74+) render
+	// 4:4 as a dotted underline; the rest fall back to a solid underline
+	// or no underline — never a glyph artifact.
+	cfg.LinkText.BlockPrefix = "\x1b[4:4m" + cfg.LinkText.BlockPrefix
+	cfg.LinkText.BlockSuffix = cfg.LinkText.BlockSuffix + "\x1b[24m"
+
+	// Link (the URL of a hyperlink): bracket with URL-suppression
+	// sentinels so stripSentinels can drop the URL plus the leading
+	// space Glamour hardcodes between LinkText and Link. We keep the
+	// URL out of the rendered prose because it adds noise; the
+	// destination is communicated via OSC 8 (in the instrumented
+	// renderer) and the footer.
+	cfg.Link.BlockPrefix = string(urlSuppressStart) + cfg.Link.BlockPrefix
+	cfg.Link.BlockSuffix = cfg.Link.BlockSuffix + string(urlSuppressEnd)
 }
 
 // defaultStyleConfig mirrors Glamour's WithAutoStyle resolution: pick

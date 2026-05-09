@@ -250,3 +250,55 @@ func TestStripSentinels_MarkerBracketsLink(t *testing.T) {
 		t.Fatalf("spans: got %d want 2", len(spans))
 	}
 }
+
+// TestStripSentinels_URLSuppression covers the urlSuppressStart/End pair
+// that hides Glamour's trailing "[text] /url" form. The leading space
+// must come off too so prose reads as "[text]" without a hanging blank.
+func TestStripSentinels_URLSuppression(t *testing.T) {
+	in := "see \x1cdocs\x1e \x1d/path/to/file.md\x1f for more"
+	cleaned, spans := stripSentinels(in, nil)
+	want := "see docs for more"
+	if cleaned != want {
+		t.Errorf("cleaned = %q, want %q", cleaned, want)
+	}
+	if len(spans) != 1 || spans[0].text != "docs" {
+		t.Errorf("spans = %+v, want one span with text %q", spans, "docs")
+	}
+}
+
+// TestRender_HidesURLs confirms the plain renderer also honors the
+// hidden-URL house style — Render runs through stripURLSentinels so a
+// caller piping output to a file gets the same prose the TUI does.
+func TestRender_HidesURLs(t *testing.T) {
+	r := rendererForTest(t)
+	out, err := r.Render("See [docs](https://example.com/long/path) for more.\n")
+	if err != nil {
+		t.Fatalf("Render: %v", err)
+	}
+	if strings.Contains(out, "example.com") || strings.Contains(out, "/long/path") {
+		t.Errorf("URL leaked into plain Render output: %q", out)
+	}
+	if !strings.Contains(out, "docs") {
+		t.Errorf("link text missing from plain Render output: %q", out)
+	}
+	if strings.ContainsRune(out, urlSuppressStart) || strings.ContainsRune(out, urlSuppressEnd) {
+		t.Errorf("url-suppress sentinels leaked: %q", out)
+	}
+}
+
+// TestRender_DottedUnderlineSGR confirms the LinkText primitive emits
+// the SGR 4:4 (dotted underline) sequence around link visible text.
+// Terminals without 4:4 support fall back to a solid underline.
+func TestRender_DottedUnderlineSGR(t *testing.T) {
+	r := rendererForTest(t)
+	out, err := r.Render("See [docs](https://example.com).\n")
+	if err != nil {
+		t.Fatalf("Render: %v", err)
+	}
+	if !strings.Contains(out, "\x1b[4:4m") {
+		t.Errorf("expected dotted-underline SGR \\x1b[4:4m in output: %q", out)
+	}
+	if !strings.Contains(out, "\x1b[24m") {
+		t.Errorf("expected underline-reset SGR \\x1b[24m in output: %q", out)
+	}
+}

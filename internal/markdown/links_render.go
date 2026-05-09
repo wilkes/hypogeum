@@ -8,13 +8,25 @@ import (
 	"github.com/wilkes/hypogeum/internal/wikilink"
 )
 
-// Sentinel runes injected into the rendered output around every link's
-// visible text. They survive Glamour's word-wrap pass and get stripped
-// out of the returned rendered string. Chosen as ASCII separator
-// characters that are extremely unlikely to appear in user content.
+// Sentinel runes injected into the rendered output. They survive
+// Glamour's word-wrap pass and get stripped out of the returned
+// rendered string. Chosen as ASCII separator characters that are
+// extremely unlikely to appear in user content.
+//
+// The link-text pair (sentinelStart/sentinelEnd) brackets the visible
+// text of every link; stripSentinels records each pair as a sentinelSpan
+// and the caller learns the link's row in the cleaned output.
+//
+// The url-suppress pair (urlSuppressStart/urlSuppressEnd) brackets the
+// URL portion Glamour emits after every hyperlink. stripSentinels
+// discards everything between the pair, plus the single space Glamour
+// hardcodes immediately before urlSuppressStart, so the rendered prose
+// reads as "[text]" instead of "[text] /path/to/target.md".
 const (
-	sentinelStart = '\x1c' // FS (file separator)
-	sentinelEnd   = '\x1e' // RS (record separator)
+	sentinelStart    = '\x1c' // FS (file separator)
+	sentinelEnd      = '\x1e' // RS (record separator)
+	urlSuppressStart = '\x1d' // GS (group separator)
+	urlSuppressEnd   = '\x1f' // US (unit separator)
 )
 
 // Link is a renderable hyperlink: the visible text the user reads, the raw
@@ -129,7 +141,13 @@ type sentinelSpan struct {
 // stripSentinels removes every sentinel byte from raw and returns the
 // cleaned string plus a list of (row, visible-text) spans, one per link.
 // If marker is non-nil, each link's text is wrapped with the open/close
-// strings it returns, in place of the stripped sentinels.
+// strings it returns, in place of the link-text sentinels.
+//
+// Sentinel pairs handled:
+//   - sentinelStart..sentinelEnd: link visible text. Recorded as a span.
+//   - urlSuppressStart..urlSuppressEnd: URL portion. Discarded along with
+//     the single space Glamour hardcodes before it, so "[text] /url"
+//     collapses to "[text]" in the cleaned output.
 func stripSentinels(raw string, marker LinkMarker) (string, []sentinelSpan) {
 	var (
 		out       strings.Builder
@@ -177,6 +195,21 @@ func stripSentinels(raw string, marker LinkMarker) (string, []sentinelSpan) {
 				linkIdx++
 			}
 			i++
+		case urlSuppressStart:
+			// Drop everything until urlSuppressEnd, including any ANSI
+			// styling Glamour applied to the URL. Also peel back the
+			// single space immediately before this sentinel so the
+			// "[text] /url" form collapses cleanly. Never strip a
+			// newline — that would join paragraphs.
+			trimTrailingSpace(&out)
+			j := i + 1
+			for j < len(raw) && raw[j] != urlSuppressEnd {
+				j++
+			}
+			if j < len(raw) {
+				j++ // consume the urlSuppressEnd byte too
+			}
+			i = j
 		case '\n':
 			row++
 			out.WriteByte(c)
@@ -193,4 +226,46 @@ func stripSentinels(raw string, marker LinkMarker) (string, []sentinelSpan) {
 		}
 	}
 	return out.String(), spans
+}
+
+// trimTrailingSpace removes a single trailing ' ' byte from b if present.
+// Used by stripSentinels to drop the space Glamour writes between a
+// link's text and its URL before the URL gets suppressed.
+func trimTrailingSpace(b *strings.Builder) {
+	s := b.String()
+	if n := len(s); n > 0 && s[n-1] == ' ' {
+		b.Reset()
+		b.WriteString(s[:n-1])
+	}
+}
+
+// stripURLSentinels removes urlSuppressStart..urlSuppressEnd ranges
+// from raw, along with the single space immediately preceding each
+// start sentinel. Used by Render (the plain path) to honor the
+// hidden-URL house style without paying for the link-text bookkeeping
+// stripSentinels does.
+func stripURLSentinels(raw string) string {
+	if !strings.ContainsRune(raw, urlSuppressStart) {
+		return raw
+	}
+	var out strings.Builder
+	out.Grow(len(raw))
+	for i := 0; i < len(raw); {
+		c := raw[i]
+		if c == urlSuppressStart {
+			trimTrailingSpace(&out)
+			j := i + 1
+			for j < len(raw) && raw[j] != urlSuppressEnd {
+				j++
+			}
+			if j < len(raw) {
+				j++
+			}
+			i = j
+			continue
+		}
+		out.WriteByte(c)
+		i++
+	}
+	return out.String()
 }

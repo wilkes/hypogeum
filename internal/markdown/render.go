@@ -88,10 +88,14 @@ func (r *Renderer) RenderFile(path string) (string, error) {
 }
 
 // Render renders a markdown string.
+//
+// The URL-suppression sentinels grafted onto cfg.Link by hypogeumStyle
+// are stripped here so the plain renderer produces the same hidden-URL
+// output as RenderWithLinks.
 func (r *Renderer) Render(src string) (string, error) {
 	out, err := r.g.Render(src)
 	if err != nil {
 		return "", fmt.Errorf("render markdown: %w", err)
 	}
-	return out, nil
+	return stripURLSentinels(out), nil
 }
