@@ -266,6 +266,27 @@ func TestStripSentinels_URLSuppression(t *testing.T) {
 	}
 }
 
+// TestStripSentinels_URLSuppression_SpaceInsideSGR covers the real-world
+// case: Glamour writes the space between LinkText and Link's content
+// using the parent style, so the bytes are "<space>\x1b[0m\x1d...".
+// The trim must walk back past the trailing SGR reset to find and
+// remove the space, but must preserve the SGR (it's a valid reset
+// that the terminal will honor).
+func TestStripSentinels_URLSuppression_SpaceInsideSGR(t *testing.T) {
+	in := "see \x1cdocs\x1e \x1b[0m\x1d/path\x1f, more"
+	cleaned, _ := stripSentinels(in, nil)
+	// stripANSI for visual comparison (the SGR survives, but no extra
+	// spaces between "docs" and ",").
+	visible := stripANSI(cleaned)
+	want := "see docs, more"
+	if visible != want {
+		t.Errorf("visible(cleaned) = %q, want %q (raw: %q)", visible, want, cleaned)
+	}
+	if strings.ContainsRune(cleaned, urlSuppressStart) || strings.ContainsRune(cleaned, urlSuppressEnd) {
+		t.Errorf("url-suppress sentinels leaked: %q", cleaned)
+	}
+}
+
 // TestRender_HidesURLs confirms the plain renderer also honors the
 // hidden-URL house style — Render runs through stripURLSentinels so a
 // caller piping output to a file gets the same prose the TUI does.
@@ -286,20 +307,21 @@ func TestRender_HidesURLs(t *testing.T) {
 	}
 }
 
-// TestRender_DottedUnderlineSGR confirms the LinkText primitive emits
-// the SGR 4:4 (dotted underline) sequence around link visible text.
-// Terminals without 4:4 support fall back to a solid underline.
-func TestRender_DottedUnderlineSGR(t *testing.T) {
+// TestRender_LinkTextUnderlined confirms the LinkText primitive carries
+// the underline attribute (Glamour's dark theme puts it on Link, not
+// LinkText, so we layer it on explicitly to compensate for hiding the
+// URL portion).
+func TestRender_LinkTextUnderlined(t *testing.T) {
 	r := rendererForTest(t)
 	out, err := r.Render("See [docs](https://example.com).\n")
 	if err != nil {
 		t.Fatalf("Render: %v", err)
 	}
-	if !strings.Contains(out, "\x1b[4:4m") {
-		t.Errorf("expected dotted-underline SGR \\x1b[4:4m in output: %q", out)
-	}
-	if !strings.Contains(out, "\x1b[24m") {
-		t.Errorf("expected underline-reset SGR \\x1b[24m in output: %q", out)
+	// termenv emits ";4" as a sub-parameter when underline is requested
+	// alongside other attributes (color, bold). Look for either ";4m"
+	// or "[4m" — both are valid SGR underline indicators.
+	if !strings.Contains(out, ";4m") && !strings.Contains(out, "[4m") {
+		t.Errorf("expected underline SGR (;4 or [4) in output: %q", out)
 	}
 }
 

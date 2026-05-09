@@ -132,13 +132,16 @@ func applyHypogeumOverrides(cfg *ansi.StyleConfig, width int) {
 	cbBg := "235"
 	cfg.CodeBlock.BackgroundColor = &cbBg
 
-	// LinkText (the visible text of a hyperlink): bracket with dotted-
-	// underline SGR. Most modern terminals (kitty, wezterm, foot, ghostty,
-	// alacritty, iTerm2 3.5+, Konsole, gnome-terminal vte 0.74+) render
-	// 4:4 as a dotted underline; the rest fall back to a solid underline
-	// or no underline — never a glyph artifact.
-	cfg.LinkText.BlockPrefix = "\x1b[4:4m" + cfg.LinkText.BlockPrefix
-	cfg.LinkText.BlockSuffix = cfg.LinkText.BlockSuffix + "\x1b[24m"
+	// LinkText (the visible text of a hyperlink): underline. Glamour's
+	// dark theme puts the underline on Link (the URL), not LinkText, so
+	// once we hide the URL the visible text loses its underline cue.
+	// Move it onto LinkText. We use the standard underline flag (which
+	// termenv emits as SGR 4) rather than a dotted-underline SGR via
+	// BlockPrefix because Glamour's BaseElement writes a separate
+	// \x1b[0m reset between BlockPrefix and the styled token, which
+	// would erase any preceding SGR. The flag-based path survives
+	// because termenv applies it inside the styled span.
+	cfg.LinkText.Underline = &yes
 
 	// Link (the URL of a hyperlink): bracket with URL-suppression
 	// sentinels so stripSentinels can drop the URL plus the leading

@@ -277,15 +277,73 @@ func stripSentinelsWithOSC8(raw string, marker LinkMarker, osc8Target func(int) 
 	return out.String(), spans
 }
 
-// trimTrailingSpace removes a single trailing ' ' byte from b if present.
-// Used by stripSentinels to drop the space Glamour writes between a
-// link's text and its URL before the URL gets suppressed.
+// trimTrailingSpace removes the most recent printable space byte from b,
+// skipping over any trailing ANSI escape sequences. Glamour writes the
+// space between LinkText and Link as part of the URL element's Prefix
+// using the parent style, which means the rendered byte order is
+// "<space>\x1b[0m...\x1d". We need to remove the space, not the escape,
+// so the post-strip prose reads cleanly.
+//
+// Used by stripSentinels and stripURLSentinels.
 func trimTrailingSpace(b *strings.Builder) {
 	s := b.String()
-	if n := len(s); n > 0 && s[n-1] == ' ' {
-		b.Reset()
-		b.WriteString(s[:n-1])
+	end := len(s)
+	for end > 0 {
+		// Walk back over any complete trailing CSI/OSC escapes.
+		if i := lastEscapeStart(s, end); i >= 0 {
+			end = i
+			continue
+		}
+		break
 	}
+	if end == 0 || s[end-1] != ' ' {
+		return
+	}
+	rest := s[end:]
+	b.Reset()
+	b.WriteString(s[:end-1])
+	b.WriteString(rest)
+}
+
+// lastEscapeStart returns the index of the start of an ANSI escape
+// (\x1b...) that ends exactly at end, or -1 if none. Recognizes
+// CSI ("...m") and OSC ("...\x1b\\" or "...\x07") forms.
+func lastEscapeStart(s string, end int) int {
+	if end < 2 {
+		return -1
+	}
+	last := s[end-1]
+	// CSI: ends in 'm'.
+	if last == 'm' {
+		for i := end - 2; i >= 0; i-- {
+			if s[i] == 0x1b && i+1 < end && s[i+1] == '[' {
+				return i
+			}
+			if s[i] == 0x1b {
+				return -1
+			}
+		}
+		return -1
+	}
+	// OSC ST: ends in "\x1b\\".
+	if end >= 2 && s[end-2] == 0x1b && last == '\\' {
+		for i := end - 3; i >= 0; i-- {
+			if s[i] == 0x1b && i+1 < end && s[i+1] == ']' {
+				return i
+			}
+		}
+		return -1
+	}
+	// OSC BEL: ends in "\x07".
+	if last == 0x07 {
+		for i := end - 2; i >= 0; i-- {
+			if s[i] == 0x1b && i+1 < end && s[i+1] == ']' {
+				return i
+			}
+		}
+		return -1
+	}
+	return -1
 }
 
 // stripURLSentinels removes urlSuppressStart..urlSuppressEnd ranges
