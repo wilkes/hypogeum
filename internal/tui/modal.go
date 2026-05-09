@@ -22,21 +22,33 @@ const (
 	modalHelp
 )
 
+// modalUIState bundles modal render state. kind is which modal is up
+// (modalNone when none); vp is the shared viewport for backlinks/logs/
+// help bodies (the picker keeps its own); picker is the vault-rooted
+// file picker; prevFocus is the focus to restore on close. prevFocus
+// lives here because it is only read/written by modal open/close paths.
+type modalUIState struct {
+	kind      modalKind
+	vp        viewport.Model
+	picker    pickerState
+	prevFocus focus
+}
+
 // toggleModal closes the modal of `kind` if it's currently open;
 // otherwise it saves the current focus (unless the persistent backlinks
 // pane has it — that pane stays sticky across modal opens), sets the
 // modal open, and runs onOpen for per-modal init. The returned Cmd is
 // whatever onOpen produced, threaded back to Bubble Tea.
 func (m *Model) toggleModal(kind modalKind, onOpen func() tea.Cmd) tea.Cmd {
-	if m.modalOpen == kind {
-		m.modalOpen = modalNone
-		m.focus = m.prevFocus
+	if m.modals.kind == kind {
+		m.modals.kind = modalNone
+		m.focus = m.modals.prevFocus
 		return nil
 	}
-	if m.modalOpen == modalNone && m.focus != focusBacklinks {
-		m.prevFocus = m.focus
+	if m.modals.kind == modalNone && m.focus != focusBacklinks {
+		m.modals.prevFocus = m.focus
 	}
-	m.modalOpen = kind
+	m.modals.kind = kind
 	return onOpen()
 }
 
@@ -84,8 +96,8 @@ func (m Model) renderModal(body string) string {
 // resizeModalVP resizes the shared modal viewport to fit the modal interior.
 func (m *Model) resizeModalVP() {
 	_, _, w, h := modalGeometry(m.width, m.height)
-	m.modalVP.Width = w - 2
-	m.modalVP.Height = h - 2
+	m.modals.vp.Width = w - 2
+	m.modals.vp.Height = h - 2
 }
 
 // newModalViewport returns an empty viewport sized 0,0 — resized later.

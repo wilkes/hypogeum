@@ -153,9 +153,9 @@ func (m *Model) resizePicker() {
 	if ph < 1 {
 		ph = 1
 	}
-	m.picker.vp.Width = pw
-	m.picker.vp.Height = ph
-	m.picker.refreshVP()
+	m.modals.picker.vp.Width = pw
+	m.modals.picker.vp.Height = ph
+	m.modals.picker.refreshVP()
 }
 
 // pickerSelectedFile returns the file path under the picker cursor, or

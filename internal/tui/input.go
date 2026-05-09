@@ -133,7 +133,7 @@ func (m *Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		// as a footer transient so the user knows why nothing happened
 		// instead of wondering if `?` is broken. `?` while help is
 		// already open still toggles it closed via the toggleModal path.
-		if m.modalOpen != modalNone && m.modalOpen != modalHelp {
+		if m.modals.kind != modalNone && m.modals.kind != modalHelp {
 			if m.diag != nil {
 				m.diag.Info("close current modal (esc) before opening help")
 			}
@@ -146,7 +146,7 @@ func (m *Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case key.Matches(msg, m.keys.OpenPicker):
 		return *m, m.toggleModal(modalPicker, func() tea.Cmd {
 			// Each open starts fresh: cursor at top, all dirs collapsed.
-			m.picker.reset(m.rootNode)
+			m.modals.picker.reset(m.rootNode)
 			return nil
 		})
 	}
@@ -161,55 +161,55 @@ func (m *Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	// While a modal is open, Esc closes it. Backlinks modal gets explicit
 	// cursor handling so j/k move the selection rather than scroll the
 	// viewport. Logs modal keeps the viewport-scroll fall-through.
-	if m.modalOpen != modalNone {
-		if m.modalOpen == modalPicker {
+	if m.modals.kind != modalNone {
+		if m.modals.kind == modalPicker {
 			switch {
 			case key.Matches(msg, m.keys.ClearLink): // Esc closes from any depth
-				m.modalOpen = modalNone
-				m.focus = m.prevFocus
+				m.modals.kind = modalNone
+				m.focus = m.modals.prevFocus
 			case key.Matches(msg, m.keys.Up):
-				if m.picker.cursor > 0 {
-					m.picker.cursor--
-					m.picker.refreshVP()
+				if m.modals.picker.cursor > 0 {
+					m.modals.picker.cursor--
+					m.modals.picker.refreshVP()
 				}
 			case key.Matches(msg, m.keys.Down):
-				if m.picker.cursor < len(m.picker.flat)-1 {
-					m.picker.cursor++
-					m.picker.refreshVP()
+				if m.modals.picker.cursor < len(m.modals.picker.flat)-1 {
+					m.modals.picker.cursor++
+					m.modals.picker.refreshVP()
 				}
 			case key.Matches(msg, m.keys.ToggleFolder):
-				m.picker.toggleAt(m.rootNode)
+				m.modals.picker.toggleAt(m.rootNode)
 			case key.Matches(msg, m.keys.Open):
-				if path, ok := m.picker.selectedFile(); ok {
-					m.modalOpen = modalNone
-					m.focus = m.prevFocus
+				if path, ok := m.modals.picker.selectedFile(); ok {
+					m.modals.kind = modalNone
+					m.focus = m.modals.prevFocus
 					m.navigateTo(path)
 				} else {
 					// On a directory: Enter expands/collapses it, same as space.
-					m.picker.toggleAt(m.rootNode)
+					m.modals.picker.toggleAt(m.rootNode)
 				}
 			}
 			return *m, nil
 		}
 		if key.Matches(msg, m.keys.ClearLink) { // Esc
-			m.modalOpen = modalNone
-			m.focus = m.prevFocus
+			m.modals.kind = modalNone
+			m.focus = m.modals.prevFocus
 			return *m, nil
 		}
-		if m.modalOpen == modalBacklinks {
+		if m.modals.kind == modalBacklinks {
 			switch {
 			case key.Matches(msg, m.keys.Down):
 				if m.backlinks.cursor < len(m.backlinks.items)-1 {
 					m.backlinks.cursor++
 					m.refreshBacklinksModal(m.history.Current())
-					m.ensureCursorVisible(&m.modalVP)
+					m.ensureCursorVisible(&m.modals.vp)
 				}
 				return *m, nil
 			case key.Matches(msg, m.keys.Up):
 				if m.backlinks.cursor > 0 {
 					m.backlinks.cursor--
 					m.refreshBacklinksModal(m.history.Current())
-					m.ensureCursorVisible(&m.modalVP)
+					m.ensureCursorVisible(&m.modals.vp)
 				}
 				return *m, nil
 			case key.Matches(msg, m.keys.Open):
@@ -219,7 +219,7 @@ func (m *Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			// Fall through to viewport scroll for any other key.
 		}
 		var cmd tea.Cmd
-		m.modalVP, cmd = m.modalVP.Update(msg)
+		m.modals.vp, cmd = m.modals.vp.Update(msg)
 		return *m, cmd
 	}
 
@@ -249,10 +249,10 @@ func (m *Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case key.Matches(msg, m.keys.ToggleBacklinks):
 		if m.backlinks.open {
 			m.backlinks.open = false
-			m.focus = m.prevFocus
+			m.focus = m.modals.prevFocus
 		} else {
 			m.backlinks.open = true
-			m.prevFocus = m.focus
+			m.modals.prevFocus = m.focus
 			m.focus = focusBacklinks
 			m.backlinks.cursor = 0
 			m.refreshBacklinks(m.history.Current())
@@ -302,7 +302,7 @@ func (m *Model) handleContentKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 func (m *Model) handleBacklinksKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch {
 	case key.Matches(msg, m.keys.ClearLink): // Esc
-		m.focus = m.prevFocus
+		m.focus = m.modals.prevFocus
 		return *m, nil
 	case key.Matches(msg, m.keys.Down):
 		if m.backlinks.cursor < len(m.backlinks.items)-1 {

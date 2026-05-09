@@ -48,15 +48,10 @@ type Model struct {
 	tree      treeUIState
 	content   contentUIState
 	backlinks backlinksUIState
+	modals    modalUIState
 
 	history *nav.History
 	focus   focus
-
-	prevFocus focus // saved when opening a backlinks surface, restored on close
-
-	modalOpen modalKind
-	modalVP   viewport.Model
-	picker    pickerState
 
 	width, height int
 	keys          keyMap
@@ -153,8 +148,8 @@ func New(root, initialFile string) (Model, error) {
 	}
 	m.tree.flat = m.flattenVisible()
 	m.backlinks.vp = viewport.New(0, 0)
-	m.modalVP = newModalViewport()
-	m.picker = newPicker()
+	m.modals.vp = newModalViewport()
+	m.modals.picker = newPicker()
 
 	// A watcher is best-effort: if it fails (e.g. inotify limits hit on
 	// Linux), we silently fall back to the previous reload-on-navigate

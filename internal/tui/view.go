@@ -70,10 +70,10 @@ func (m Model) View() string {
 	// Scan must run on the final composed output so BubbleZone records
 	// each zone's absolute screen position.
 	base := zone.Scan(lipgloss.JoinVertical(lipgloss.Left, body, footer))
-	if m.modalOpen != modalNone {
-		body := m.modalVP.View()
-		if m.modalOpen == modalPicker {
-			body = m.picker.View()
+	if m.modals.kind != modalNone {
+		body := m.modals.vp.View()
+		if m.modals.kind == modalPicker {
+			body = m.modals.picker.View()
 		}
 		return overlayModal(base, m.renderModal(body), m.width, m.height)
 	}

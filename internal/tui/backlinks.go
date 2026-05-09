@@ -156,18 +156,18 @@ func applyHighlight(s string) string {
 	return out
 }
 
-// refreshBacklinksModal repopulates m.modalVP from the vault for the
+// refreshBacklinksModal repopulates m.modals.vp from the vault for the
 // currently-open file. Called when opening the backlinks modal.
 func (m *Model) refreshBacklinksModal(currentPath string) {
 	if m.vault == nil || currentPath == "" {
 		m.backlinks.items = nil
-		m.modalVP.SetContent("")
+		m.modals.vp.SetContent("")
 		return
 	}
 	m.resizeModalVP()
 	links := m.vault.Backlinks(currentPath)
 	m.backlinks.items = links
-	m.modalVP.SetContent(formatBacklinks(links, m.root, m.modalVP.Width, m.backlinks.cursor))
+	m.modals.vp.SetContent(formatBacklinks(links, m.root, m.modals.vp.Width, m.backlinks.cursor))
 }
 
 // ensureCursorVisible adjusts vp's YOffset so the two-row entry at
@@ -207,7 +207,7 @@ func truncateOneLine(s string, width int) string {
 // Modal takes precedence: if both are open and we're following from
 // the modal, we want to come back to the modal.
 func (m Model) activeBacklinksSurface() backlinksSurface {
-	if m.modalOpen == modalBacklinks {
+	if m.modals.kind == modalBacklinks {
 		return surfaceModal
 	}
 	return surfacePane
@@ -231,8 +231,8 @@ func (m *Model) followBacklink() {
 
 	// Close modal if active; persistent pane stays open and
 	// re-populates for the new file's own backlinks.
-	if m.modalOpen == modalBacklinks {
-		m.modalOpen = modalNone
+	if m.modals.kind == modalBacklinks {
+		m.modals.kind = modalNone
 	}
 	m.focus = focusContent
 
@@ -262,7 +262,7 @@ func (m *Model) maybeRestoreReturnCursor(path string) {
 		}
 		m.refreshBacklinks(path) // re-render with cursor highlighted
 	case surfaceModal:
-		m.modalOpen = modalBacklinks
+		m.modals.kind = modalBacklinks
 		m.refreshBacklinksModal(path)
 	}
 }

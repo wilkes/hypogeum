@@ -70,13 +70,13 @@ func TestBacklinksModalToggleAndEsc(t *testing.T) {
 	m.openFile(filepath.Join(dir, "b.md"))
 
 	out, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'B'}})
-	if out.(Model).modalOpen != modalBacklinks {
-		t.Fatalf("after B: expected modalBacklinks, got %v", out.(Model).modalOpen)
+	if out.(Model).modals.kind != modalBacklinks {
+		t.Fatalf("after B: expected modalBacklinks, got %v", out.(Model).modals.kind)
 	}
 
 	out2, _ := out.(Model).Update(tea.KeyMsg{Type: tea.KeyEsc})
-	if out2.(Model).modalOpen != modalNone {
-		t.Fatalf("after Esc: expected modalNone, got %v", out2.(Model).modalOpen)
+	if out2.(Model).modals.kind != modalNone {
+		t.Fatalf("after Esc: expected modalNone, got %v", out2.(Model).modals.kind)
 	}
 }
 
@@ -206,8 +206,8 @@ func TestBacklinksModal_CursorAndEnter(t *testing.T) {
 
 	// Open backlinks modal.
 	m = pressRune(t, m, 'B')
-	if m.modalOpen != modalBacklinks {
-		t.Fatalf("expected modalBacklinks, got %v", m.modalOpen)
+	if m.modals.kind != modalBacklinks {
+		t.Fatalf("expected modalBacklinks, got %v", m.modals.kind)
 	}
 	if len(m.backlinks.items) != 2 {
 		t.Fatalf("expected 2 backlinks, got %d", len(m.backlinks.items))
@@ -224,8 +224,8 @@ func TestBacklinksModal_CursorAndEnter(t *testing.T) {
 
 	// Enter follows AND closes the modal.
 	m = pressKey(t, m, tea.KeyMsg{Type: tea.KeyEnter})
-	if m.modalOpen != modalNone {
-		t.Fatalf("expected modal closed after Enter, got %v", m.modalOpen)
+	if m.modals.kind != modalNone {
+		t.Fatalf("expected modal closed after Enter, got %v", m.modals.kind)
 	}
 	if m.focus != focusContent {
 		t.Fatalf("expected focusContent after Enter, got %v", m.focus)
@@ -345,14 +345,14 @@ func TestBacklinksModal_BackReopensModal(t *testing.T) {
 	m = pressRune(t, m, 'B')          // open modal
 	m = pressRune(t, m, 'j')          // cursor → 1
 	m = pressKey(t, m, tea.KeyMsg{Type: tea.KeyEnter}) // follow + close modal
-	if m.modalOpen != modalNone {
-		t.Fatalf("expected modal closed during follow, got %v", m.modalOpen)
+	if m.modals.kind != modalNone {
+		t.Fatalf("expected modal closed during follow, got %v", m.modals.kind)
 	}
 
 	m = pressRune(t, m, 'h')
 
-	if m.modalOpen != modalBacklinks {
-		t.Fatalf("expected modalBacklinks reopened on Back, got %v", m.modalOpen)
+	if m.modals.kind != modalBacklinks {
+		t.Fatalf("expected modalBacklinks reopened on Back, got %v", m.modals.kind)
 	}
 	if m.backlinks.cursor != 1 {
 		t.Fatalf("expected cursor=1 restored, got %d", m.backlinks.cursor)
