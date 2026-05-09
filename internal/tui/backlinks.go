@@ -175,16 +175,7 @@ func (m *Model) refreshBacklinksModal(currentPath string) {
 // mutation. Each backlink takes 2 visible rows.
 func (m *Model) ensureCursorVisible(vp *viewport.Model) {
 	const rowsPerEntry = 2
-	cursorTop := m.backlinks.cursor * rowsPerEntry
-	cursorBottom := cursorTop + rowsPerEntry - 1
-
-	if cursorTop < vp.YOffset {
-		vp.SetYOffset(cursorTop)
-		return
-	}
-	if cursorBottom >= vp.YOffset+vp.Height {
-		vp.SetYOffset(cursorBottom - vp.Height + 1)
-	}
+	viewportClamp(vp, m.backlinks.cursor, rowsPerEntry)
 }
 
 // truncateOneLine collapses internal newlines into spaces and clips

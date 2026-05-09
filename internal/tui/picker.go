@@ -97,11 +97,7 @@ func (p *pickerState) toggleAt(root *tree.Node) {
 // row is in view. Mirrors Model.refreshTreeVP for the left pane.
 func (p *pickerState) refreshVP() {
 	p.vp.SetContent(p.renderRows())
-	if p.cursor < p.vp.YOffset {
-		p.vp.SetYOffset(p.cursor)
-	} else if last := p.vp.YOffset + p.vp.Height - 1; p.cursor > last {
-		p.vp.SetYOffset(p.cursor - p.vp.Height + 1)
-	}
+	viewportClamp(&p.vp, p.cursor, 1)
 }
 
 // renderRows builds the picker's display string: chevron-prefixed

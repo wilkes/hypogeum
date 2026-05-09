@@ -85,11 +85,7 @@ func (m Model) View() string {
 // Call after every write to m.tree.flat or m.tree.cursor.
 func (m *Model) refreshTreeVP() {
 	m.tree.vp.SetContent(m.renderTree())
-	if m.tree.cursor < m.tree.vp.YOffset {
-		m.tree.vp.SetYOffset(m.tree.cursor)
-	} else if last := m.tree.vp.YOffset + m.tree.vp.Height - 1; m.tree.cursor > last {
-		m.tree.vp.SetYOffset(m.tree.cursor - m.tree.vp.Height + 1)
-	}
+	viewportClamp(&m.tree.vp, m.tree.cursor, 1)
 }
 
 func (m Model) renderTree() string {

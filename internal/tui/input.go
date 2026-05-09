@@ -117,15 +117,13 @@ func (m *Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	// or closes it.
 	switch {
 	case key.Matches(msg, m.keys.OpenBacklinksModal):
-		return *m, m.toggleModal(modalBacklinks, func() tea.Cmd {
+		return *m, m.openModalWith(modalBacklinks, func() {
 			m.backlinks.cursor = 0
 			m.refreshBacklinksModal(m.history.Current())
-			return nil
 		})
 	case key.Matches(msg, m.keys.OpenLogsModal):
-		return *m, m.toggleModal(modalLogs, func() tea.Cmd {
+		return *m, m.openModalWith(modalLogs, func() {
 			m.refreshLogsModal()
-			return nil
 		})
 	case key.Matches(msg, m.keys.OpenHelpModal):
 		// Help is anchored: pressing `?` while a *different* modal is
@@ -139,15 +137,13 @@ func (m *Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			}
 			return *m, nil
 		}
-		return *m, m.toggleModal(modalHelp, func() tea.Cmd {
+		return *m, m.openModalWith(modalHelp, func() {
 			m.refreshHelpModal()
-			return nil
 		})
 	case key.Matches(msg, m.keys.OpenPicker):
-		return *m, m.toggleModal(modalPicker, func() tea.Cmd {
+		return *m, m.openModalWith(modalPicker, func() {
 			// Each open starts fresh: cursor at top, all dirs collapsed.
 			m.modals.picker.reset(m.rootNode)
-			return nil
 		})
 	}
 
@@ -197,20 +193,16 @@ func (m *Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return *m, nil
 		}
 		if m.modals.kind == modalBacklinks {
+			refresh := func() {
+				m.refreshBacklinksModal(m.history.Current())
+				m.ensureCursorVisible(&m.modals.vp)
+			}
 			switch {
 			case key.Matches(msg, m.keys.Down):
-				if m.backlinks.cursor < len(m.backlinks.items)-1 {
-					m.backlinks.cursor++
-					m.refreshBacklinksModal(m.history.Current())
-					m.ensureCursorVisible(&m.modals.vp)
-				}
+				cursorMoveAndRefresh(&m.backlinks.cursor, len(m.backlinks.items), +1, refresh)
 				return *m, nil
 			case key.Matches(msg, m.keys.Up):
-				if m.backlinks.cursor > 0 {
-					m.backlinks.cursor--
-					m.refreshBacklinksModal(m.history.Current())
-					m.ensureCursorVisible(&m.modals.vp)
-				}
+				cursorMoveAndRefresh(&m.backlinks.cursor, len(m.backlinks.items), -1, refresh)
 				return *m, nil
 			case key.Matches(msg, m.keys.Open):
 				m.followBacklink()
@@ -300,23 +292,19 @@ func (m *Model) handleContentKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 // backlinks pane has focus. j/k move the cursor; Enter follows
 // (added in Task 9); Esc restores focus to prevFocus without closing the pane.
 func (m *Model) handleBacklinksKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	refresh := func() {
+		m.refreshBacklinks(m.history.Current())
+		m.ensureCursorVisible(&m.backlinks.vp)
+	}
 	switch {
 	case key.Matches(msg, m.keys.ClearLink): // Esc
 		m.focus = m.modals.prevFocus
 		return *m, nil
 	case key.Matches(msg, m.keys.Down):
-		if m.backlinks.cursor < len(m.backlinks.items)-1 {
-			m.backlinks.cursor++
-			m.refreshBacklinks(m.history.Current())
-			m.ensureCursorVisible(&m.backlinks.vp)
-		}
+		cursorMoveAndRefresh(&m.backlinks.cursor, len(m.backlinks.items), +1, refresh)
 		return *m, nil
 	case key.Matches(msg, m.keys.Up):
-		if m.backlinks.cursor > 0 {
-			m.backlinks.cursor--
-			m.refreshBacklinks(m.history.Current())
-			m.ensureCursorVisible(&m.backlinks.vp)
-		}
+		cursorMoveAndRefresh(&m.backlinks.cursor, len(m.backlinks.items), -1, refresh)
 		return *m, nil
 	case key.Matches(msg, m.keys.Open):
 		m.followBacklink()
