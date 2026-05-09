@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/charmbracelet/bubbles/viewport"
 	"github.com/charmbracelet/lipgloss"
 	zone "github.com/lrstanley/bubblezone"
 )
@@ -14,11 +15,24 @@ import (
 // the height axis.
 const twoPaneMinWidth = 80
 
-// shouldShowTree gates m.treeVisible (user intent) on terminal width.
+// treeUIState bundles the left tree pane's render state. flat is the
+// pre-flattened row list; cursor indexes into it; vp scrolls the pane
+// when flat exceeds pane height; visible is the user-facing intent
+// (gated by width via shouldShowTree); expanded stores deviations
+// from the default-expanded folder state.
+type treeUIState struct {
+	flat     []treeRow
+	cursor   int
+	vp       viewport.Model
+	visible  bool
+	expanded map[string]bool
+}
+
+// shouldShowTree gates m.tree.visible (user intent) on terminal width.
 // Below twoPaneMinWidth the tree is force-hidden so content gets the
 // full window. Parallels shouldShowBacklinks on the height axis.
 func (m Model) shouldShowTree() bool {
-	return m.treeVisible && m.width >= twoPaneMinWidth
+	return m.tree.visible && m.width >= twoPaneMinWidth
 }
 
 func (m Model) View() string {
@@ -47,7 +61,7 @@ func (m Model) View() string {
 		treeStyled := zone.Mark(zoneTreePane, paneStyle(m.focus == focusTree).
 			Width(m.treeWidth()).
 			Height(m.height-4).
-			Render(m.treeVP.View()))
+			Render(m.tree.vp.View()))
 		body = lipgloss.JoinHorizontal(lipgloss.Top, treeStyled, contentColumn)
 	} else {
 		body = contentColumn
@@ -67,23 +81,23 @@ func (m Model) View() string {
 }
 
 // refreshTreeVP populates the tree viewport with the current rendered
-// rows and scrolls so that m.treeCursor is within the visible window.
-// Call after every write to m.flatTree or m.treeCursor.
+// rows and scrolls so that m.tree.cursor is within the visible window.
+// Call after every write to m.tree.flat or m.tree.cursor.
 func (m *Model) refreshTreeVP() {
-	m.treeVP.SetContent(m.renderTree())
-	if m.treeCursor < m.treeVP.YOffset {
-		m.treeVP.SetYOffset(m.treeCursor)
-	} else if last := m.treeVP.YOffset + m.treeVP.Height - 1; m.treeCursor > last {
-		m.treeVP.SetYOffset(m.treeCursor - m.treeVP.Height + 1)
+	m.tree.vp.SetContent(m.renderTree())
+	if m.tree.cursor < m.tree.vp.YOffset {
+		m.tree.vp.SetYOffset(m.tree.cursor)
+	} else if last := m.tree.vp.YOffset + m.tree.vp.Height - 1; m.tree.cursor > last {
+		m.tree.vp.SetYOffset(m.tree.cursor - m.tree.vp.Height + 1)
 	}
 }
 
 func (m Model) renderTree() string {
 	var b strings.Builder
-	for i, row := range m.flatTree {
+	for i, row := range m.tree.flat {
 		indent := strings.Repeat("  ", row.depth)
 		marker := " "
-		if i == m.treeCursor {
+		if i == m.tree.cursor {
 			marker = ">"
 		}
 		name := row.node.Name

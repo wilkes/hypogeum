@@ -42,13 +42,12 @@ const (
 
 // Model is the top-level Bubble Tea model.
 type Model struct {
-	root       string
-	rootNode   *tree.Node
-	flatTree   []treeRow // pre-flattened for keyboard navigation
-	treeCursor int
+	root     string
+	rootNode *tree.Node
+
+	tree treeUIState
 
 	viewport viewport.Model
-	treeVP   viewport.Model // scrolls the tree pane when flatTree exceeds pane height
 	renderer *markdown.Renderer
 
 	history *nav.History
@@ -71,14 +70,6 @@ type Model struct {
 	width, height int
 	keys          keyMap
 	status        string // last error or info message
-
-	// treeVisible toggles the left tree pane on/off (^b). When false, the
-	// content pane gets the full window width.
-	treeVisible bool
-	// expanded stores deviations from the default-expanded state, keyed by
-	// directory absolute path. expanded[path]==false means collapsed.
-	// Missing keys read as expanded — see isCollapsed.
-	expanded map[string]bool
 
 	// watcher observes the tree for live updates. nil if construction
 	// failed (we degrade gracefully — the browser still works without it).
@@ -151,23 +142,25 @@ func New(root, initialFile string) (Model, error) {
 	}
 
 	m := Model{
-		root:        root,
-		rootNode:    rootNode,
-		viewport:    viewport.New(0, 0),
-		renderer:    r,
-		history:     nav.New(),
-		focus:       focusTree,
-		keys:        defaultKeys(),
-		linkCursor:  -1,
-		vault:       v,
-		diag:        diag,
-		treeVisible: true,
-		expanded:    map[string]bool{},
+		root:       root,
+		rootNode:   rootNode,
+		viewport:   viewport.New(0, 0),
+		renderer:   r,
+		history:    nav.New(),
+		focus:      focusTree,
+		keys:       defaultKeys(),
+		linkCursor: -1,
+		vault:      v,
+		diag:       diag,
+		tree: treeUIState{
+			vp:       viewport.New(0, 0),
+			visible:  true,
+			expanded: map[string]bool{},
+		},
 	}
-	m.flatTree = m.flattenVisible()
+	m.tree.flat = m.flattenVisible()
 	m.backlinksVP = viewport.New(0, 0)
 	m.modalVP = newModalViewport()
-	m.treeVP = viewport.New(0, 0)
 	m.picker = newPicker()
 
 	// A watcher is best-effort: if it fails (e.g. inotify limits hit on
@@ -237,13 +230,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.backlinksVP.Height = backlinksHeight - 2
 		// The tree viewport gets the inside of the tree pane: width
 		// minus its border (2), height minus border + footer (4).
-		m.treeVP.Width = treeWidth - 2
-		if m.treeVP.Width < 0 {
-			m.treeVP.Width = 0
+		m.tree.vp.Width = treeWidth - 2
+		if m.tree.vp.Width < 0 {
+			m.tree.vp.Width = 0
 		}
-		m.treeVP.Height = m.height - 4 - 2 // pane border (2) on top of viewport's own
-		if m.treeVP.Height < 1 {
-			m.treeVP.Height = 1
+		m.tree.vp.Height = m.height - 4 - 2 // pane border (2) on top of viewport's own
+		if m.tree.vp.Height < 1 {
+			m.tree.vp.Height = 1
 		}
 		m.refreshTreeVP()
 		m.resizeModalVP()

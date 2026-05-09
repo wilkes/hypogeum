@@ -122,19 +122,19 @@ func pressRune(t *testing.T, m Model, r rune) Model {
 	return pressKey(t, m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{r}})
 }
 
-// driveCursorTo presses up/down until m.treeCursor reaches target, failing
+// driveCursorTo presses up/down until m.tree.cursor reaches target, failing
 // the test if the cursor ever fails to advance (a stuck cursor would
 // otherwise loop forever).
 func driveCursorTo(t *testing.T, m Model, target int) Model {
 	t.Helper()
-	for m.treeCursor != target {
+	for m.tree.cursor != target {
 		key := tea.KeyMsg{Type: tea.KeyDown}
-		if m.treeCursor > target {
+		if m.tree.cursor > target {
 			key = tea.KeyMsg{Type: tea.KeyUp}
 		}
-		prev := m.treeCursor
+		prev := m.tree.cursor
 		m = pressKey(t, m, key)
-		if m.treeCursor == prev {
+		if m.tree.cursor == prev {
 			t.Fatalf("cursor stuck at %d trying to reach %d", prev, target)
 		}
 	}

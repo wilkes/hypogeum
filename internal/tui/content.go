@@ -98,10 +98,10 @@ func (m *Model) refreshContent(path string) {
 // subtree lands on a visible row.
 func (m *Model) selectInTree(path string) {
 	if m.expandAncestors(path) {
-		m.flatTree = m.flattenVisible()
+		m.tree.flat = m.flattenVisible()
 	}
 	if i := m.rowIndexByPath(path); i >= 0 {
-		m.treeCursor = i
+		m.tree.cursor = i
 	}
 	m.refreshTreeVP()
 }
@@ -109,7 +109,7 @@ func (m *Model) selectInTree(path string) {
 // rowIndexByPath returns the index of the visible tree row whose node
 // path equals path, or -1 if no such row is visible.
 func (m *Model) rowIndexByPath(path string) int {
-	for i, row := range m.flatTree {
+	for i, row := range m.tree.flat {
 		if row.node.Path == path {
 			return i
 		}
@@ -118,25 +118,25 @@ func (m *Model) rowIndexByPath(path string) int {
 }
 
 // cursorRow returns the row under the tree cursor, or zero-value+false
-// when flatTree is empty or the cursor is out of bounds.
+// when the flat tree is empty or the cursor is out of bounds.
 func (m *Model) cursorRow() (treeRow, bool) {
-	if m.treeCursor < 0 || m.treeCursor >= len(m.flatTree) {
+	if m.tree.cursor < 0 || m.tree.cursor >= len(m.tree.flat) {
 		return treeRow{}, false
 	}
-	return m.flatTree[m.treeCursor], true
+	return m.tree.flat[m.tree.cursor], true
 }
 
 // toggleFolder flips the collapsed state of the directory at path,
-// rebuilds flatTree, and keeps the cursor on that directory's row.
+// rebuilds the flat tree, and keeps the cursor on that directory's row.
 func (m *Model) toggleFolder(path string) {
 	if m.isCollapsed(path) {
-		delete(m.expanded, path) // back to default-expanded
+		delete(m.tree.expanded, path) // back to default-expanded
 	} else {
-		m.expanded[path] = false
+		m.tree.expanded[path] = false
 	}
-	m.flatTree = m.flattenVisible()
+	m.tree.flat = m.flattenVisible()
 	if i := m.rowIndexByPath(path); i >= 0 {
-		m.treeCursor = i
+		m.tree.cursor = i
 	}
 	m.refreshTreeVP()
 }
@@ -146,8 +146,8 @@ func (m *Model) toggleFolder(path string) {
 func (m *Model) expandAncestors(path string) bool {
 	changed := false
 	for dir := filepath.Dir(path); ; dir = filepath.Dir(dir) {
-		if v, ok := m.expanded[dir]; ok && !v {
-			delete(m.expanded, dir)
+		if v, ok := m.tree.expanded[dir]; ok && !v {
+			delete(m.tree.expanded, dir)
 			changed = true
 		}
 		// Stop at the configured root, or at the filesystem root where
@@ -188,8 +188,8 @@ func (m *Model) handleFSEvent(ev watch.Event) {
 			}
 		}
 		selectedPath := ""
-		if m.treeCursor < len(m.flatTree) {
-			selectedPath = m.flatTree[m.treeCursor].node.Path
+		if m.tree.cursor < len(m.tree.flat) {
+			selectedPath = m.tree.flat[m.tree.cursor].node.Path
 		}
 		newRoot, err := tree.Walk(m.root)
 		if err != nil {
@@ -197,18 +197,18 @@ func (m *Model) handleFSEvent(ev watch.Event) {
 			return
 		}
 		m.rootNode = newRoot
-		m.flatTree = m.flattenVisible()
+		m.tree.flat = m.flattenVisible()
 		// Restore cursor by path; if the previously selected node is gone,
 		// clamp to a valid index rather than dangling past the end.
-		m.treeCursor = 0
+		m.tree.cursor = 0
 		if i := m.rowIndexByPath(selectedPath); i >= 0 {
-			m.treeCursor = i
+			m.tree.cursor = i
 		}
-		if m.treeCursor >= len(m.flatTree) {
-			m.treeCursor = len(m.flatTree) - 1
+		if m.tree.cursor >= len(m.tree.flat) {
+			m.tree.cursor = len(m.tree.flat) - 1
 		}
-		if m.treeCursor < 0 {
-			m.treeCursor = 0
+		if m.tree.cursor < 0 {
+			m.tree.cursor = 0
 		}
 		m.refreshTreeVP()
 
@@ -259,7 +259,7 @@ func (m *Model) flattenVisible() []treeRow {
 
 // isCollapsed reports whether the directory at path is currently collapsed.
 func (m *Model) isCollapsed(path string) bool {
-	v, ok := m.expanded[path]
+	v, ok := m.tree.expanded[path]
 	return ok && !v
 }
 

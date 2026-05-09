@@ -21,7 +21,7 @@ import (
 // the left pane (or vice versa). Expansion state is reset on each open.
 type pickerState struct {
 	cursor   int
-	expanded map[string]bool // path → true if expanded; missing = collapsed (opposite of m.expanded)
+	expanded map[string]bool // path → true if expanded; missing = collapsed (opposite of m.tree.expanded)
 	flat     []treeRow
 	vp       viewport.Model
 }

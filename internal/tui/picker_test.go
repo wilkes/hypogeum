@@ -155,7 +155,7 @@ func TestModel_PickerExpansionIndependentFromTreePane(t *testing.T) {
 	m := sized(t, root, "")
 
 	// Snapshot left-pane expansion state before opening picker.
-	leftExpandedBefore := len(m.expanded)
+	leftExpandedBefore := len(m.tree.expanded)
 
 	// Open picker, expand a folder in it.
 	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyCtrlP})
@@ -170,8 +170,8 @@ func TestModel_PickerExpansionIndependentFromTreePane(t *testing.T) {
 	m = pressKey(t, m, tea.KeyMsg{Type: tea.KeyEsc})
 
 	// Left pane expansion should be unchanged.
-	if len(m.expanded) != leftExpandedBefore {
-		t.Errorf("left-pane expanded changed: before=%d after=%d", leftExpandedBefore, len(m.expanded))
+	if len(m.tree.expanded) != leftExpandedBefore {
+		t.Errorf("left-pane expanded changed: before=%d after=%d", leftExpandedBefore, len(m.tree.expanded))
 	}
 }
 

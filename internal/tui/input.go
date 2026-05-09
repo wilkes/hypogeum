@@ -25,7 +25,7 @@ func debugMouse(msg tea.MouseMsg, m *Model) {
 		fmt.Fprintf(f, "(%d,%d)-(%d,%d)", z.StartX, z.StartY, z.EndX, z.EndY)
 	}
 	fmt.Fprintf(f, "  rows:")
-	for i := range m.flatTree {
+	for i := range m.tree.flat {
 		z := zone.Get(treeRowZoneID(i))
 		if z.IsZero() {
 			continue
@@ -34,7 +34,7 @@ func debugMouse(msg tea.MouseMsg, m *Model) {
 		if z.InBounds(msg) {
 			hit = "*"
 		}
-		fmt.Fprintf(f, " [%d%s y=%d %s]", i, hit, z.StartY, m.flatTree[i].node.Name)
+		fmt.Fprintf(f, " [%d%s y=%d %s]", i, hit, z.StartY, m.tree.flat[i].node.Name)
 	}
 	fmt.Fprintln(f)
 }
@@ -63,9 +63,9 @@ func (m *Model) handleMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 	debugMouse(msg, m)
 
 	// Tree row hit. Iterate visible rows; the first that contains the
-	// click wins. Stops at len(m.flatTree) so out-of-range zones from a
+	// click wins. Stops at len(m.tree.flat) so out-of-range zones from a
 	// previous longer document don't match.
-	for i := range m.flatTree {
+	for i := range m.tree.flat {
 		if zone.Get(treeRowZoneID(i)).InBounds(msg) {
 			return m.clickTree(i)
 		}
@@ -96,16 +96,16 @@ func (m *Model) handleMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 }
 
 // clickTree selects the tree row at index row (relative to the visible
-// flatTree top), opens it if it's a file, and switches focus.
+// flat tree top), opens it if it's a file, and switches focus.
 func (m *Model) clickTree(row int) (tea.Model, tea.Cmd) {
-	if row < 0 || row >= len(m.flatTree) {
+	if row < 0 || row >= len(m.tree.flat) {
 		return *m, nil
 	}
 	m.focus = focusTree
-	m.treeCursor = row
+	m.tree.cursor = row
 	m.refreshTreeVP()
-	if !m.flatTree[row].node.IsDir {
-		m.openFile(m.flatTree[row].node.Path)
+	if !m.tree.flat[row].node.IsDir {
+		m.openFile(m.tree.flat[row].node.Path)
 	}
 	return *m, nil
 }
@@ -154,7 +154,7 @@ func (m *Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	// Toggle the tree pane. Synthesize a resize so the renderer and
 	// viewport widths recompute through the existing WindowSizeMsg path.
 	if key.Matches(msg, m.keys.ToggleTree) {
-		m.treeVisible = !m.treeVisible
+		m.tree.visible = !m.tree.visible
 		return m.Update(tea.WindowSizeMsg{Width: m.width, Height: m.height})
 	}
 
@@ -328,13 +328,13 @@ func (m *Model) handleBacklinksKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 func (m *Model) handleTreeKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch {
 	case key.Matches(msg, m.keys.Up):
-		if m.treeCursor > 0 {
-			m.treeCursor--
+		if m.tree.cursor > 0 {
+			m.tree.cursor--
 			m.refreshTreeVP()
 		}
 	case key.Matches(msg, m.keys.Down):
-		if m.treeCursor < len(m.flatTree)-1 {
-			m.treeCursor++
+		if m.tree.cursor < len(m.tree.flat)-1 {
+			m.tree.cursor++
 			m.refreshTreeVP()
 		}
 	case key.Matches(msg, m.keys.ToggleFolder):

@@ -13,7 +13,7 @@ func TestModel_FSEventRebuildsTreeOnStructureChange(t *testing.T) {
 	root := writeFixture(t)
 	m := sized(t, root, "")
 
-	before := len(m.flatTree)
+	before := len(m.tree.flat)
 
 	// Add a new top-level markdown file and synthesize the watcher event
 	// directly, bypassing the real fsnotify path so the test is deterministic.
@@ -23,11 +23,11 @@ func TestModel_FSEventRebuildsTreeOnStructureChange(t *testing.T) {
 	}
 	m.handleFSEvent(watch.Event{Kind: watch.StructureChanged, Paths: []string{newPath}})
 
-	if len(m.flatTree) != before+1 {
-		t.Fatalf("flatTree length = %d, want %d", len(m.flatTree), before+1)
+	if len(m.tree.flat) != before+1 {
+		t.Fatalf("flatTree length = %d, want %d", len(m.tree.flat), before+1)
 	}
 	found := false
-	for _, row := range m.flatTree {
+	for _, row := range m.tree.flat {
 		if row.node.Path == newPath {
 			found = true
 			break
@@ -43,12 +43,12 @@ func TestModel_FSEventPreservesCursorOnStructureChange(t *testing.T) {
 	m := sized(t, root, "")
 
 	firstPath := filepath.Join(root, "notes", "first.md")
-	for i, row := range m.flatTree {
+	for i, row := range m.tree.flat {
 		if row.node.Path == firstPath {
-			m.treeCursor = i
+			m.tree.cursor = i
 		}
 	}
-	if m.flatTree[m.treeCursor].node.Path != firstPath {
+	if m.tree.flat[m.tree.cursor].node.Path != firstPath {
 		t.Fatalf("setup: cursor not on %s", firstPath)
 	}
 
@@ -57,7 +57,7 @@ func TestModel_FSEventPreservesCursorOnStructureChange(t *testing.T) {
 	}
 	m.handleFSEvent(watch.Event{Kind: watch.StructureChanged})
 
-	if got := m.flatTree[m.treeCursor].node.Path; got != firstPath {
+	if got := m.tree.flat[m.tree.cursor].node.Path; got != firstPath {
 		t.Errorf("cursor moved to %s, want %s", got, firstPath)
 	}
 }
