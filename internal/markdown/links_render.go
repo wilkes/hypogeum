@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
+
+	"github.com/wilkes/hypogeum/internal/wikilink"
 )
 
 // Sentinel runes injected into the rendered output around every link's
@@ -79,62 +81,27 @@ func (r *Renderer) preprocessWikilinks(src string) string {
 	}
 	return wikilinkRegex.ReplaceAllStringFunc(src, func(match string) string {
 		body := match[2 : len(match)-2]
-		w := parseWikilinkBodyForRender(body)
+		w := wikilink.Parse(body)
 		if w == nil {
 			return match
 		}
-		display := w.alias
+		display := w.Alias
 		if display == "" {
-			display = w.name
-			if w.heading != "" {
-				display = w.name + " > " + w.heading
+			display = w.Name
+			if w.Heading != "" {
+				display = w.Name + " > " + w.Heading
 			}
 		}
-		path, ok := r.resolver.Resolve(r.fromFile, w.name, w.heading, w.block)
+		path, ok := r.resolver.Resolve(r.fromFile, w.Name, w.Heading, w.Block)
 		if !ok {
 			return display + "?"
 		}
 		href := path
-		if w.heading != "" {
-			href = path + "#" + slugify(w.heading)
+		if w.Heading != "" {
+			href = path + "#" + slugify(w.Heading)
 		}
 		return "[" + display + "](" + href + ")"
 	})
-}
-
-// parsedWikilink mirrors the vault's wikilinkNode without depending on
-// it (markdown does not import vault). Names are kept lowercase here
-// to make the source-rewrite logic readable.
-type parsedWikilink struct {
-	name    string
-	heading string
-	block   string
-	alias   string
-}
-
-func parseWikilinkBodyForRender(body string) *parsedWikilink {
-	body = strings.TrimSpace(body)
-	if body == "" {
-		return nil
-	}
-	w := &parsedWikilink{}
-	if i := strings.IndexByte(body, '|'); i >= 0 {
-		w.alias = strings.TrimSpace(body[i+1:])
-		body = body[:i]
-	}
-	if i := strings.IndexByte(body, '^'); i >= 0 {
-		w.block = strings.TrimSpace(body[i+1:])
-		body = body[:i]
-	}
-	if i := strings.IndexByte(body, '#'); i >= 0 {
-		w.heading = strings.TrimSpace(body[i+1:])
-		body = body[:i]
-	}
-	w.name = strings.TrimSpace(body)
-	if w.name == "" {
-		return nil
-	}
-	return w
 }
 
 // slugify is the same heading-slug rule used by anchor-style links.
