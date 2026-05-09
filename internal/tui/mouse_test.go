@@ -56,10 +56,10 @@ func TestModel_MouseClick_OnContentLinkRow_FollowsLink(t *testing.T) {
 	m := sized(t, root, "")
 	// Verify our setup assumption: the auto-opened doc has at least one link
 	// and we know its row.
-	if len(m.links) == 0 {
-		t.Fatalf("fixture should yield links, got %d", len(m.links))
+	if len(m.content.links) == 0 {
+		t.Fatalf("fixture should yield links, got %d", len(m.content.links))
 	}
-	link := m.links[0]
+	link := m.content.links[0]
 	if link.Resolved.Kind != markdown.LinkLocalFile {
 		t.Fatalf("first link should be local file, got %v", link.Resolved.Kind)
 	}

@@ -10,18 +10,18 @@ import (
 // the unselected state (-1), +1 selects the first link and -1 selects
 // the last. No-op when there are no links on the page.
 func (m *Model) cycleLink(step int) {
-	if len(m.links) == 0 {
+	if len(m.content.links) == 0 {
 		return
 	}
 	switch {
-	case m.linkCursor < 0 && step > 0:
-		m.linkCursor = 0
-	case m.linkCursor < 0 && step < 0:
-		m.linkCursor = len(m.links) - 1
+	case m.content.linkCursor < 0 && step > 0:
+		m.content.linkCursor = 0
+	case m.content.linkCursor < 0 && step < 0:
+		m.content.linkCursor = len(m.content.links) - 1
 	default:
-		m.linkCursor = (m.linkCursor + step + len(m.links)) % len(m.links)
+		m.content.linkCursor = (m.content.linkCursor + step + len(m.content.links)) % len(m.content.links)
 	}
-	m.scrollToLink(m.links[m.linkCursor])
+	m.scrollToLink(m.content.links[m.content.linkCursor])
 }
 
 // followLink performs whatever navigation a link's kind warrants.
@@ -44,23 +44,23 @@ func (m *Model) followLink(l markdown.Link) {
 // scrollToLink ensures the link's row is visible in the viewport. Pads
 // by one line above so the link isn't flush with the top edge.
 func (m *Model) scrollToLink(l markdown.Link) {
-	top := m.viewport.YOffset
-	bottom := top + m.viewport.Height - 1
+	top := m.content.viewport.YOffset
+	bottom := top + m.content.viewport.Height - 1
 	switch {
 	case l.Row < top:
-		m.viewport.SetYOffset(max(0, l.Row-1))
+		m.content.viewport.SetYOffset(max(0, l.Row-1))
 	case l.Row > bottom:
-		m.viewport.SetYOffset(l.Row - m.viewport.Height + 2)
+		m.content.viewport.SetYOffset(l.Row - m.content.viewport.Height + 2)
 	}
 }
 
 // selectedLink returns a pointer to the currently selected link, or nil
 // if no link is selected.
 func (m Model) selectedLink() *markdown.Link {
-	if m.linkCursor < 0 || m.linkCursor >= len(m.links) {
+	if m.content.linkCursor < 0 || m.content.linkCursor >= len(m.content.links) {
 		return nil
 	}
-	return &m.links[m.linkCursor]
+	return &m.content.links[m.content.linkCursor]
 }
 
 // linkLabel formats a link's target for footer display: relative path

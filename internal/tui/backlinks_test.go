@@ -248,8 +248,8 @@ func TestScrollToLine_PositionsLineNearTop(t *testing.T) {
 
 	m := sized(t, dir, filepath.Join(dir, "long.md"))
 	// Initially YOffset = 0.
-	if m.viewport.YOffset != 0 {
-		t.Fatalf("expected YOffset=0 initially, got %d", m.viewport.YOffset)
+	if m.content.viewport.YOffset != 0 {
+		t.Fatalf("expected YOffset=0 initially, got %d", m.content.viewport.YOffset)
 	}
 
 	// Scroll to line 60. Expect YOffset to leave ~25% padding above:
@@ -257,18 +257,18 @@ func TestScrollToLine_PositionsLineNearTop(t *testing.T) {
 	// With viewportHeight ≈ 32 (height 40 - 4 for borders/footer - 4 misc),
 	// target ≈ 60 - 8 = 52. Be lenient: assert YOffset is in [40, 56].
 	m.scrollToLine(60)
-	if m.viewport.YOffset < 40 || m.viewport.YOffset > 56 {
-		t.Fatalf("expected YOffset in [40, 56] after scrollToLine(60), got %d", m.viewport.YOffset)
+	if m.content.viewport.YOffset < 40 || m.content.viewport.YOffset > 56 {
+		t.Fatalf("expected YOffset in [40, 56] after scrollToLine(60), got %d", m.content.viewport.YOffset)
 	}
 
 	// scrollToLine(huge) clamps to last line.
 	m.scrollToLine(99999)
-	maxYOffset := m.viewport.TotalLineCount() - m.viewport.Height
+	maxYOffset := m.content.viewport.TotalLineCount() - m.content.viewport.Height
 	if maxYOffset < 0 {
 		maxYOffset = 0
 	}
-	if m.viewport.YOffset > maxYOffset {
-		t.Fatalf("expected YOffset clamped to max %d, got %d", maxYOffset, m.viewport.YOffset)
+	if m.content.viewport.YOffset > maxYOffset {
+		t.Fatalf("expected YOffset clamped to max %d, got %d", maxYOffset, m.content.viewport.YOffset)
 	}
 }
 

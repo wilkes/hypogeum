@@ -5,11 +5,25 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/charmbracelet/bubbles/viewport"
 	zone "github.com/lrstanley/bubblezone"
 
+	"github.com/wilkes/hypogeum/internal/markdown"
 	"github.com/wilkes/hypogeum/internal/tree"
 	"github.com/wilkes/hypogeum/internal/watch"
 )
+
+// contentUIState bundles the right content pane's render state. viewport
+// scrolls the rendered markdown; renderer is rebuilt at every WindowSizeMsg
+// so wrap width tracks pane width; links is the per-document link list
+// from the latest render; linkCursor indexes into links (-1 when nothing
+// is selected).
+type contentUIState struct {
+	viewport   viewport.Model
+	renderer   *markdown.Renderer
+	links      []markdown.Link
+	linkCursor int
+}
 
 // linkZoneID returns the BubbleZone id used to track the i-th link in
 // the rendered content. Stable across re-renders of the same document
@@ -71,25 +85,25 @@ func (m *Model) refreshContent(path string) {
 	src, err := os.ReadFile(path)
 	if err != nil {
 		m.status = err.Error()
-		m.viewport.SetContent(fmt.Sprintf("Error: %v", err))
-		m.links = nil
-		m.linkCursor = -1
+		m.content.viewport.SetContent(fmt.Sprintf("Error: %v", err))
+		m.content.links = nil
+		m.content.linkCursor = -1
 		return
 	}
-	m.renderer.SetFromFile(path)
-	out, links, err := m.renderer.RenderWithLinks(string(src), path, linkZoneMarker)
+	m.content.renderer.SetFromFile(path)
+	out, links, err := m.content.renderer.RenderWithLinks(string(src), path, linkZoneMarker)
 	if err != nil {
 		m.status = err.Error()
-		m.viewport.SetContent(fmt.Sprintf("Error: %v", err))
-		m.links = nil
-		m.linkCursor = -1
+		m.content.viewport.SetContent(fmt.Sprintf("Error: %v", err))
+		m.content.links = nil
+		m.content.linkCursor = -1
 		return
 	}
 	m.status = path
-	m.viewport.SetContent(out)
-	m.viewport.GotoTop()
-	m.links = links
-	m.linkCursor = -1
+	m.content.viewport.SetContent(out)
+	m.content.viewport.GotoTop()
+	m.content.links = links
+	m.content.linkCursor = -1
 	m.refreshBacklinks(path)
 }
 
@@ -226,11 +240,11 @@ func (m *Model) handleFSEvent(ev watch.Event) {
 		}
 		for _, p := range ev.Paths {
 			if p == cur {
-				offset := m.viewport.YOffset
+				offset := m.content.viewport.YOffset
 				m.refreshContent(cur)
 				// refreshContent calls GotoTop; restore scroll so a save
 				// in your editor doesn't jump the reader to the start.
-				m.viewport.SetYOffset(offset)
+				m.content.viewport.SetYOffset(offset)
 				return
 			}
 		}
@@ -276,23 +290,23 @@ func (m *Model) scrollToLine(n int) {
 	if n < 1 {
 		n = 1
 	}
-	total := m.viewport.TotalLineCount()
+	total := m.content.viewport.TotalLineCount()
 	if n > total {
 		n = total
 	}
 	// Position the target line ~25% from the top of the viewport so the
 	// user sees the lines preceding the reference for context.
-	pad := m.viewport.Height / 4
+	pad := m.content.viewport.Height / 4
 	target := n - 1 - pad
 	if target < 0 {
 		target = 0
 	}
-	maxOffset := total - m.viewport.Height
+	maxOffset := total - m.content.viewport.Height
 	if maxOffset < 0 {
 		maxOffset = 0
 	}
 	if target > maxOffset {
 		target = maxOffset
 	}
-	m.viewport.SetYOffset(target)
+	m.content.viewport.SetYOffset(target)
 }

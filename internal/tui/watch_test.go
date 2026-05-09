@@ -74,7 +74,7 @@ func TestModel_FSEventRefreshesOpenFileOnWrite(t *testing.T) {
 
 	// Glamour wraps each word in its own SGR span, so "Fresh body" is
 	// split by ANSI escapes in the rendered output. Check tokens separately.
-	view := m.viewport.View()
+	view := m.content.viewport.View()
 	if !strings.Contains(view, "Fresh") || !strings.Contains(view, "body") {
 		t.Errorf("viewport did not pick up new contents:\n%s", view)
 	}
@@ -86,7 +86,7 @@ func TestModel_FSEventIgnoresWriteToOtherFile(t *testing.T) {
 	m := sized(t, root, indexPath)
 
 	otherPath := filepath.Join(root, "notes", "first.md")
-	original := m.viewport.View()
+	original := m.content.viewport.View()
 
 	// Modify a different file. Even with a FileModified event for it,
 	// the open file's view should be untouched.
@@ -95,7 +95,7 @@ func TestModel_FSEventIgnoresWriteToOtherFile(t *testing.T) {
 	}
 	m.handleFSEvent(watch.Event{Kind: watch.FileModified, Paths: []string{otherPath}})
 
-	if m.viewport.View() != original {
+	if m.content.viewport.View() != original {
 		t.Errorf("viewport changed for write to other file")
 	}
 }

@@ -53,7 +53,7 @@ func debugMouse(msg tea.MouseMsg, m *Model) {
 func (m *Model) handleMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 	if tea.MouseEvent(msg).IsWheel() {
 		var cmd tea.Cmd
-		m.viewport, cmd = m.viewport.Update(msg)
+		m.content.viewport, cmd = m.content.viewport.Update(msg)
 		return *m, cmd
 	}
 	if msg.Action != tea.MouseActionPress || msg.Button != tea.MouseButtonLeft {
@@ -73,10 +73,10 @@ func (m *Model) handleMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 
 	// Content link hit. Each link's visible text is a separate zone so a
 	// click on any cell of (possibly word-wrapped) link text follows it.
-	for i, l := range m.links {
+	for i, l := range m.content.links {
 		if zone.Get(linkZoneID(i)).InBounds(msg) {
 			m.focus = focusContent
-			m.linkCursor = i
+			m.content.linkCursor = i
 			m.followLink(l)
 			return *m, nil
 		}
@@ -88,7 +88,7 @@ func (m *Model) handleMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 	if zone.Get(zoneContentPane).InBounds(msg) {
 		m.focus = focusContent
 		var cmd tea.Cmd
-		m.viewport, cmd = m.viewport.Update(msg)
+		m.content.viewport, cmd = m.content.viewport.Update(msg)
 		return *m, cmd
 	}
 
@@ -283,7 +283,7 @@ func (m *Model) handleContentKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.cycleLink(-1)
 		return *m, nil
 	case key.Matches(msg, m.keys.ClearLink):
-		m.linkCursor = -1
+		m.content.linkCursor = -1
 		return *m, nil
 	case key.Matches(msg, m.keys.Open):
 		if sel := m.selectedLink(); sel != nil {
@@ -292,7 +292,7 @@ func (m *Model) handleContentKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 	}
 	var cmd tea.Cmd
-	m.viewport, cmd = m.viewport.Update(msg)
+	m.content.viewport, cmd = m.content.viewport.Update(msg)
 	return *m, cmd
 }
 

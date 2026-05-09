@@ -81,7 +81,7 @@ func (m *Model) refreshBacklinks(currentPath string) {
 	}
 	links := m.vault.Backlinks(currentPath)
 	m.backlinks = links
-	m.backlinksVP.SetContent(formatBacklinks(links, m.root, m.viewport.Width, m.backlinkCursor))
+	m.backlinksVP.SetContent(formatBacklinks(links, m.root, m.content.viewport.Width, m.backlinkCursor))
 }
 
 // renderBacklinks returns the rendered string of the persistent pane,
@@ -92,7 +92,7 @@ func (m Model) renderBacklinks() string {
 		return ""
 	}
 	return paneStyle(false).
-		Width(m.viewport.Width).
+		Width(m.content.viewport.Width).
 		Height(backlinksHeight - 2). // -2 for top/bottom border
 		Render(m.backlinksVP.View())
 }

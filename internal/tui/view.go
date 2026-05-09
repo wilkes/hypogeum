@@ -40,14 +40,14 @@ func (m Model) View() string {
 		return "" // wait for first WindowSizeMsg
 	}
 
-	content := m.viewport.View()
+	content := m.content.viewport.View()
 
 	contentHeight := m.height - 4
 	if m.shouldShowBacklinks() {
 		contentHeight -= backlinksHeight
 	}
 	contentStyled := zone.Mark(zoneContentPane, paneStyle(m.focus == focusContent).
-		Width(m.viewport.Width).
+		Width(m.content.viewport.Width).
 		Height(contentHeight).
 		Render(content))
 
@@ -139,7 +139,7 @@ func (m Model) renderFooter() string {
 
 	hasLink := false
 	if sel := m.selectedLink(); sel != nil {
-		loc = fmt.Sprintf("%s%s [%d/%d] %s", linkFooterMarker, loc, m.linkCursor+1, len(m.links), linkLabel(*sel, m.root))
+		loc = fmt.Sprintf("%s%s [%d/%d] %s", linkFooterMarker, loc, m.content.linkCursor+1, len(m.content.links), linkLabel(*sel, m.root))
 		hasLink = true
 	}
 	// The help row is always faint. The location row is faint by default

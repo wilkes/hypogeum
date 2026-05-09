@@ -45,16 +45,11 @@ type Model struct {
 	root     string
 	rootNode *tree.Node
 
-	tree treeUIState
-
-	viewport viewport.Model
-	renderer *markdown.Renderer
+	tree    treeUIState
+	content contentUIState
 
 	history *nav.History
 	focus   focus
-
-	links      []markdown.Link // links extracted from the currently rendered file
-	linkCursor int             // -1 when no link is selected (Phase 1: always -1)
 
 	backlinksOpen  bool
 	backlinksVP    viewport.Model
@@ -142,20 +137,22 @@ func New(root, initialFile string) (Model, error) {
 	}
 
 	m := Model{
-		root:       root,
-		rootNode:   rootNode,
-		viewport:   viewport.New(0, 0),
-		renderer:   r,
-		history:    nav.New(),
-		focus:      focusTree,
-		keys:       defaultKeys(),
-		linkCursor: -1,
-		vault:      v,
-		diag:       diag,
+		root:     root,
+		rootNode: rootNode,
+		history:  nav.New(),
+		focus:    focusTree,
+		keys:     defaultKeys(),
+		vault:    v,
+		diag:     diag,
 		tree: treeUIState{
 			vp:       viewport.New(0, 0),
 			visible:  true,
 			expanded: map[string]bool{},
+		},
+		content: contentUIState{
+			viewport:   viewport.New(0, 0),
+			renderer:   r,
+			linkCursor: -1,
 		},
 	}
 	m.tree.flat = m.flattenVisible()
@@ -222,10 +219,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if contentWidth < 20 {
 			contentWidth = 20
 		}
-		m.viewport.Width = contentWidth
+		m.content.viewport.Width = contentWidth
 		// Leave room for the pane's top+bottom borders (2) and the
 		// two-line footer (2) so View() fits within m.height.
-		m.viewport.Height = m.height - 4
+		m.content.viewport.Height = m.height - 4
 		m.backlinksVP.Width = contentWidth
 		m.backlinksVP.Height = backlinksHeight - 2
 		// The tree viewport gets the inside of the tree pane: width
@@ -249,7 +246,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			rOpts = append(rOpts, markdown.WithResolver(m.vault))
 		}
 		if r, err := markdown.NewRenderer(renderWidth, rOpts...); err == nil {
-			m.renderer = r
+			m.content.renderer = r
 		}
 		if cur := m.history.Current(); cur != "" {
 			m.refreshContent(cur)
@@ -278,7 +275,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	// Forward other messages to the viewport when content has focus.
 	if m.focus == focusContent {
 		var cmd tea.Cmd
-		m.viewport, cmd = m.viewport.Update(msg)
+		m.content.viewport, cmd = m.content.viewport.Update(msg)
 		return m, cmd
 	}
 	return m, nil
