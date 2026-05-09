@@ -10,25 +10,27 @@ Implement the `tea.Model` interface (`Init` / `Update` / `View`) on top of the l
 
 ## Types
 
+State is grouped into four named sub-structs so `Model` reads as a composition rather than a flat bag of fields. Each lives next to the file that owns its behavior:
+
 ```go
 type Model struct {
-    root        string
-    rootNode    *tree.Node
-    flatTree    []treeRow
-    treeCursor  int
+    root     string
+    rootNode *tree.Node
 
-    viewport    viewport.Model
-    renderer    *markdown.Renderer
+    tree      treeUIState      // flat, cursor, vp, visible, expanded
+    content   contentUIState   // viewport, renderer, links, linkCursor
+    backlinks backlinksUIState // open, vp, cursor, items, returnCursor
+    modals    modalUIState     // kind, vp, picker, prevFocus
 
-    history     *nav.History
-    focus       focus            // focusTree or focusContent
-
-    links       []markdown.Link
-    linkCursor  int              // -1 when no link selected
-
+    history *nav.History
+    focus   focus            // focusTree, focusContent, focusBacklinks
     width, height int
     keys          keyMap
     status        string
+
+    watcher *watch.Watcher
+    vault   *vault.Vault
+    diag    *diagnostics
 }
 
 type treeRow struct {
@@ -36,6 +38,8 @@ type treeRow struct {
     depth int
 }
 ```
+
+`treeUIState`, `contentUIState`, `backlinksUIState`, and `modalUIState` are package-private. Field access is `m.tree.cursor`, `m.content.linkCursor`, `m.backlinks.items`, `m.modals.kind`, etc.
 
 ## Public surface
 
@@ -56,15 +60,21 @@ Everything else is package-private. The Bubble Tea runtime drives the model thro
 ```
 Update(KeyMsg)
   ├── global: Quit, FocusTog, Back, Forward
+  ├── modal-toggle (B, ^l, ?, ^p) → openModalWith(kind, prepare)
   └── per-focus:
-       ├── focusTree    → handleTreeKey   (Up/Down/Enter)
-       └── focusContent → handleContentKey
-            ├── NextLink (n)   → cycleLink(+1) + scrollToLink
-            ├── PrevLink (p)   → cycleLink(-1) + scrollToLink
-            ├── ClearLink (Esc) → linkCursor = -1
-            ├── Open (Enter, when a link is selected) → followLink
-            └── otherwise      → viewport.Update(msg)  // scrolling
+       ├── focusTree      → handleTreeKey   (Up/Down/Enter)
+       ├── focusContent   → handleContentKey
+       │    ├── NextLink (n)   → cycleLink(+1) + scrollToLink
+       │    ├── PrevLink (p)   → cycleLink(-1) + scrollToLink
+       │    ├── ClearLink (Esc) → content.linkCursor = -1
+       │    ├── Open (Enter, when a link is selected) → followLink
+       │    └── otherwise      → viewport.Update(msg)  // scrolling
+       └── focusBacklinks → handleBacklinksKey
+            ├── Up/Down → cursorMoveAndRefresh + viewportClamp
+            └── Enter   → followBacklink (records returnCursor)
 ```
+
+The cursor-move-and-refresh pattern and the viewport-clamp pattern are extracted into [`dispatch.go`](../../internal/tui/dispatch.go) and shared by the tree, picker, backlinks pane, and backlinks modal.
 
 `followLink` switches on `Resolved.Kind`:
 
@@ -73,9 +83,9 @@ Update(KeyMsg)
 - **`LinkAnchor`** — Status bar: `"anchor navigation not implemented"`. Phase 2 will resolve to a heading row.
 - **`LinkInvalid`** — Status bar: `"unrecognized link"`.
 
-## Why `Model` holds both `links` and `linkCursor`
+## Why `contentUIState` holds both `links` and `linkCursor`
 
-`links` is the document's link list, refreshed every render. `linkCursor` is the user's selection within it. Resetting on refresh keeps the two consistent — a link list from a document the user is no longer viewing would create a footer pointing at a dead row. Pair them or accept stale UI.
+`content.links` is the document's link list, refreshed every render. `content.linkCursor` is the user's selection within it. Resetting on refresh keeps the two consistent — a link list from a document the user is no longer viewing would create a footer pointing at a dead row. Pair them or accept stale UI.
 
 ## Footer rendering
 
@@ -83,7 +93,7 @@ Update(KeyMsg)
 
 ## Backlinks and modal surfaces
 
-The TUI hosts five additional surfaces beyond the two-pane core: the persistent backlinks pane (`b`), the backlinks modal (`B`), the log viewer modal (`^l`), the help modal (`?`), and the file picker modal (`^p`). They share input rules, geometry, and a single `prevFocus` slot. Each has its own concept doc:
+The TUI hosts five additional surfaces beyond the two-pane core: the persistent backlinks pane (`b`), the backlinks modal (`B`), the log viewer modal (`^l`), the help modal (`?`), and the file picker modal (`^p`). They share input rules, geometry, and a single `modals.prevFocus` slot. Each has its own concept doc:
 
 - [[modal-geometry]] — single-modal invariant, layout recompute on open, auto-collapse below height 20, `Esc` priority chain. `?` is anchored (no swap); `B` and `^l` swap with each other.
 - [[diagnostics]] — the warn/error stream that feeds the footer transient and the `^l` modal.
