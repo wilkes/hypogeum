@@ -107,46 +107,10 @@ func addDirsRecursive(fsw *fsnotify.Watcher, dir string) error {
 
 func (w *Watcher) run() {
 	var (
-		pendingStruct = make(map[string]struct{})
-		pendingWrite  = make(map[string]struct{})
-		timer         *time.Timer
-		timerC        <-chan time.Time
+		p      pending
+		timer  *time.Timer
+		timerC <-chan time.Time
 	)
-
-	resetTimer := func() {
-		if timer == nil {
-			timer = time.NewTimer(w.debounceWindow)
-		} else {
-			if !timer.Stop() {
-				select {
-				case <-timer.C:
-				default:
-				}
-			}
-			timer.Reset(w.debounceWindow)
-		}
-		timerC = timer.C
-	}
-
-	flush := func() {
-		if len(pendingStruct) > 0 {
-			paths := drainSet(pendingStruct)
-			select {
-			case w.out <- Event{Kind: StructureChanged, Paths: paths}:
-			case <-w.done:
-				return
-			}
-		}
-		if len(pendingWrite) > 0 {
-			paths := drainSet(pendingWrite)
-			select {
-			case w.out <- Event{Kind: FileModified, Paths: paths}:
-			case <-w.done:
-				return
-			}
-		}
-		timerC = nil
-	}
 
 	for {
 		select {
@@ -159,8 +123,8 @@ func (w *Watcher) run() {
 				close(w.out)
 				return
 			}
-			w.classify(ev, pendingStruct, pendingWrite)
-			resetTimer()
+			w.stage(ev, &p)
+			timerC = w.resetTimer(&timer)
 
 		case _, ok := <-w.fsw.Errors:
 			if !ok {
@@ -171,51 +135,8 @@ func (w *Watcher) run() {
 			// from here; drop them rather than crashing the goroutine.
 
 		case <-timerC:
-			flush()
+			w.flush(&p)
+			timerC = nil
 		}
 	}
 }
-
-// classify routes one raw fsnotify event into the pending-event maps.
-// Hidden paths are ignored. Newly created directories are added to the
-// underlying watcher so their contents are observed too.
-func (w *Watcher) classify(ev fsnotify.Event, pendingStruct, pendingWrite map[string]struct{}) {
-	if tree.IsHiddenPath(ev.Name) {
-		return
-	}
-
-	switch {
-	case ev.Op&fsnotify.Create != 0:
-		// If a new directory appeared, watch it (and its descendants) so
-		// files dropped into it later raise events too.
-		if info, err := os.Stat(ev.Name); err == nil && info.IsDir() {
-			_ = addDirsRecursive(w.fsw, ev.Name)
-			pendingStruct[ev.Name] = struct{}{}
-			return
-		}
-		if tree.IsMarkdown(ev.Name) {
-			pendingStruct[ev.Name] = struct{}{}
-		}
-
-	case ev.Op&(fsnotify.Remove|fsnotify.Rename) != 0:
-		// We don't know whether the removed entry was a directory or a
-		// markdown file (it's gone), so be conservative: any remove or
-		// rename inside a watched dir triggers a structure refresh.
-		pendingStruct[ev.Name] = struct{}{}
-
-	case ev.Op&fsnotify.Write != 0:
-		if tree.IsMarkdown(ev.Name) {
-			pendingWrite[ev.Name] = struct{}{}
-		}
-	}
-}
-
-func drainSet(m map[string]struct{}) []string {
-	out := make([]string, 0, len(m))
-	for k := range m {
-		out = append(out, k)
-		delete(m, k)
-	}
-	return out
-}
-
