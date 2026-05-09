@@ -152,3 +152,58 @@ func TestPreselect_FollowBacklink_NoMatchFallsThroughToScrollToLine(t *testing.T
 		t.Fatalf("expected linkCursor preselected (a.md links to b.md), got %d", m.content.linkCursor)
 	}
 }
+
+// TestPreselect_Back_RestoresLink: from a.md, follow [b](b.md), then press
+// 'h' to Back. We should be on a.md again with the [b](b.md) link
+// pre-selected.
+func TestPreselect_Back_RestoresLink(t *testing.T) {
+	root, aAbs, bAbs := writePreselectFixture(t)
+	m := sized(t, root, aAbs)
+
+	// Navigate a → b by following the inline link.
+	m = switchToContent(t, m)
+	m = pressRune(t, m, 'n') // select first link in a.md (which is [b](b.md))
+	m = pressKey(t, m, tea.KeyMsg{Type: tea.KeyEnter})
+	if m.history.Current() != bAbs {
+		t.Fatalf("expected on b.md after follow, got %q", m.history.Current())
+	}
+
+	// Press 'h' to Back.
+	m = pressRune(t, m, 'h')
+	if m.history.Current() != aAbs {
+		t.Fatalf("expected on a.md after Back, got %q", m.history.Current())
+	}
+	if m.content.linkCursor < 0 {
+		t.Fatalf("expected linkCursor preselected after Back, got %d", m.content.linkCursor)
+	}
+	if got := m.content.links[m.content.linkCursor].Resolved.Target; got != bAbs {
+		t.Fatalf("preselected link target = %q, want %q", got, bAbs)
+	}
+}
+
+// TestPreselect_Forward_RestoresLink: a → b → Back to a → Forward to b.
+// On Forward arrival at b.md, b.md's [a](a.md) link should be pre-selected.
+func TestPreselect_Forward_RestoresLink(t *testing.T) {
+	root, aAbs, bAbs := writePreselectFixture(t)
+	m := sized(t, root, aAbs)
+
+	m = switchToContent(t, m)
+	m = pressRune(t, m, 'n')
+	m = pressKey(t, m, tea.KeyMsg{Type: tea.KeyEnter}) // a → b
+	m = pressRune(t, m, 'h')                           // back to a
+	if m.history.Current() != aAbs {
+		t.Fatalf("setup: expected on a.md, got %q", m.history.Current())
+	}
+
+	// Forward (default key binding is 'l').
+	m = pressRune(t, m, 'l')
+	if m.history.Current() != bAbs {
+		t.Fatalf("expected on b.md after Forward, got %q", m.history.Current())
+	}
+	if m.content.linkCursor < 0 {
+		t.Fatalf("expected linkCursor preselected after Forward, got %d", m.content.linkCursor)
+	}
+	if got := m.content.links[m.content.linkCursor].Resolved.Target; got != aAbs {
+		t.Fatalf("preselected link target = %q, want %q", got, aAbs)
+	}
+}
