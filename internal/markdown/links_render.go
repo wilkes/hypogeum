@@ -163,15 +163,16 @@ type sentinelSpan struct {
 //     collapses to "[text]" in the cleaned output.
 func stripSentinels(raw string, marker LinkMarker) (string, []sentinelSpan) {
 	var (
-		out       strings.Builder
-		spans     []sentinelSpan
-		row       int
-		inLink    bool
-		linkText  strings.Builder
-		linkRow   int
-		linkIdx   int
-		openMark  string
-		closeMark string
+		out        strings.Builder
+		spans      []sentinelSpan
+		row        int
+		inLink     bool
+		openEmit   bool // true once openMark has been written for the current link
+		linkText   strings.Builder
+		linkRow    int
+		linkIdx    int
+		openMark   string
+		closeMark  string
 	)
 	out.Grow(len(raw))
 
@@ -192,19 +193,25 @@ func stripSentinels(raw string, marker LinkMarker) (string, []sentinelSpan) {
 		switch c {
 		case sentinelStart:
 			inLink = true
+			openEmit = false
 			linkText.Reset()
 			linkRow = row
 			openMark, closeMark = "", ""
 			if marker != nil {
 				openMark, closeMark = marker(linkIdx)
 			}
-			out.WriteString(openMark)
 			i++
 		case sentinelEnd:
 			if inLink {
+				if !openEmit {
+					// Span contained only escapes — emit openMark now so
+					// closeMark has a matching open.
+					out.WriteString(openMark)
+				}
 				out.WriteString(closeMark)
 				spans = append(spans, sentinelSpan{row: linkRow, text: linkText.String()})
 				inLink = false
+				openEmit = false
 				linkIdx++
 			}
 			i++
@@ -224,6 +231,10 @@ func stripSentinels(raw string, marker LinkMarker) (string, []sentinelSpan) {
 			}
 			i = j
 		case '\n':
+			if inLink && !openEmit {
+				out.WriteString(openMark)
+				openEmit = true
+			}
 			row++
 			out.WriteByte(c)
 			if inLink {
@@ -231,6 +242,10 @@ func stripSentinels(raw string, marker LinkMarker) (string, []sentinelSpan) {
 			}
 			i++
 		default:
+			if inLink && !openEmit {
+				out.WriteString(openMark)
+				openEmit = true
+			}
 			out.WriteByte(c)
 			if inLink {
 				linkText.WriteByte(c)
