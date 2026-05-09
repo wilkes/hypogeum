@@ -155,42 +155,18 @@ func TestRenderWithLinks_WikilinkResolvesToHref(t *testing.T) {
 	}
 }
 
-// stripANSI removes CSI sequences (\x1b[…m) and OSC 8 hyperlink
-// sequences (\x1b]8;…ST). Used in tests to compare visible output
-// between the plain and instrumented renderers — the instrumented
-// renderer adds OSC 8 wrapping for terminals that support clickable
-// hyperlinks; both renderers should be visible-byte-equivalent
-// otherwise.
+// stripANSI removes CSI sequences. Used in tests to compare visible output.
 func stripANSI(s string) string {
 	var b strings.Builder
 	i := 0
 	for i < len(s) {
-		if s[i] == 0x1b && i+1 < len(s) {
-			switch s[i+1] {
-			case '[':
-				j := i + 2
-				for j < len(s) && s[j] != 'm' {
-					j++
-				}
-				i = j + 1
-				continue
-			case ']':
-				// OSC sequence: terminated by ST (\x1b\\) or BEL (\x07).
-				j := i + 2
-				for j < len(s) {
-					if s[j] == 0x07 {
-						j++
-						break
-					}
-					if s[j] == 0x1b && j+1 < len(s) && s[j+1] == '\\' {
-						j += 2
-						break
-					}
-					j++
-				}
-				i = j
-				continue
+		if s[i] == 0x1b && i+1 < len(s) && s[i+1] == '[' {
+			j := i + 2
+			for j < len(s) && s[j] != 'm' {
+				j++
 			}
+			i = j + 1
+			continue
 		}
 		b.WriteByte(s[i])
 		i++

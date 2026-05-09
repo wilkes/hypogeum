@@ -60,16 +60,16 @@ type ASTLink struct {
 
 Two sentinel pairs are grafted onto Glamour's link primitives:
 
-- `\x1c` / `\x1e` (FS / RS) bracket `link_text`. Post-render the strip pass records each pair as a `(row, text)` span and (in `RenderWithLinks`) splices BubbleZone Mark/Close pairs and OSC 8 hyperlink wrappers in their place.
+- `\x1c` / `\x1e` (FS / RS) bracket `link_text`. Post-render the strip pass records each pair as a `(row, text)` span and (in `RenderWithLinks`) splices BubbleZone Mark/Close pairs in their place.
 - `\x1d` / `\x1f` (GS / US) bracket `link` (the URL Glamour writes after every link). The strip pass discards the bytes between, plus the leading space Glamour hardcodes — so rendered prose reads as `[text]` instead of `[text] /path/to/target.md`.
 
-The cleaned output is byte-equivalent to a plain `Render` on the same terminal after stripping CSI and OSC sequences — verified by `TestRenderWithLinks_OutputIsCleanRender`. Full design and rationale (including the alternatives we rejected): [[sentinel-render]].
+The cleaned output is byte-equivalent to a plain `Render` on the same terminal after stripping ANSI — verified by `TestRenderWithLinks_OutputIsCleanRender`. Full design and rationale (including the alternatives we rejected): [[sentinel-render]].
 
 ## Link styling
 
-`LinkText` carries a dotted-underline SGR pair (`\x1b[4:4m` … `\x1b[24m`) layered on top of the base theme's color + underline. Modern terminals (kitty, wezterm, foot, ghostty, alacritty, iTerm2 3.5+, Konsole 21+, gnome-terminal vte 0.74+) render `4:4` as dotted; older terminals fall back to a solid underline.
+`LinkText` carries an underline (`Underline: &yes` on the Glamour style primitive). Glamour's dark theme puts the underline on `Link` (the URL portion), not `LinkText` — once we hide the URL the visible text loses that cue, so we move it onto `LinkText` explicitly.
 
-In `RenderWithLinks` (the TUI path), each link's visible text is also wrapped in an OSC 8 hyperlink. Local files become `file://` URLs; external URLs pass through; anchor-only links skip OSC 8. Combined with URL suppression, this gives the user a click-to-open affordance without the URL appearing in prose.
+OSC 8 hyperlinks were investigated and rejected: BubbleZone's `Scan` measures cell coordinates with `muesli/ansi.PrintableRuneWidth`, which terminates any escape on an ASCII letter. An OSC 8 sequence's URL contains letters, so the scanner exits escape mode mid-URL and counts the rest as visible width. Result: zone bounds shift far to the right of where the link actually rendered, and mouse-click hit-testing breaks. External-URL launching belongs in Phase 3 of [link-following](../link-following.md) via `xdg-open`/`open` on `Enter`.
 
 ## Why goldmark is a direct dependency
 
