@@ -11,16 +11,20 @@ cmd/hypogeum               (entrypoint — argv → tui.New → tea.NewProgram)
         │
         ▼
 internal/tui               (Bubble Tea Model, the only package that knows about the UI)
-   │      │      │      │
-   ▼      ▼      ▼      ▼
-   tree   markdown   nav   watch   (lower layers, mutually independent)
+   │      │      │      │      │
+   ▼      ▼      ▼      ▼      ▼
+   tree   markdown   nav   watch   vault   (lower layers)
+              │                       │
+              └───────► wikilink ◄────┘    (shared parser, no other deps)
 ```
 
 - [`internal/tree`](packages/tree.md) walks the filesystem and produces a `*Node` tree of markdown files.
 - [`internal/markdown`](packages/markdown.md) renders markdown via Glamour and resolves links.
 - [`internal/nav`](packages/nav.md) is a back/forward stack of opaque path strings.
 - [`internal/watch`](packages/watch.md) wraps fsnotify and emits debounced, markdown-aware events.
-- [`internal/tui`](packages/tui.md) is the only package that imports the other four.
+- `internal/vault` builds the wikilink/backlink index over the markdown set.
+- `internal/wikilink` parses `[[Name#Heading^Block|Alias]]` bodies; shared by `vault` and `markdown` so neither package re-implements it.
+- [`internal/tui`](packages/tui.md) is the only package that imports the other layers.
 
 The lower layers know nothing about Bubble Tea or terminals; they're testable as pure functions.
 
@@ -29,8 +33,9 @@ The lower layers know nothing about Bubble Tea or terminals; they're testable as
 1. Bubble Tea delivers a `tea.KeyMsg` to `Model.Update`.
 2. Global bindings (quit, focus toggle, back/forward) match first.
 3. If still unhandled, dispatch by focus:
-   - `focusTree` → `handleTreeKey` updates `treeCursor` or calls `openFile`.
-   - `focusContent` → `handleContentKey` cycles the link cursor, follows a link, clears selection, or falls through to the viewport's own scrolling bindings.
+   - `focusTree` → `handleTreeKey` updates `m.tree.cursor` or calls `openFile`.
+   - `focusContent` → `handleContentKey` cycles `m.content.linkCursor`, follows a link, clears selection, or falls through to the viewport's own scrolling bindings.
+   - `focusBacklinks` → `handleBacklinksKey` moves `m.backlinks.cursor` and follows backlinks via `Enter`.
 4. `openFile(path)` records the visit in `nav.History` and calls `refreshContent`.
 5. `refreshContent(path)` reads the file, calls `markdown.RenderWithLinks`, sets the viewport content, and stores the new link list. The link cursor resets to `-1`.
 6. `View()` joins the styled tree pane and viewport pane horizontally with Lip Gloss, then appends the footer.
@@ -62,8 +67,11 @@ When you add a new concern, decide its owner first. The packages are small enoug
 
 If you want to understand the whole codebase, read in dependency order — bottom up:
 
-1. [`internal/nav`](packages/nav.md) — 66 lines, pure stack, sets the vocabulary for "history."
-2. [`internal/tree`](packages/tree.md) — 135 lines, no UI, easy to picture.
-3. [`internal/markdown`](packages/markdown.md) — render + link resolution + the sentinel trick.
-4. [`internal/tui`](packages/tui.md) — biggest package; sits on the other three.
-5. [`cmd/hypogeum/main.go`](../cmd/hypogeum/main.go) — 64 lines, just argv parsing and a `tea.NewProgram` call.
+1. [`internal/nav`](packages/nav.md) — pure stack, sets the vocabulary for "history."
+2. `internal/wikilink` — single file, the shared `[[...]]` body parser.
+3. [`internal/tree`](packages/tree.md) — filesystem walker, no UI, easy to picture.
+4. [`internal/markdown`](packages/markdown.md) — render + link resolution + the sentinel trick.
+5. `internal/vault` — wikilink/backlink index, split across `vault.go`/`extract.go`/`backlink.go`/`resolver.go`.
+6. [`internal/watch`](packages/watch.md) — fsnotify wrapper; `classify.go` is pure, `debounce.go` debounces, `watch.go` runs the loop.
+7. [`internal/tui`](packages/tui.md) — biggest package; `Model` decomposes into four sub-structs, dispatch helpers in `dispatch.go`.
+8. [`cmd/hypogeum/main.go`](../cmd/hypogeum/main.go) — argv parsing and a `tea.NewProgram` call.

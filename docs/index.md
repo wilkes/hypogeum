@@ -10,6 +10,8 @@ Index of everything in `docs/`. Browse this folder by running `hypogeum docs/` f
   - [`internal/nav`](packages/nav.md) — browser-style back/forward stack, no I/O
   - [`internal/tui`](packages/tui.md) — Bubble Tea Model that wires everything together
   - [`internal/watch`](packages/watch.md) — fsnotify-backed live-update watcher, debounced and tree-aware
+  - `internal/vault` — wikilink/backlink index over the markdown set; see [[vault-index]]
+  - `internal/wikilink` — shared `[[Name#Heading^Block|Alias]]` body parser used by `vault` and `markdown`
 
 ## Concepts
 

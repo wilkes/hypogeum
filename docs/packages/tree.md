@@ -23,7 +23,11 @@ The root is always a directory. Children are sorted: directories first, then fil
 
 ## Public surface
 
-- `Walk(root string) (*Node, error)` — the only entry point.
+- `Walk(root string) (*Node, error)` — the main entry point.
+- `IsMarkdown(name string) bool` — reports whether a filename has a recognized markdown extension. Used by `internal/watch` to filter events.
+- `IsHidden(name string) bool` — reports whether a single name is hidden (starts with `.`).
+- `IsHiddenPath(p string) bool` — reports whether any component of a path is hidden. Used by `internal/watch` so its filter rule matches the walker's.
+- `MarkdownExts []string` — the recognized extensions, exposed for callers that need the raw slice.
 
 ## Key invariants
 
@@ -38,4 +42,4 @@ The walker returns the natural parent/child structure. The TUI then flattens tha
 
 ## Testability
 
-`readDir` is split into a thin wrapper (`osreaddir.go`) so the walker can be driven by a fake filesystem in tests. Currently every test hits the real filesystem via `t.TempDir()` — fast enough that the seam hasn't been used yet, but it's there if you want it.
+Every test hits the real filesystem via `t.TempDir()` — fast enough that an `os.ReadDir` seam hasn't been needed. If a future test needs a fake filesystem, the natural place to introduce one is the `os.ReadDir` call in `walk`.

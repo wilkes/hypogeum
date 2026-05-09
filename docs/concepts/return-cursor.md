@@ -17,19 +17,19 @@ Single-slot state on the model:
 ```go
 type returnCursor struct {
     sourceFile string             // the file whose backlinks were being navigated
-    cursor     int                // backlinkCursor at follow time
+    cursor     int                // backlinks.cursor at follow time
     surface    backlinksSurface   // surfacePane | surfaceModal
 }
 
-returnCursor *returnCursor  // nil when no follow is pending return
+// stored on the model as m.backlinks.returnCursor (nil when no follow is pending return)
 ```
 
 **Set on follow** (inside `followBacklink`, before `openFile` mutates history):
 
 ```go
-m.returnCursor = &returnCursor{
+m.backlinks.returnCursor = &returnCursor{
     sourceFile: m.history.Current(),
-    cursor:     m.backlinkCursor,
+    cursor:     m.backlinks.cursor,
     surface:    m.activeBacklinksSurface(),
 }
 ```
@@ -37,23 +37,23 @@ m.returnCursor = &returnCursor{
 **Consumed on Back** (after `history.Back()` and `refreshContent`):
 
 ```go
-if m.returnCursor != nil && path == m.returnCursor.sourceFile {
+if rc := m.backlinks.returnCursor; rc != nil && path == rc.sourceFile {
     m.refreshBacklinks(path)
-    m.backlinkCursor = clamp(m.returnCursor.cursor, 0, len(m.backlinks)-1)
-    switch m.returnCursor.surface {
+    m.backlinks.cursor = clamp(rc.cursor, 0, len(m.backlinks.items)-1)
+    switch rc.surface {
     case surfacePane:
         if m.shouldShowBacklinks() {
             m.focus = focusBacklinks
         }
     case surfaceModal:
-        m.modalOpen = modalBacklinks
+        m.modals.kind = modalBacklinks
         m.refreshBacklinksModal(path)
     }
-    m.returnCursor = nil
+    m.backlinks.returnCursor = nil
 }
 ```
 
-The `path == m.returnCursor.sourceFile` check is path-keyed, not time-keyed: if the user navigates Back twice, the second Back lands on a *different* file, the check fails, and the slot is left untouched (it'll be consumed if they ever return to the original — though in practice the user has moved on by then). The slot is cleared either way on the next successful match-and-restore.
+The `path == rc.sourceFile` check is path-keyed, not time-keyed: if the user navigates Back twice, the second Back lands on a *different* file, the check fails, and the slot is left untouched (it'll be consumed if they ever return to the original — though in practice the user has moved on by then). The slot is cleared either way on the next successful match-and-restore.
 
 ## Invariants / gotchas
 
@@ -61,5 +61,5 @@ The `path == m.returnCursor.sourceFile` check is path-keyed, not time-keyed: if 
 - **Path-keyed lifetime, not time-keyed.** A stale `returnCursor` is harmless: it sits there until either the user returns to its `sourceFile` (consumed) or some unrelated path eventually matches `sourceFile` (rare; restoration would still be valid because the cached cursor was at that file's backlink list).
 - **Cursor is clamped on restore.** If the vault refreshed between follow and return and the selected backlink no longer exists, the cursor lands on a neighbor. Test: `TestReturnCursor_ClampsToShrunkList` in `internal/tui/backlinks_test.go`.
 - **Surface restoration matters.** A user who followed from a modal expects to land back in a modal, not in the pane. The slot records which surface was active at follow time; the restore branches on it.
-- **The pane being closed at return time is fine.** If the user closed the pane between follow and return, `m.backlinksOpen` is false; we don't reopen it. Cursor is still restored in case they reopen later.
+- **The pane being closed at return time is fine.** If the user closed the pane between follow and return, `m.backlinks.open` is false; we don't reopen it. Cursor is still restored in case they reopen later.
 - **Vault refresh between follow and return is also fine.** `refreshBacklinks` re-queries; the clamp handles list-shrink.
