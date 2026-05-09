@@ -4,13 +4,8 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
-	"sort"
 	"strings"
 	"sync"
-
-	"github.com/yuin/goldmark"
-	"github.com/yuin/goldmark/ast"
-	"github.com/yuin/goldmark/text"
 
 	"github.com/wilkes/hypogeum/internal/tree"
 )
@@ -37,42 +32,6 @@ type fileEntry struct {
 	path string
 	refs []reference
 }
-
-type referenceKind int
-
-const (
-	refWikilink referenceKind = iota
-	refStdLink
-)
-
-type reference struct {
-	kind        referenceKind
-	target      string // raw [[Target]] (wikilink) or href (stdlink)
-	resolved    string // absolute path of the target file, "" if unresolved
-	heading     string
-	block       string
-	alias       string
-	displayText string
-	snippet     string
-	line        int
-}
-
-// Backlink is one cross-reference *to* a given file. Returned by Backlinks
-// for the TUI to render in the persistent pane and modal.
-type Backlink struct {
-	SourceFile  string
-	DisplayText string
-	Snippet     string
-	Line        int
-	Kind        BacklinkKind
-}
-
-type BacklinkKind int
-
-const (
-	BacklinkWikilink BacklinkKind = iota
-	BacklinkStdLink
-)
 
 // Build walks root and indexes every .md file's wikilinks and standard
 // markdown links. The diag sink receives non-fatal issues; pass
@@ -153,47 +112,6 @@ func removePath(s []string, p string) []string {
 	return out
 }
 
-// Backlinks returns every reference *to* path in document order across
-// files. Includes both wikilink and standard-markdown-link references.
-func (v *Vault) Backlinks(path string) []Backlink {
-	v.mu.RLock()
-	defer v.mu.RUnlock()
-
-	abs, _ := filepath.Abs(path)
-	var out []Backlink
-	for src, entry := range v.files {
-		for _, ref := range entry.refs {
-			if ref.resolved == "" || ref.resolved != abs {
-				continue
-			}
-			kind := BacklinkStdLink
-			if ref.kind == refWikilink {
-				kind = BacklinkWikilink
-			}
-			out = append(out, Backlink{
-				SourceFile:  src,
-				DisplayText: ref.displayText,
-				Snippet:     ref.snippet,
-				Line:        ref.line,
-				Kind:        kind,
-			})
-		}
-	}
-	// Stable order: sort by source file, then by line, so test fixtures
-	// don't depend on map iteration order.
-	sortBacklinks(out)
-	return out
-}
-
-func sortBacklinks(b []Backlink) {
-	sort.Slice(b, func(i, j int) bool {
-		if b[i].SourceFile != b[j].SourceFile {
-			return b[i].SourceFile < b[j].SourceFile
-		}
-		return b[i].Line < b[j].Line
-	})
-}
-
 // walkAndIndex populates v.files and v.names by walking v.root.
 // Per-file parse failures emit a Warn diagnostic and are skipped.
 // A walk-level error (root unreadable) is fatal.
@@ -243,100 +161,6 @@ func (v *Vault) indexFile(path string) {
 		}
 	}
 	v.names[key] = append(deduped, path)
-}
-
-// extractReferences parses src as markdown (with the wikilink extension)
-// and returns one reference per outgoing link, in document order.
-// Standard ast.Link nodes become refStdLink entries; wikilinkNode
-// instances become refWikilink entries.
-func extractReferences(src, fromPath string) []reference {
-	source := []byte(src)
-	md := goldmark.New(goldmark.WithExtensions(WikilinkExtension))
-	doc := md.Parser().Parse(text.NewReader(source))
-
-	var refs []reference
-	_ = ast.Walk(doc, func(n ast.Node, entering bool) (ast.WalkStatus, error) {
-		if !entering {
-			return ast.WalkContinue, nil
-		}
-		switch nn := n.(type) {
-		case *wikilinkNode:
-			disp := nn.Alias
-			if disp == "" {
-				disp = nn.Name
-			}
-			refs = append(refs, reference{
-				kind:        refWikilink,
-				target:      nn.Name,
-				heading:     nn.Heading,
-				block:       nn.Block,
-				alias:       nn.Alias,
-				displayText: disp,
-				snippet:     snippetForNode(nn, source, disp),
-				line:        lineForNode(nn, source),
-			})
-			return ast.WalkSkipChildren, nil
-		case *ast.Link:
-			href := string(nn.Destination)
-			disp := linkText(nn, source)
-			refs = append(refs, reference{
-				kind:        refStdLink,
-				target:      href,
-				resolved:    resolveStdLink(fromPath, href),
-				displayText: disp,
-				snippet:     snippetForNode(nn, source, disp),
-				line:        lineForNode(nn, source),
-			})
-			return ast.WalkSkipChildren, nil
-		case *ast.Image:
-			return ast.WalkSkipChildren, nil
-		}
-		return ast.WalkContinue, nil
-	})
-	return refs
-}
-
-// lineForNode returns the 1-indexed line of the first segment of n
-// within source. Returns 0 if no segment is found (rare — defensive).
-func lineForNode(n ast.Node, source []byte) int {
-	var seg *ast.Text
-	_ = ast.Walk(n, func(c ast.Node, entering bool) (ast.WalkStatus, error) {
-		if !entering {
-			return ast.WalkContinue, nil
-		}
-		if t, ok := c.(*ast.Text); ok {
-			seg = t
-			return ast.WalkStop, nil
-		}
-		return ast.WalkContinue, nil
-	})
-	if seg == nil {
-		return 0
-	}
-	stop := seg.Segment.Start
-	if stop > len(source) {
-		stop = len(source)
-	}
-	line := 1
-	for i := 0; i < stop; i++ {
-		if source[i] == '\n' {
-			line++
-		}
-	}
-	return line
-}
-
-// linkText returns the visible text under a *ast.Link.
-func linkText(n ast.Node, source []byte) string {
-	var out []byte
-	for c := n.FirstChild(); c != nil; c = c.NextSibling() {
-		if t, ok := c.(*ast.Text); ok {
-			out = append(out, t.Segment.Value(source)...)
-			continue
-		}
-		out = append(out, []byte(linkText(c, source))...)
-	}
-	return string(out)
 }
 
 // nameKey is the basename without extension, lowercased — the key used
@@ -409,26 +233,5 @@ func (v *Vault) resolveLocked(fromFile, name string) (string, bool) {
 	if len(candidates) == 0 {
 		return "", false
 	}
-	if len(candidates) == 1 {
-		return candidates[0], true
-	}
-	type scored struct {
-		path string
-		dist int
-	}
-	scoredCands := make([]scored, 0, len(candidates))
-	for _, c := range candidates {
-		rel, err := filepath.Rel(filepath.Dir(fromFile), c)
-		if err != nil {
-			rel = c
-		}
-		scoredCands = append(scoredCands, scored{path: c, dist: len(rel)})
-	}
-	sort.Slice(scoredCands, func(i, j int) bool {
-		if scoredCands[i].dist != scoredCands[j].dist {
-			return scoredCands[i].dist < scoredCands[j].dist
-		}
-		return scoredCands[i].path < scoredCands[j].path
-	})
-	return scoredCands[0].path, true
+	return scoreProximity(candidates, fromFile), true
 }

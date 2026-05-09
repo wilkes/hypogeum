@@ -22,12 +22,15 @@ func (v *Vault) Resolve(fromFile, name, heading, block string) (string, bool) {
 	if len(candidates) == 0 {
 		return "", false
 	}
-	if len(candidates) == 1 {
-		return candidates[0], true
-	}
+	return scoreProximity(candidates, fromFile), true
+}
 
-	// Proximity tiebreaker: prefer the candidate whose path is shortest
-	// relative to fromFile. Falls back to lexical order on ties.
+// scoreProximity picks the best candidate for fromFile by counting
+// shared leading path components. Ties broken by lexical order.
+func scoreProximity(candidates []string, fromFile string) string {
+	if len(candidates) == 1 {
+		return candidates[0]
+	}
 	type scored struct {
 		path string
 		dist int
@@ -46,5 +49,5 @@ func (v *Vault) Resolve(fromFile, name, heading, block string) (string, bool) {
 		}
 		return scoredCands[i].path < scoredCands[j].path
 	})
-	return scoredCands[0].path, true
+	return scoredCands[0].path
 }
