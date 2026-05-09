@@ -39,9 +39,15 @@ type Link struct {
 	Row      int          // zero-indexed row in the rendered output
 }
 
-// LinkMarker brackets a link's visible text in the rendered output. The
-// TUI uses this to inject BubbleZone Mark/Close pairs without coupling
-// the markdown package to a specific zone library.
+// LinkMarker brackets a link's visible text in the rendered output.
+// The TUI uses this to inject BubbleZone Mark/Close pairs (for click
+// hit-testing) without coupling the markdown package to a specific
+// zone library; the markdown package itself layers OSC 8 hyperlink
+// sequences around the marker output so terminals that support it
+// can click-to-open without the URL appearing in prose.
+//
+// linkIndex matches ASTLinks[linkIndex] for the same render — the
+// caller can resolve href back to the original link if needed.
 type LinkMarker func(linkIndex int) (open, close string)
 
 // RenderWithLinks renders src and returns both the rendered string and a
@@ -61,7 +67,13 @@ func (r *Renderer) RenderWithLinks(src, base string, marker LinkMarker) (string,
 	}
 
 	asts := ExtractLinks(src)
-	cleaned, spans := stripSentinels(raw, marker)
+	osc8 := func(i int) string {
+		if i < 0 || i >= len(asts) {
+			return ""
+		}
+		return resolveOSC8Target(base, asts[i].Href)
+	}
+	cleaned, spans := stripSentinelsWithOSC8(raw, marker, osc8)
 	links := make([]Link, 0, len(spans))
 	for i, s := range spans {
 		l := Link{Row: s.row}
@@ -75,6 +87,22 @@ func (r *Renderer) RenderWithLinks(src, base string, marker LinkMarker) (string,
 		links = append(links, l)
 	}
 	return cleaned, links, nil
+}
+
+// resolveOSC8Target picks the hyperlink target embedded in an OSC 8
+// sequence. Local files become file:// URLs (so click handlers in
+// modern terminals open them); externals pass through; anchors are
+// dropped (no target to click).
+func resolveOSC8Target(base, href string) string {
+	r := ResolveLink(base, href)
+	switch r.Kind {
+	case LinkLocalFile:
+		return "file://" + r.Target
+	case LinkExternal:
+		return r.Target
+	default:
+		return ""
+	}
 }
 
 // wikilinkRegex matches the wikilink syntax for the source-rewrite pass.
@@ -149,16 +177,27 @@ type sentinelSpan struct {
 //     the single space Glamour hardcodes before it, so "[text] /url"
 //     collapses to "[text]" in the cleaned output.
 func stripSentinels(raw string, marker LinkMarker) (string, []sentinelSpan) {
+	return stripSentinelsWithOSC8(raw, marker, nil)
+}
+
+// stripSentinelsWithOSC8 is stripSentinels with an additional hook that
+// wraps each link's text in an OSC 8 hyperlink. osc8Target(i) returns
+// the URL for the i-th link (empty string skips OSC 8 wrapping for that
+// link). The OSC 8 wrappers go *outside* the marker pair so terminal
+// hit-testing (BubbleZone Mark) and click-to-open (OSC 8) compose
+// rather than conflict.
+func stripSentinelsWithOSC8(raw string, marker LinkMarker, osc8Target func(int) string) (string, []sentinelSpan) {
 	var (
-		out       strings.Builder
-		spans     []sentinelSpan
-		row       int
-		inLink    bool
-		linkText  strings.Builder
-		linkRow   int
-		linkIdx   int
-		openMark  string
-		closeMark string
+		out         strings.Builder
+		spans       []sentinelSpan
+		row         int
+		inLink      bool
+		linkText    strings.Builder
+		linkRow     int
+		linkIdx     int
+		openMark    string
+		closeMark   string
+		currentOSC8 string
 	)
 	out.Grow(len(raw))
 
@@ -185,11 +224,21 @@ func stripSentinels(raw string, marker LinkMarker) (string, []sentinelSpan) {
 			if marker != nil {
 				openMark, closeMark = marker(linkIdx)
 			}
+			currentOSC8 = ""
+			if osc8Target != nil {
+				currentOSC8 = osc8Target(linkIdx)
+			}
+			if currentOSC8 != "" {
+				out.WriteString("\x1b]8;;" + currentOSC8 + "\x1b\\")
+			}
 			out.WriteString(openMark)
 			i++
 		case sentinelEnd:
 			if inLink {
 				out.WriteString(closeMark)
+				if currentOSC8 != "" {
+					out.WriteString("\x1b]8;;\x1b\\")
+				}
 				spans = append(spans, sentinelSpan{row: linkRow, text: linkText.String()})
 				inLink = false
 				linkIdx++
