@@ -127,6 +127,34 @@ func TestRenderWithLinks_OutputIsCleanRender(t *testing.T) {
 	}
 }
 
+// TestRenderWithLinks_WikilinkResolvesToHref guards the wikilink.Parse
+// migration: preprocessWikilinks must still rewrite [[Name#Heading]]
+// into a standard markdown link whose href is the resolver's path with
+// the slugified heading appended, and the resolved Link.Resolved.Target
+// must be that path.
+func TestRenderWithLinks_WikilinkResolvesToHref(t *testing.T) {
+	r, err := NewRenderer(80, WithResolver(fakeResolver{
+		answers: map[string]string{"Notes": "/abs/notes.md"},
+	}))
+	if err != nil {
+		t.Fatalf("NewRenderer: %v", err)
+	}
+	r.SetFromFile("/abs/source.md")
+	_, links, err := r.RenderWithLinks("see [[Notes#Section Two]] above.", "/abs/source.md", nil)
+	if err != nil {
+		t.Fatalf("RenderWithLinks: %v", err)
+	}
+	if len(links) != 1 {
+		t.Fatalf("links: got %d want 1 (%v)", len(links), links)
+	}
+	if got, want := links[0].Href, "/abs/notes.md#section-two"; got != want {
+		t.Fatalf("Href = %q, want %q", got, want)
+	}
+	if got, want := links[0].Resolved.Target, "/abs/notes.md"; links[0].Resolved.Kind != LinkLocalFile || got != want {
+		t.Fatalf("Resolved = %+v, want LinkLocalFile %q", links[0].Resolved, want)
+	}
+}
+
 // stripANSI removes CSI sequences. Used in tests to compare visible output.
 func stripANSI(s string) string {
 	var b strings.Builder

@@ -1,13 +1,13 @@
 package vault
 
 import (
-	"strings"
-
 	"github.com/yuin/goldmark"
 	"github.com/yuin/goldmark/ast"
 	"github.com/yuin/goldmark/parser"
 	"github.com/yuin/goldmark/text"
 	"github.com/yuin/goldmark/util"
+
+	"github.com/wilkes/hypogeum/internal/wikilink"
 )
 
 // wikilinkNode is the AST type produced by the wikilink inline parser.
@@ -79,38 +79,20 @@ func (wikilinkParser) Parse(parent ast.Node, block text.Reader, pc parser.Contex
 }
 
 // parseWikilinkBody splits the inside of [[...]] into its components.
-// Returns nil if the body is empty or otherwise malformed.
+// Returns nil if the body is empty or otherwise malformed. Delegates the
+// actual splitting to internal/wikilink so the markdown renderer and the
+// vault index share one parser.
 func parseWikilinkBody(body string) *wikilinkNode {
-	body = strings.TrimSpace(body)
-	if body == "" {
+	b := wikilink.Parse(body)
+	if b == nil {
 		return nil
 	}
-
-	w := &wikilinkNode{}
-
-	// Pipe splits "name-with-extras|alias" first.
-	if i := strings.Index(body, "|"); i >= 0 {
-		w.Alias = strings.TrimSpace(body[i+1:])
-		body = body[:i]
+	return &wikilinkNode{
+		Name:    b.Name,
+		Heading: b.Heading,
+		Block:   b.Block,
+		Alias:   b.Alias,
 	}
-
-	// "^block" is allowed after the name, with or without a heading.
-	if i := strings.Index(body, "^"); i >= 0 {
-		w.Block = strings.TrimSpace(body[i+1:])
-		body = body[:i]
-	}
-
-	// "#heading" is everything between name and ^/| boundaries.
-	if i := strings.Index(body, "#"); i >= 0 {
-		w.Heading = strings.TrimSpace(body[i+1:])
-		body = body[:i]
-	}
-
-	w.Name = strings.TrimSpace(body)
-	if w.Name == "" {
-		return nil
-	}
-	return w
 }
 
 // wikilinkExt registers wikilinkParser with the parser at a high priority.
