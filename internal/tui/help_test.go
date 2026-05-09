@@ -71,23 +71,97 @@ func TestHelpModalEscCloses(t *testing.T) {
 // modal is open is a no-op — help is anchored, unlike B and ^l which
 // swap content under the single-modal-swap rule. This prevents `?` from
 // stealing focus when the user is mid-task in another modal.
+//
+// The three sub-cases (backlinks, logs, picker) each pin a distinct way
+// the guard could regress: a refactor narrowing the condition to a
+// single == comparison would only catch one and silently break the
+// others.
 func TestHelpModalDoesNotSwap(t *testing.T) {
+	cases := []struct {
+		name string
+		open tea.KeyMsg
+		want modalKind
+	}{
+		{"backlinks", tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'B'}}, modalBacklinks},
+		{"logs", tea.KeyMsg{Type: tea.KeyCtrlL}, modalLogs},
+		{"picker", tea.KeyMsg{Type: tea.KeyCtrlP}, modalPicker},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			m, _ := New(dir, "")
+			mm, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 40})
+			m = mm.(Model)
+
+			out, _ := m.Update(tc.open)
+			m = out.(Model)
+			if m.modalOpen != tc.want {
+				t.Fatalf("precondition: expected %v open, got %v", tc.want, m.modalOpen)
+			}
+
+			// Press `?`. Expect: original modal stays, help does NOT open.
+			out, _ = m.Update(pressQuestion())
+			if got := out.(Model).modalOpen; got != tc.want {
+				t.Errorf("? should be a no-op while %s modal is open; got %v", tc.name, got)
+			}
+		})
+	}
+}
+
+// TestHelpModalSwapsToOtherModals verifies the *other* direction of the
+// anchor asymmetry: opening help and then pressing B/^l/^p should swap
+// to the new modal (because those handlers don't gate on modalHelp).
+// Without this test, someone copying the anchor guard to the swap
+// handlers ("be consistent with help") would silently break the
+// "user can read the cheat sheet then jump straight into a task"
+// flow — they'd be stuck having to Esc out of help first.
+func TestHelpModalSwapsToOtherModals(t *testing.T) {
+	cases := []struct {
+		name string
+		key  tea.KeyMsg
+		want modalKind
+	}{
+		{"backlinks", tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'B'}}, modalBacklinks},
+		{"logs", tea.KeyMsg{Type: tea.KeyCtrlL}, modalLogs},
+		{"picker", tea.KeyMsg{Type: tea.KeyCtrlP}, modalPicker},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			m, _ := New(dir, "")
+			mm, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 40})
+			m = mm.(Model)
+
+			out, _ := m.Update(pressQuestion())
+			m = out.(Model)
+			if m.modalOpen != modalHelp {
+				t.Fatalf("precondition: help modal should be open")
+			}
+
+			out, _ = m.Update(tc.key)
+			if got := out.(Model).modalOpen; got != tc.want {
+				t.Errorf("expected %v after swap from help, got %v", tc.want, got)
+			}
+		})
+	}
+}
+
+// TestFooterAdvertisesHelp pins the trimmed footer's two essential hints
+// — the entry point to the cheat sheet (`?`) and the way out (`q`).
+// Without this, a future "let's drop `?: help` because power users know
+// it" change would silently destroy discoverability of every other
+// binding, since the cheat sheet is now the only place they're listed.
+func TestFooterAdvertisesHelp(t *testing.T) {
 	dir := t.TempDir()
 	m, _ := New(dir, "")
 	mm, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 40})
 	m = mm.(Model)
 
-	// Open backlinks modal first.
-	out, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'B'}})
-	m = out.(Model)
-	if m.modalOpen != modalBacklinks {
-		t.Fatalf("precondition: backlinks modal should be open")
-	}
-
-	// Press `?`. Expect: backlinks stays, help does NOT open.
-	out, _ = m.Update(pressQuestion())
-	if got := out.(Model).modalOpen; got != modalBacklinks {
-		t.Errorf("? should be a no-op while backlinks modal is open; got %v", got)
+	rendered := m.renderFooter()
+	for _, want := range []string{"?: help", "q: quit"} {
+		if !strings.Contains(rendered, want) {
+			t.Errorf("footer missing %q\nfooter:\n%s", want, rendered)
+		}
 	}
 }
 

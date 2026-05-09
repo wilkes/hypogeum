@@ -3,7 +3,7 @@ package tui
 import "github.com/charmbracelet/bubbles/key"
 
 // keyMap collects every keybinding the model knows about. Centralizing them
-// makes the help footer trivial to render and the bindings easy to change.
+// makes the help cheat sheet trivial to render and the bindings easy to change.
 type keyMap struct {
 	Up       key.Binding
 	Down     key.Binding

@@ -10,8 +10,9 @@ import (
 )
 
 // refreshHelpModal repopulates m.modalVP with the keybinding cheat sheet,
-// grouped into logical sections. The body is built from m.keys so adding
-// a binding there automatically surfaces it here.
+// grouped into logical sections. The section list in formatHelp is
+// curated for UX (ordering and grouping matter), so a new keyMap field
+// won't surface here automatically — add it to the right section below.
 func (m *Model) refreshHelpModal() {
 	m.resizeModalVP()
 	m.modalVP.SetContent(formatHelp(m.keys))
