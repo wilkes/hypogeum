@@ -11,6 +11,20 @@ import (
 	"github.com/wilkes/hypogeum/internal/vault"
 )
 
+// backlinksUIState bundles the backlinks pane/modal render state. open
+// is the user-facing intent for the persistent pane (gated by height
+// via shouldShowBacklinks); vp scrolls the persistent pane; cursor
+// indexes into items; items is cached so cursor moves don't re-query
+// the vault; returnCursor is set when following a backlink and consumed
+// on the next matching Back navigation.
+type backlinksUIState struct {
+	open         bool
+	vp           viewport.Model
+	cursor       int
+	items        []vault.Backlink
+	returnCursor *returnCursor
+}
+
 // backlinksHeight is the row count of the persistent bottom-split pane,
 // including its border. Two visible rows per backlink × ~3 backlinks
 // visible at a time + border (2) = 8.
@@ -68,20 +82,20 @@ func clamp(v, lo, hi int) int {
 // shouldShowBacklinks returns true when the persistent pane is open
 // AND the terminal is tall enough for it.
 func (m Model) shouldShowBacklinks() bool {
-	return m.backlinksOpen && m.height >= backlinksMinTotalHeight
+	return m.backlinks.open && m.height >= backlinksMinTotalHeight
 }
 
-// refreshBacklinks repopulates m.backlinksVP from the vault for the
+// refreshBacklinks repopulates m.backlinks.vp from the vault for the
 // currently-open file. Called on file change and on toggle.
 func (m *Model) refreshBacklinks(currentPath string) {
 	if m.vault == nil || currentPath == "" {
-		m.backlinks = nil
-		m.backlinksVP.SetContent("")
+		m.backlinks.items = nil
+		m.backlinks.vp.SetContent("")
 		return
 	}
 	links := m.vault.Backlinks(currentPath)
-	m.backlinks = links
-	m.backlinksVP.SetContent(formatBacklinks(links, m.root, m.content.viewport.Width, m.backlinkCursor))
+	m.backlinks.items = links
+	m.backlinks.vp.SetContent(formatBacklinks(links, m.root, m.content.viewport.Width, m.backlinks.cursor))
 }
 
 // renderBacklinks returns the rendered string of the persistent pane,
@@ -94,7 +108,7 @@ func (m Model) renderBacklinks() string {
 	return paneStyle(false).
 		Width(m.content.viewport.Width).
 		Height(backlinksHeight - 2). // -2 for top/bottom border
-		Render(m.backlinksVP.View())
+		Render(m.backlinks.vp.View())
 }
 
 // cursorMarkerStyle is the left-edge highlight for the selected entry.
@@ -146,22 +160,22 @@ func applyHighlight(s string) string {
 // currently-open file. Called when opening the backlinks modal.
 func (m *Model) refreshBacklinksModal(currentPath string) {
 	if m.vault == nil || currentPath == "" {
-		m.backlinks = nil
+		m.backlinks.items = nil
 		m.modalVP.SetContent("")
 		return
 	}
 	m.resizeModalVP()
 	links := m.vault.Backlinks(currentPath)
-	m.backlinks = links
-	m.modalVP.SetContent(formatBacklinks(links, m.root, m.modalVP.Width, m.backlinkCursor))
+	m.backlinks.items = links
+	m.modalVP.SetContent(formatBacklinks(links, m.root, m.modalVP.Width, m.backlinks.cursor))
 }
 
 // ensureCursorVisible adjusts vp's YOffset so the two-row entry at
-// m.backlinkCursor is fully on-screen. Called after every cursor
+// m.backlinks.cursor is fully on-screen. Called after every cursor
 // mutation. Each backlink takes 2 visible rows.
 func (m *Model) ensureCursorVisible(vp *viewport.Model) {
 	const rowsPerEntry = 2
-	cursorTop := m.backlinkCursor * rowsPerEntry
+	cursorTop := m.backlinks.cursor * rowsPerEntry
 	cursorBottom := cursorTop + rowsPerEntry - 1
 
 	if cursorTop < vp.YOffset {
@@ -203,15 +217,15 @@ func (m Model) activeBacklinksSurface() backlinksSurface {
 // backlink, recording return state for a subsequent h (Back) restore.
 // No-op if no backlink is selected (e.g. empty list).
 func (m *Model) followBacklink() {
-	if m.backlinkCursor < 0 || m.backlinkCursor >= len(m.backlinks) {
+	if m.backlinks.cursor < 0 || m.backlinks.cursor >= len(m.backlinks.items) {
 		return
 	}
-	bl := m.backlinks[m.backlinkCursor]
+	bl := m.backlinks.items[m.backlinks.cursor]
 
 	// Save return state BEFORE openFile mutates history.
-	m.returnCursor = &returnCursor{
+	m.backlinks.returnCursor = &returnCursor{
 		sourceFile: m.history.Current(),
-		cursor:     m.backlinkCursor,
+		cursor:     m.backlinks.cursor,
 		surface:    m.activeBacklinksSurface(),
 	}
 
@@ -232,14 +246,14 @@ func (m *Model) followBacklink() {
 // the slot regardless of the surface restore actually being possible
 // (e.g. the user closed the pane while away).
 func (m *Model) maybeRestoreReturnCursor(path string) {
-	if m.returnCursor == nil || path != m.returnCursor.sourceFile {
+	if m.backlinks.returnCursor == nil || path != m.backlinks.returnCursor.sourceFile {
 		return
 	}
-	rc := m.returnCursor
-	m.returnCursor = nil
+	rc := m.backlinks.returnCursor
+	m.backlinks.returnCursor = nil
 
 	m.refreshBacklinks(path)
-	m.backlinkCursor = clamp(rc.cursor, 0, len(m.backlinks)-1)
+	m.backlinks.cursor = clamp(rc.cursor, 0, len(m.backlinks.items)-1)
 
 	switch rc.surface {
 	case surfacePane:

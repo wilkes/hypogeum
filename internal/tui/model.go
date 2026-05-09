@@ -45,18 +45,14 @@ type Model struct {
 	root     string
 	rootNode *tree.Node
 
-	tree    treeUIState
-	content contentUIState
+	tree      treeUIState
+	content   contentUIState
+	backlinks backlinksUIState
 
 	history *nav.History
 	focus   focus
 
-	backlinksOpen  bool
-	backlinksVP    viewport.Model
-	backlinkCursor int
-	backlinks      []vault.Backlink // cached so cursor moves don't re-query the vault
-	prevFocus      focus            // saved when opening a backlinks surface, restored on close
-	returnCursor   *returnCursor    // set on follow, consumed on the next matching Back navigation
+	prevFocus focus // saved when opening a backlinks surface, restored on close
 
 	modalOpen modalKind
 	modalVP   viewport.Model
@@ -156,7 +152,7 @@ func New(root, initialFile string) (Model, error) {
 		},
 	}
 	m.tree.flat = m.flattenVisible()
-	m.backlinksVP = viewport.New(0, 0)
+	m.backlinks.vp = viewport.New(0, 0)
 	m.modalVP = newModalViewport()
 	m.picker = newPicker()
 
@@ -223,8 +219,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Leave room for the pane's top+bottom borders (2) and the
 		// two-line footer (2) so View() fits within m.height.
 		m.content.viewport.Height = m.height - 4
-		m.backlinksVP.Width = contentWidth
-		m.backlinksVP.Height = backlinksHeight - 2
+		m.backlinks.vp.Width = contentWidth
+		m.backlinks.vp.Height = backlinksHeight - 2
 		// The tree viewport gets the inside of the tree pane: width
 		// minus its border (2), height minus border + footer (4).
 		m.tree.vp.Width = treeWidth - 2

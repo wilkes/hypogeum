@@ -118,7 +118,7 @@ func (m *Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch {
 	case key.Matches(msg, m.keys.OpenBacklinksModal):
 		return *m, m.toggleModal(modalBacklinks, func() tea.Cmd {
-			m.backlinkCursor = 0
+			m.backlinks.cursor = 0
 			m.refreshBacklinksModal(m.history.Current())
 			return nil
 		})
@@ -199,15 +199,15 @@ func (m *Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if m.modalOpen == modalBacklinks {
 			switch {
 			case key.Matches(msg, m.keys.Down):
-				if m.backlinkCursor < len(m.backlinks)-1 {
-					m.backlinkCursor++
+				if m.backlinks.cursor < len(m.backlinks.items)-1 {
+					m.backlinks.cursor++
 					m.refreshBacklinksModal(m.history.Current())
 					m.ensureCursorVisible(&m.modalVP)
 				}
 				return *m, nil
 			case key.Matches(msg, m.keys.Up):
-				if m.backlinkCursor > 0 {
-					m.backlinkCursor--
+				if m.backlinks.cursor > 0 {
+					m.backlinks.cursor--
 					m.refreshBacklinksModal(m.history.Current())
 					m.ensureCursorVisible(&m.modalVP)
 				}
@@ -247,14 +247,14 @@ func (m *Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return *m, nil
 
 	case key.Matches(msg, m.keys.ToggleBacklinks):
-		if m.backlinksOpen {
-			m.backlinksOpen = false
+		if m.backlinks.open {
+			m.backlinks.open = false
 			m.focus = m.prevFocus
 		} else {
-			m.backlinksOpen = true
+			m.backlinks.open = true
 			m.prevFocus = m.focus
 			m.focus = focusBacklinks
-			m.backlinkCursor = 0
+			m.backlinks.cursor = 0
 			m.refreshBacklinks(m.history.Current())
 		}
 		return *m, nil
@@ -305,17 +305,17 @@ func (m *Model) handleBacklinksKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.focus = m.prevFocus
 		return *m, nil
 	case key.Matches(msg, m.keys.Down):
-		if m.backlinkCursor < len(m.backlinks)-1 {
-			m.backlinkCursor++
+		if m.backlinks.cursor < len(m.backlinks.items)-1 {
+			m.backlinks.cursor++
 			m.refreshBacklinks(m.history.Current())
-			m.ensureCursorVisible(&m.backlinksVP)
+			m.ensureCursorVisible(&m.backlinks.vp)
 		}
 		return *m, nil
 	case key.Matches(msg, m.keys.Up):
-		if m.backlinkCursor > 0 {
-			m.backlinkCursor--
+		if m.backlinks.cursor > 0 {
+			m.backlinks.cursor--
 			m.refreshBacklinks(m.history.Current())
-			m.ensureCursorVisible(&m.backlinksVP)
+			m.ensureCursorVisible(&m.backlinks.vp)
 		}
 		return *m, nil
 	case key.Matches(msg, m.keys.Open):

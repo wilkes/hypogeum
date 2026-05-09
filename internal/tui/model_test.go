@@ -96,15 +96,15 @@ func TestKeyBTogglesBacklinksOpen(t *testing.T) {
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
-	if m.backlinksOpen {
+	if m.backlinks.open {
 		t.Fatalf("expected backlinksOpen=false initially")
 	}
 	out, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'b'}})
-	if !out.(Model).backlinksOpen {
+	if !out.(Model).backlinks.open {
 		t.Fatalf("after b: expected backlinksOpen=true")
 	}
 	out2, _ := out.(Model).Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'b'}})
-	if out2.(Model).backlinksOpen {
+	if out2.(Model).backlinks.open {
 		t.Fatalf("after second b: expected backlinksOpen=false")
 	}
 }
