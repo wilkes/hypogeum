@@ -47,7 +47,6 @@ func TestPreselect_DefaultPathUnchanged(t *testing.T) {
 	if m.content.linkCursor != -1 {
 		t.Fatalf("expected linkCursor=-1 after redundant refresh, got %d", m.content.linkCursor)
 	}
-	_ = tea.KeyMsg{} // silence unused import; tea is used by other tests in this file
 }
 
 // TestPreselect_ConsumerMatchesByTarget exercises refreshContent's match
@@ -318,5 +317,29 @@ func TestPreselect_OnlyLocalFileLinks(t *testing.T) {
 	m.refreshContent(aAbs)
 	if m.content.linkCursor != -1 {
 		t.Fatalf("expected linkCursor=-1 (only LinkLocalFile is eligible), got %d", m.content.linkCursor)
+	}
+}
+
+// TestPreselect_FieldClearedOnReadError confirms the single-shot invariant
+// holds even on the read-failure early return: a target set before a
+// refreshContent that fails to read the file must not leak into the next
+// refreshContent.
+func TestPreselect_FieldClearedOnReadError(t *testing.T) {
+	root, aAbs, bAbs := writePreselectFixture(t)
+	m := sized(t, root, aAbs)
+
+	// Set the field, then trigger a read error by passing a non-existent
+	// path. The consumer's clear must run before the early return.
+	m.pendingPreselectTarget = bAbs
+	m.refreshContent(filepath.Join(root, "does-not-exist.md"))
+	if m.pendingPreselectTarget != "" {
+		t.Fatalf("expected field cleared after read-failure refresh, got %q", m.pendingPreselectTarget)
+	}
+
+	// Now refresh a real file that contains a link to b.md. With the
+	// field correctly cleared above, no preselect should fire.
+	m.refreshContent(aAbs)
+	if m.content.linkCursor != -1 {
+		t.Fatalf("expected linkCursor=-1 (field was cleared by prior failure), got %d", m.content.linkCursor)
 	}
 }

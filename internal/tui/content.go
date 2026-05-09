@@ -82,6 +82,12 @@ func (m *Model) normalizeFocus() {
 // touching history. Used by back/forward and on resize. Also refreshes
 // the link list and clears any active link selection.
 func (m *Model) refreshContent(path string) {
+	// Single-shot pre-select: clear the field unconditionally before any
+	// early return, so a read or render failure here can't leak a stale
+	// target into the next refreshContent.
+	target := m.pendingPreselectTarget
+	m.pendingPreselectTarget = ""
+
 	src, err := os.ReadFile(path)
 	if err != nil {
 		m.status = err.Error()
@@ -103,9 +109,6 @@ func (m *Model) refreshContent(path string) {
 	m.content.viewport.SetContent(out)
 	m.content.viewport.GotoTop()
 	m.content.links = links
-
-	target := m.pendingPreselectTarget
-	m.pendingPreselectTarget = "" // single-shot — always clear
 
 	m.content.linkCursor = -1
 	if target != "" {
