@@ -5,6 +5,143 @@ import (
 	"testing"
 )
 
+// recordingResolver captures every Resolve call so tests can assert on the
+// arguments passed (notably heading/block, which the simpler fakeResolver
+// in wikilink_test.go drops).
+type recordingResolver struct {
+	answers map[string]string
+	calls   []resolveCall
+}
+
+type resolveCall struct {
+	fromFile string
+	name     string
+	heading  string
+	block    string
+}
+
+func (r *recordingResolver) Resolve(fromFile, name, heading, block string) (string, bool) {
+	r.calls = append(r.calls, resolveCall{fromFile: fromFile, name: name, heading: heading, block: block})
+	v, ok := r.answers[name]
+	return v, ok
+}
+
+func TestPreprocessWikilinks_NilResolverPassesThrough(t *testing.T) {
+	r, err := NewRenderer(80)
+	if err != nil {
+		t.Fatalf("NewRenderer: %v", err)
+	}
+	r.resolver = nil
+	src := "see [[Foo]] above"
+	got := r.preprocessWikilinks(src)
+	if got != src {
+		t.Fatalf("expected pass-through, got %q", got)
+	}
+}
+
+func TestPreprocessWikilinks_SimpleResolved(t *testing.T) {
+	r, err := NewRenderer(80, WithResolver(&recordingResolver{
+		answers: map[string]string{"Foo": "/abs/foo.md"},
+	}))
+	if err != nil {
+		t.Fatalf("NewRenderer: %v", err)
+	}
+	got := r.preprocessWikilinks("see [[Foo]] above")
+	want := "see [Foo](/abs/foo.md) above"
+	if got != want {
+		t.Fatalf("got %q want %q", got, want)
+	}
+}
+
+func TestPreprocessWikilinks_AliasIsDisplay(t *testing.T) {
+	r, err := NewRenderer(80, WithResolver(&recordingResolver{
+		answers: map[string]string{"Foo": "/abs/foo.md"},
+	}))
+	if err != nil {
+		t.Fatalf("NewRenderer: %v", err)
+	}
+	got := r.preprocessWikilinks("[[Foo|the foo]]")
+	want := "[the foo](/abs/foo.md)"
+	if got != want {
+		t.Fatalf("got %q want %q", got, want)
+	}
+}
+
+func TestPreprocessWikilinks_HeadingDisplayAndAnchor(t *testing.T) {
+	r, err := NewRenderer(80, WithResolver(&recordingResolver{
+		answers: map[string]string{"Foo": "/abs/foo.md"},
+	}))
+	if err != nil {
+		t.Fatalf("NewRenderer: %v", err)
+	}
+	got := r.preprocessWikilinks("[[Foo#Some Heading]]")
+	want := "[Foo > Some Heading](/abs/foo.md#some-heading)"
+	if got != want {
+		t.Fatalf("got %q want %q", got, want)
+	}
+}
+
+func TestPreprocessWikilinks_UnresolvedRendersBroken(t *testing.T) {
+	r, err := NewRenderer(80, WithResolver(&recordingResolver{}))
+	if err != nil {
+		t.Fatalf("NewRenderer: %v", err)
+	}
+	got := r.preprocessWikilinks("[[Missing]]")
+	want := "Missing?"
+	if got != want {
+		t.Fatalf("got %q want %q", got, want)
+	}
+}
+
+func TestPreprocessWikilinks_BlockReferencePassedToResolver(t *testing.T) {
+	rec := &recordingResolver{answers: map[string]string{"Foo": "/abs/foo.md"}}
+	r, err := NewRenderer(80, WithResolver(rec))
+	if err != nil {
+		t.Fatalf("NewRenderer: %v", err)
+	}
+	r.SetFromFile("/abs/src.md")
+	_ = r.preprocessWikilinks("[[Foo^block123]]")
+	if len(rec.calls) != 1 {
+		t.Fatalf("expected 1 Resolve call, got %d", len(rec.calls))
+	}
+	c := rec.calls[0]
+	if c.name != "Foo" {
+		t.Errorf("name: got %q want Foo", c.name)
+	}
+	if c.block != "block123" {
+		t.Errorf("block: got %q want block123", c.block)
+	}
+	if c.fromFile != "/abs/src.md" {
+		t.Errorf("fromFile: got %q want /abs/src.md", c.fromFile)
+	}
+}
+
+func TestRenderWithLinks_EndToEndSentinelsStripped(t *testing.T) {
+	r := rendererForTest(t)
+	out, links, err := r.RenderWithLinks("See [the docs](docs.md) here.\n", "/base/index.md", nil)
+	if err != nil {
+		t.Fatalf("RenderWithLinks: %v", err)
+	}
+	if len(links) != 1 {
+		t.Fatalf("links: got %d want 1", len(links))
+	}
+	if links[0].Text != "the docs" {
+		t.Errorf("Text: got %q want %q", links[0].Text, "the docs")
+	}
+	if links[0].Href != "docs.md" {
+		t.Errorf("Href: got %q want %q", links[0].Href, "docs.md")
+	}
+	if links[0].Row < 0 {
+		t.Errorf("Row: got %d want >=0", links[0].Row)
+	}
+	if !strings.Contains(out, "the docs") {
+		t.Errorf("output missing link text: %q", out)
+	}
+	if strings.ContainsRune(out, sentinelStart) || strings.ContainsRune(out, sentinelEnd) {
+		t.Errorf("sentinels leaked into output: %q", out)
+	}
+}
+
 func TestStripSentinels_NoSentinels(t *testing.T) {
 	in := "hello world\nno markers here\n"
 	cleaned, spans := stripSentinels(in, nil)
