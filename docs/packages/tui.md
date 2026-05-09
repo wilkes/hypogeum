@@ -83,10 +83,10 @@ Update(KeyMsg)
 
 ## Backlinks and modal surfaces
 
-The TUI hosts three additional surfaces beyond the two-pane core: the persistent backlinks pane (`b`), the backlinks modal (`B`), and the log viewer modal (`?`). They share input rules, geometry, and a single `prevFocus` slot. Each has its own concept doc:
+The TUI hosts five additional surfaces beyond the two-pane core: the persistent backlinks pane (`b`), the backlinks modal (`B`), the log viewer modal (`^l`), the help modal (`?`), and the file picker modal (`^p`). They share input rules, geometry, and a single `prevFocus` slot. Each has its own concept doc:
 
-- [[modal-geometry]] — single-modal invariant, layout recompute on open, auto-collapse below height 20, `Esc` priority chain.
-- [[diagnostics]] — the warn/error stream that feeds the footer transient and the `?` modal.
+- [[modal-geometry]] — single-modal invariant, layout recompute on open, auto-collapse below height 20, `Esc` priority chain. `?` is anchored (no swap); `B` and `^l` swap with each other.
+- [[diagnostics]] — the warn/error stream that feeds the footer transient and the `^l` modal.
 - [[return-cursor]] — single-slot cursor restoration that survives `Enter`-follow → `h`-back round trips on backlinks.
 
 The vault that powers backlinks is documented at [[vault-index]].

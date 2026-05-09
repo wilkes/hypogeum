@@ -17,8 +17,8 @@ Cross-cutting ideas that show up in multiple specs and packages. Each is its own
 
 - [[sentinel-render]] — how link positions are recovered from Glamour's ANSI output
 - [[vault-index]] — forward + reverse reference index, basename resolution, proximity tiebreak
-- [[diagnostics]] — the warn/error stream, footer transient, log file, `?` modal
-- [[modal-geometry]] — single-modal invariant and layout recompute on `B`/`?`
+- [[diagnostics]] — the warn/error stream, footer transient, log file, `^l` modal
+- [[modal-geometry]] — single-modal invariant and layout recompute on `B`/`^l`
 - [[return-cursor]] — path-keyed cursor restoration on Back navigation
 - [[link-cursor]] — content-pane link selection (`n`/`p`/`Enter`/`Esc`) state model
 
