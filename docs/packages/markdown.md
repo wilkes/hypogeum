@@ -42,10 +42,10 @@ type ASTLink struct {
 
 ## Public surface
 
-- `NewRenderer(width int) (*Renderer, error)` — width below 20 falls back to 80.
+- `NewRenderer(width int, opts ...Option) (*Renderer, error)` — width below 20 falls back to 80. Options include `WithResolver(Resolver)` for wikilink resolution; the TUI passes its `*vault.Vault` here.
 - `(*Renderer).RenderFile(path) (string, error)` — read + plain render. Used when the link list isn't needed.
 - `(*Renderer).Render(src string) (string, error)` — plain render of an already-loaded string.
-- `(*Renderer).RenderWithLinks(src, base string) (string, []Link, error)` — instrumented render. The TUI uses this on every file open. `base` is the path of the file being rendered; it's needed to resolve relative link targets.
+- `(*Renderer).RenderWithLinks(src, base string, marker LinkMarker) (string, []Link, error)` — instrumented render. The TUI uses this on every file open. `base` is the path of the file being rendered; it's needed to resolve relative link targets. `marker` is optional (may be `nil`); if non-nil, its open/close strings are spliced around each link's visible text — the TUI uses this to inject BubbleZone Mark/Close pairs for click hit-testing.
 - `ResolveLink(base, href string) ResolvedLink` — pure path classification. Useful in tests.
 - `ExtractLinks(src string) []ASTLink` — goldmark AST walk; returns inline links and autolinks in document order, skips images.
 
@@ -63,3 +63,7 @@ The instrumented renderer injects two ASCII separator characters (`\x1c` FS, `\x
 ## Why goldmark is a direct dependency
 
 It comes in transitively via Glamour, but `ExtractLinks` uses it directly to walk the AST. Promoting it to a direct require makes the dependency graph honest and prevents a Glamour version bump from silently dropping it.
+
+## Wikilink preprocessing
+
+When a `Resolver` is set (`WithResolver`), `RenderWithLinks` runs a regex pass over the source before handing it to Glamour, rewriting every `[[Name#Heading^Block|Alias]]` into either a standard markdown link (resolved) or styled placeholder text (unresolved with `?` suffix). The body parser is shared with `internal/vault` via the [`internal/wikilink`](../../internal/wikilink/wikilink.go) package — both consumers call `wikilink.Parse(body)` and operate on the resulting `*Body`.
