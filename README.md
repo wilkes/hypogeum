@@ -6,7 +6,7 @@ The name is the Greek word for an underground chamber or network of chambers (*h
 
 ## Status
 
-Renders GitHub Flavored Markdown via [Glamour](https://github.com/charmbracelet/glamour), walks directory trees, navigates file-to-file. Wikilinks (`[[note]]`) and standard markdown links resolve across the whole vault; press `b` to see what links to the current file (and `B` for the same view as a centered modal).
+Renders GitHub Flavored Markdown via [Glamour](https://github.com/charmbracelet/glamour), walks directory trees, navigates file-to-file. Wikilinks (`[[note]]`) and standard markdown links resolve across the whole vault; press `b` to see what links to the current file (and `B` for the same view as a centered modal). The selected inline link is highlighted in reverse-video on the page; following a backlink, going back, or going forward leaves the link you came from pre-selected, so `n`/`p` cycling resumes from a meaningful position.
 
 ## Install
 
@@ -36,6 +36,8 @@ hypogeum ~/notes/index.md # open a specific file; tree roots at its directory
 | `Esc` | Clear link selection |
 | `b` | Toggle backlinks pane |
 | `B` | Backlinks modal |
+| `^b` | Toggle tree pane |
+| `^p` | Open file picker (modal) |
 | `^l` | Log viewer |
 | `?` | Help (cheat sheet) |
 | `q` | Quit |
