@@ -7,12 +7,12 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
-// refreshLogsModal repopulates m.modalVP with the diagnostic ring
+// refreshLogsModal repopulates m.modals.vp with the diagnostic ring
 // buffer formatted for display.
 func (m *Model) refreshLogsModal() {
 	m.resizeModalVP()
 	entries := m.diag.snapshot()
-	m.modalVP.SetContent(formatLogEntries(entries))
+	m.modals.vp.SetContent(formatLogEntries(entries))
 }
 
 // formatLogEntries renders the ring buffer as one line per entry,

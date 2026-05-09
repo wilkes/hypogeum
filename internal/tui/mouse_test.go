@@ -20,7 +20,7 @@ func TestModel_MouseClick_OnTreeRow_SelectsAndOpens(t *testing.T) {
 	// border. X just needs to be inside the tree pane.
 	wantPath := filepath.Join(root, "notes", "first.md")
 	target := -1
-	for i, row := range m.flatTree {
+	for i, row := range m.tree.flat {
 		if row.node.Path == wantPath {
 			target = i
 			break
@@ -43,8 +43,8 @@ func TestModel_MouseClick_OnTreeRow_SelectsAndOpens(t *testing.T) {
 	if m.focus != focusTree {
 		t.Errorf("focus after tree click = %v, want focusTree", m.focus)
 	}
-	if m.treeCursor != target {
-		t.Errorf("treeCursor after click = %d, want %d", m.treeCursor, target)
+	if m.tree.cursor != target {
+		t.Errorf("treeCursor after click = %d, want %d", m.tree.cursor, target)
 	}
 	if got := m.history.Current(); got != wantPath {
 		t.Errorf("history.Current after click = %q, want %q", got, wantPath)
@@ -56,10 +56,10 @@ func TestModel_MouseClick_OnContentLinkRow_FollowsLink(t *testing.T) {
 	m := sized(t, root, "")
 	// Verify our setup assumption: the auto-opened doc has at least one link
 	// and we know its row.
-	if len(m.links) == 0 {
-		t.Fatalf("fixture should yield links, got %d", len(m.links))
+	if len(m.content.links) == 0 {
+		t.Fatalf("fixture should yield links, got %d", len(m.content.links))
 	}
-	link := m.links[0]
+	link := m.content.links[0]
 	if link.Resolved.Kind != markdown.LinkLocalFile {
 		t.Fatalf("first link should be local file, got %v", link.Resolved.Kind)
 	}

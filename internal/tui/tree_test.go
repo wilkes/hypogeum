@@ -15,7 +15,7 @@ func TestModel_TreeNavigationAndOpen(t *testing.T) {
 	want := filepath.Join(root, "notes", "first.md")
 	target := m.rowIndexByPath(want)
 	if target < 0 {
-		t.Fatalf("first.md not found in flattened tree: %+v", m.flatTree)
+		t.Fatalf("first.md not found in flattened tree: %+v", m.tree.flat)
 	}
 	m = driveCursorTo(t, m, target)
 	m = pressKey(t, m, tea.KeyMsg{Type: tea.KeyEnter})
@@ -32,7 +32,7 @@ func TestModel_ToggleTreeHidesPane(t *testing.T) {
 	root := writeFixture(t)
 	m := sized(t, root, "")
 
-	if !m.treeVisible {
+	if !m.tree.visible {
 		t.Fatalf("tree should default to visible")
 	}
 	if w := m.treeWidth(); w == 0 {
@@ -46,7 +46,7 @@ func TestModel_ToggleTreeHidesPane(t *testing.T) {
 	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyCtrlB})
 	m = updated.(Model)
 
-	if m.treeVisible {
+	if m.tree.visible {
 		t.Errorf("treeVisible should be false after ^b")
 	}
 	if w := m.treeWidth(); w != 0 {
@@ -65,21 +65,21 @@ func TestModel_CollapseFolderHidesChildren(t *testing.T) {
 
 	notesDir := filepath.Join(root, "notes")
 	target := m.rowIndexByPath(notesDir)
-	if target < 0 || !m.flatTree[target].node.IsDir {
+	if target < 0 || !m.tree.flat[target].node.IsDir {
 		t.Fatalf("notes/ directory row not found in flatTree")
 	}
 	m = driveCursorTo(t, m, target)
 
-	before := len(m.flatTree)
+	before := len(m.tree.flat)
 	m = pressKey(t, m, tea.KeyMsg{Type: tea.KeySpace})
 
 	if !m.isCollapsed(notesDir) {
 		t.Fatalf("notes/ should be collapsed after space")
 	}
-	if len(m.flatTree) >= before {
-		t.Errorf("flatTree should shrink on collapse: before=%d after=%d", before, len(m.flatTree))
+	if len(m.tree.flat) >= before {
+		t.Errorf("flatTree should shrink on collapse: before=%d after=%d", before, len(m.tree.flat))
 	}
-	for _, row := range m.flatTree {
+	for _, row := range m.tree.flat {
 		if strings.HasPrefix(row.node.Path, notesDir+string(filepath.Separator)) {
 			t.Errorf("collapsed descendant still in flatTree: %s", row.node.Path)
 		}
@@ -90,8 +90,8 @@ func TestModel_CollapseFolderHidesChildren(t *testing.T) {
 	if m.isCollapsed(notesDir) {
 		t.Fatalf("notes/ should be expanded again")
 	}
-	if len(m.flatTree) != before {
-		t.Errorf("flatTree should restore on re-expand: before=%d after=%d", before, len(m.flatTree))
+	if len(m.tree.flat) != before {
+		t.Errorf("flatTree should restore on re-expand: before=%d after=%d", before, len(m.tree.flat))
 	}
 }
 
@@ -107,11 +107,11 @@ func TestModel_SelectInTreeExpandsAncestors(t *testing.T) {
 	subDir := filepath.Join(root, "notes", "sub")
 
 	// Force both ancestors collapsed.
-	m.expanded[notesDir] = false
-	m.expanded[subDir] = false
-	m.flatTree = m.flattenVisible()
+	m.tree.expanded[notesDir] = false
+	m.tree.expanded[subDir] = false
+	m.tree.flat = m.flattenVisible()
 
-	for _, row := range m.flatTree {
+	for _, row := range m.tree.flat {
 		if row.node.Path == deep {
 			t.Fatalf("precondition: deep.md should be hidden under collapsed parents")
 		}
@@ -125,8 +125,8 @@ func TestModel_SelectInTreeExpandsAncestors(t *testing.T) {
 	if m.isCollapsed(subDir) {
 		t.Errorf("notes/sub should be expanded after selectInTree(deep)")
 	}
-	if m.treeCursor >= len(m.flatTree) || m.flatTree[m.treeCursor].node.Path != deep {
-		t.Errorf("cursor should land on deep.md, got row %d in tree of %d", m.treeCursor, len(m.flatTree))
+	if m.tree.cursor >= len(m.tree.flat) || m.tree.flat[m.tree.cursor].node.Path != deep {
+		t.Errorf("cursor should land on deep.md, got row %d in tree of %d", m.tree.cursor, len(m.tree.flat))
 	}
 }
 
@@ -171,24 +171,24 @@ func TestModel_TreeScrollsToCursorOnTallTree(t *testing.T) {
 	root := writeTallFixture(t, 60)
 	m := sized(t, root, "")
 
-	if got := len(m.flatTree); got <= m.treeVP.Height {
-		t.Fatalf("precondition: flatTree (%d rows) should exceed pane height (%d)", got, m.treeVP.Height)
+	if got := len(m.tree.flat); got <= m.tree.vp.Height {
+		t.Fatalf("precondition: flatTree (%d rows) should exceed pane height (%d)", got, m.tree.vp.Height)
 	}
 
 	// Drive the cursor down to a row well past the initial visible window.
-	target := m.treeVP.Height + 10
-	if target >= len(m.flatTree) {
-		t.Fatalf("test setup: target row %d out of range (flatTree=%d)", target, len(m.flatTree))
+	target := m.tree.vp.Height + 10
+	if target >= len(m.tree.flat) {
+		t.Fatalf("test setup: target row %d out of range (flatTree=%d)", target, len(m.tree.flat))
 	}
 	m = driveCursorTo(t, m, target)
 
-	if m.treeCursor != target {
-		t.Fatalf("cursor at %d, expected %d", m.treeCursor, target)
+	if m.tree.cursor != target {
+		t.Fatalf("cursor at %d, expected %d", m.tree.cursor, target)
 	}
-	visibleTop := m.treeVP.YOffset
-	visibleBot := visibleTop + m.treeVP.Height - 1
-	if m.treeCursor < visibleTop || m.treeCursor > visibleBot {
-		t.Errorf("cursor row %d outside visible window [%d, %d]", m.treeCursor, visibleTop, visibleBot)
+	visibleTop := m.tree.vp.YOffset
+	visibleBot := visibleTop + m.tree.vp.Height - 1
+	if m.tree.cursor < visibleTop || m.tree.cursor > visibleBot {
+		t.Errorf("cursor row %d outside visible window [%d, %d]", m.tree.cursor, visibleTop, visibleBot)
 	}
 }
 
@@ -201,14 +201,14 @@ func TestModel_TreeScrollsBackUp(t *testing.T) {
 	m := sized(t, root, "")
 
 	// Drive far down then back to row 0.
-	m = driveCursorTo(t, m, m.treeVP.Height+10)
-	if m.treeVP.YOffset == 0 {
+	m = driveCursorTo(t, m, m.tree.vp.Height+10)
+	if m.tree.vp.YOffset == 0 {
 		t.Fatalf("precondition: viewport should have scrolled down before this test")
 	}
 	m = driveCursorTo(t, m, 0)
 
-	if m.treeVP.YOffset != 0 {
-		t.Errorf("YOffset should be 0 after scrolling back to row 0, got %d", m.treeVP.YOffset)
+	if m.tree.vp.YOffset != 0 {
+		t.Errorf("YOffset should be 0 after scrolling back to row 0, got %d", m.tree.vp.YOffset)
 	}
 }
 
@@ -219,7 +219,7 @@ func TestModel_TreeShownAtNarrowWidths(t *testing.T) {
 	root := writeFixture(t)
 	m := sized(t, root, "")
 
-	if !m.treeVisible {
+	if !m.tree.visible {
 		t.Fatalf("tree should default to visible")
 	}
 
@@ -251,7 +251,7 @@ func TestModel_ToggleTreeNarrowFlipsIntentOnly(t *testing.T) {
 
 	updated, _ := m.Update(tea.WindowSizeMsg{Width: 60, Height: 30})
 	m = updated.(Model)
-	if !m.treeVisible {
+	if !m.tree.visible {
 		t.Fatalf("precondition: treeVisible should still be true after a narrow resize")
 	}
 	if m.shouldShowTree() {
@@ -260,7 +260,7 @@ func TestModel_ToggleTreeNarrowFlipsIntentOnly(t *testing.T) {
 
 	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyCtrlB})
 	m = updated.(Model)
-	if m.treeVisible {
+	if m.tree.visible {
 		t.Errorf("treeVisible should be false after ^b")
 	}
 	if m.shouldShowTree() {
@@ -269,7 +269,7 @@ func TestModel_ToggleTreeNarrowFlipsIntentOnly(t *testing.T) {
 
 	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyCtrlB})
 	m = updated.(Model)
-	if !m.treeVisible {
+	if !m.tree.visible {
 		t.Errorf("treeVisible should flip back to true on second ^b")
 	}
 	if m.shouldShowTree() {
@@ -279,7 +279,7 @@ func TestModel_ToggleTreeNarrowFlipsIntentOnly(t *testing.T) {
 
 // TestModel_TreeReturnsOnGrow checks that after a narrow resize hides
 // the tree, growing the terminal back above the threshold restores it
-// without any user interaction — m.treeVisible is preserved. Focus
+// without any user interaction — m.tree.visible is preserved. Focus
 // stays on content (where it was snapped during the narrow window);
 // restoring it to the tree on grow would yank focus away from whatever
 // the user was reading.

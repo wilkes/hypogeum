@@ -48,7 +48,7 @@ func TestBacklinksPaneShowsLinkers(t *testing.T) {
 func TestBacklinksPaneAutoCollapsesBelowThreshold(t *testing.T) {
 	dir := t.TempDir()
 	m, _ := New(dir, "")
-	m.backlinksOpen = true
+	m.backlinks.open = true
 	m.height = 15 // below threshold
 	if m.shouldShowBacklinks() {
 		t.Fatalf("expected backlinks suppressed at height %d", m.height)
@@ -70,13 +70,13 @@ func TestBacklinksModalToggleAndEsc(t *testing.T) {
 	m.openFile(filepath.Join(dir, "b.md"))
 
 	out, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'B'}})
-	if out.(Model).modalOpen != modalBacklinks {
-		t.Fatalf("after B: expected modalBacklinks, got %v", out.(Model).modalOpen)
+	if out.(Model).modals.kind != modalBacklinks {
+		t.Fatalf("after B: expected modalBacklinks, got %v", out.(Model).modals.kind)
 	}
 
 	out2, _ := out.(Model).Update(tea.KeyMsg{Type: tea.KeyEsc})
-	if out2.(Model).modalOpen != modalNone {
-		t.Fatalf("after Esc: expected modalNone, got %v", out2.(Model).modalOpen)
+	if out2.(Model).modals.kind != modalNone {
+		t.Fatalf("after Esc: expected modalNone, got %v", out2.(Model).modals.kind)
 	}
 }
 
@@ -96,34 +96,34 @@ func TestBacklinksPane_CursorMovement(t *testing.T) {
 	if m.focus != focusBacklinks {
 		t.Fatalf("expected focusBacklinks after b, got %v", m.focus)
 	}
-	if len(m.backlinks) != 2 {
-		t.Fatalf("expected 2 backlinks, got %d", len(m.backlinks))
+	if len(m.backlinks.items) != 2 {
+		t.Fatalf("expected 2 backlinks, got %d", len(m.backlinks.items))
 	}
-	if m.backlinkCursor != 0 {
-		t.Fatalf("expected cursor to start at 0, got %d", m.backlinkCursor)
+	if m.backlinks.cursor != 0 {
+		t.Fatalf("expected cursor to start at 0, got %d", m.backlinks.cursor)
 	}
 
 	m = pressRune(t, m, 'j')
-	if m.backlinkCursor != 1 {
-		t.Fatalf("expected cursor=1 after j, got %d", m.backlinkCursor)
+	if m.backlinks.cursor != 1 {
+		t.Fatalf("expected cursor=1 after j, got %d", m.backlinks.cursor)
 	}
 
 	// j past the end clamps.
 	m = pressRune(t, m, 'j')
-	if m.backlinkCursor != 1 {
-		t.Fatalf("expected cursor=1 (clamped) after j at end, got %d", m.backlinkCursor)
+	if m.backlinks.cursor != 1 {
+		t.Fatalf("expected cursor=1 (clamped) after j at end, got %d", m.backlinks.cursor)
 	}
 
 	// k moves up.
 	m = pressRune(t, m, 'k')
-	if m.backlinkCursor != 0 {
-		t.Fatalf("expected cursor=0 after k, got %d", m.backlinkCursor)
+	if m.backlinks.cursor != 0 {
+		t.Fatalf("expected cursor=0 after k, got %d", m.backlinks.cursor)
 	}
 
 	// k past the start clamps.
 	m = pressRune(t, m, 'k')
-	if m.backlinkCursor != 0 {
-		t.Fatalf("expected cursor=0 (clamped) after k at start, got %d", m.backlinkCursor)
+	if m.backlinks.cursor != 0 {
+		t.Fatalf("expected cursor=0 (clamped) after k at start, got %d", m.backlinks.cursor)
 	}
 }
 
@@ -165,8 +165,8 @@ func TestBacklinksPane_EnterFollows(t *testing.T) {
 	m.openFile(cAbs)
 
 	m = pressRune(t, m, 'b')
-	if len(m.backlinks) != 1 {
-		t.Fatalf("expected 1 backlink, got %d", len(m.backlinks))
+	if len(m.backlinks.items) != 1 {
+		t.Fatalf("expected 1 backlink, got %d", len(m.backlinks.items))
 	}
 
 	m = pressKey(t, m, tea.KeyMsg{Type: tea.KeyEnter})
@@ -180,17 +180,17 @@ func TestBacklinksPane_EnterFollows(t *testing.T) {
 		t.Fatalf("expected focusContent after Enter, got %v", m.focus)
 	}
 	// returnCursor should be set with sourceFile=cAbs.
-	if m.returnCursor == nil {
+	if m.backlinks.returnCursor == nil {
 		t.Fatalf("expected returnCursor set, got nil")
 	}
-	if m.returnCursor.sourceFile != cAbs {
-		t.Fatalf("expected returnCursor.sourceFile=%s, got %s", cAbs, m.returnCursor.sourceFile)
+	if m.backlinks.returnCursor.sourceFile != cAbs {
+		t.Fatalf("expected returnCursor.sourceFile=%s, got %s", cAbs, m.backlinks.returnCursor.sourceFile)
 	}
-	if m.returnCursor.cursor != 0 {
-		t.Fatalf("expected returnCursor.cursor=0, got %d", m.returnCursor.cursor)
+	if m.backlinks.returnCursor.cursor != 0 {
+		t.Fatalf("expected returnCursor.cursor=0, got %d", m.backlinks.returnCursor.cursor)
 	}
-	if m.returnCursor.surface != surfacePane {
-		t.Fatalf("expected returnCursor.surface=surfacePane, got %v", m.returnCursor.surface)
+	if m.backlinks.returnCursor.surface != surfacePane {
+		t.Fatalf("expected returnCursor.surface=surfacePane, got %v", m.backlinks.returnCursor.surface)
 	}
 }
 
@@ -206,32 +206,32 @@ func TestBacklinksModal_CursorAndEnter(t *testing.T) {
 
 	// Open backlinks modal.
 	m = pressRune(t, m, 'B')
-	if m.modalOpen != modalBacklinks {
-		t.Fatalf("expected modalBacklinks, got %v", m.modalOpen)
+	if m.modals.kind != modalBacklinks {
+		t.Fatalf("expected modalBacklinks, got %v", m.modals.kind)
 	}
-	if len(m.backlinks) != 2 {
-		t.Fatalf("expected 2 backlinks, got %d", len(m.backlinks))
+	if len(m.backlinks.items) != 2 {
+		t.Fatalf("expected 2 backlinks, got %d", len(m.backlinks.items))
 	}
-	if m.backlinkCursor != 0 {
-		t.Fatalf("expected cursor=0, got %d", m.backlinkCursor)
+	if m.backlinks.cursor != 0 {
+		t.Fatalf("expected cursor=0, got %d", m.backlinks.cursor)
 	}
 
 	// j moves cursor in modal.
 	m = pressRune(t, m, 'j')
-	if m.backlinkCursor != 1 {
-		t.Fatalf("expected cursor=1 after j in modal, got %d", m.backlinkCursor)
+	if m.backlinks.cursor != 1 {
+		t.Fatalf("expected cursor=1 after j in modal, got %d", m.backlinks.cursor)
 	}
 
 	// Enter follows AND closes the modal.
 	m = pressKey(t, m, tea.KeyMsg{Type: tea.KeyEnter})
-	if m.modalOpen != modalNone {
-		t.Fatalf("expected modal closed after Enter, got %v", m.modalOpen)
+	if m.modals.kind != modalNone {
+		t.Fatalf("expected modal closed after Enter, got %v", m.modals.kind)
 	}
 	if m.focus != focusContent {
 		t.Fatalf("expected focusContent after Enter, got %v", m.focus)
 	}
-	if m.returnCursor == nil || m.returnCursor.surface != surfaceModal {
-		t.Fatalf("expected returnCursor.surface=surfaceModal, got %+v", m.returnCursor)
+	if m.backlinks.returnCursor == nil || m.backlinks.returnCursor.surface != surfaceModal {
+		t.Fatalf("expected returnCursor.surface=surfaceModal, got %+v", m.backlinks.returnCursor)
 	}
 }
 
@@ -248,8 +248,8 @@ func TestScrollToLine_PositionsLineNearTop(t *testing.T) {
 
 	m := sized(t, dir, filepath.Join(dir, "long.md"))
 	// Initially YOffset = 0.
-	if m.viewport.YOffset != 0 {
-		t.Fatalf("expected YOffset=0 initially, got %d", m.viewport.YOffset)
+	if m.content.viewport.YOffset != 0 {
+		t.Fatalf("expected YOffset=0 initially, got %d", m.content.viewport.YOffset)
 	}
 
 	// Scroll to line 60. Expect YOffset to leave ~25% padding above:
@@ -257,18 +257,18 @@ func TestScrollToLine_PositionsLineNearTop(t *testing.T) {
 	// With viewportHeight ≈ 32 (height 40 - 4 for borders/footer - 4 misc),
 	// target ≈ 60 - 8 = 52. Be lenient: assert YOffset is in [40, 56].
 	m.scrollToLine(60)
-	if m.viewport.YOffset < 40 || m.viewport.YOffset > 56 {
-		t.Fatalf("expected YOffset in [40, 56] after scrollToLine(60), got %d", m.viewport.YOffset)
+	if m.content.viewport.YOffset < 40 || m.content.viewport.YOffset > 56 {
+		t.Fatalf("expected YOffset in [40, 56] after scrollToLine(60), got %d", m.content.viewport.YOffset)
 	}
 
 	// scrollToLine(huge) clamps to last line.
 	m.scrollToLine(99999)
-	maxYOffset := m.viewport.TotalLineCount() - m.viewport.Height
+	maxYOffset := m.content.viewport.TotalLineCount() - m.content.viewport.Height
 	if maxYOffset < 0 {
 		maxYOffset = 0
 	}
-	if m.viewport.YOffset > maxYOffset {
-		t.Fatalf("expected YOffset clamped to max %d, got %d", maxYOffset, m.viewport.YOffset)
+	if m.content.viewport.YOffset > maxYOffset {
+		t.Fatalf("expected YOffset clamped to max %d, got %d", maxYOffset, m.content.viewport.YOffset)
 	}
 }
 
@@ -291,14 +291,14 @@ func TestBacklinksPane_BackRestoresCursor(t *testing.T) {
 	if m.history.Current() != cAbs {
 		t.Fatalf("expected back at c.md, got %s", m.history.Current())
 	}
-	if m.backlinkCursor != 1 {
-		t.Fatalf("expected backlinkCursor restored to 1, got %d", m.backlinkCursor)
+	if m.backlinks.cursor != 1 {
+		t.Fatalf("expected backlinkCursor restored to 1, got %d", m.backlinks.cursor)
 	}
 	if m.focus != focusBacklinks {
 		t.Fatalf("expected focusBacklinks restored, got %v", m.focus)
 	}
-	if m.returnCursor != nil {
-		t.Fatalf("expected returnCursor cleared, got %+v", m.returnCursor)
+	if m.backlinks.returnCursor != nil {
+		t.Fatalf("expected returnCursor cleared, got %+v", m.backlinks.returnCursor)
 	}
 }
 
@@ -328,7 +328,7 @@ func TestReturnCursor_DiscardedOnUnrelatedNav(t *testing.T) {
 	// The slot is consumed only on path-match Back. This test asserts
 	// the more interesting case: openFile to d.md did NOT consume the
 	// slot, so navigating Back twice eventually still restores.
-	if m.returnCursor == nil {
+	if m.backlinks.returnCursor == nil {
 		t.Fatalf("returnCursor unexpectedly cleared by unrelated nav (only matching Back should clear it)")
 	}
 }
@@ -345,20 +345,20 @@ func TestBacklinksModal_BackReopensModal(t *testing.T) {
 	m = pressRune(t, m, 'B')          // open modal
 	m = pressRune(t, m, 'j')          // cursor → 1
 	m = pressKey(t, m, tea.KeyMsg{Type: tea.KeyEnter}) // follow + close modal
-	if m.modalOpen != modalNone {
-		t.Fatalf("expected modal closed during follow, got %v", m.modalOpen)
+	if m.modals.kind != modalNone {
+		t.Fatalf("expected modal closed during follow, got %v", m.modals.kind)
 	}
 
 	m = pressRune(t, m, 'h')
 
-	if m.modalOpen != modalBacklinks {
-		t.Fatalf("expected modalBacklinks reopened on Back, got %v", m.modalOpen)
+	if m.modals.kind != modalBacklinks {
+		t.Fatalf("expected modalBacklinks reopened on Back, got %v", m.modals.kind)
 	}
-	if m.backlinkCursor != 1 {
-		t.Fatalf("expected cursor=1 restored, got %d", m.backlinkCursor)
+	if m.backlinks.cursor != 1 {
+		t.Fatalf("expected cursor=1 restored, got %d", m.backlinks.cursor)
 	}
-	if m.returnCursor != nil {
-		t.Fatalf("expected returnCursor cleared, got %+v", m.returnCursor)
+	if m.backlinks.returnCursor != nil {
+		t.Fatalf("expected returnCursor cleared, got %+v", m.backlinks.returnCursor)
 	}
 }
 
@@ -390,11 +390,11 @@ func TestReturnCursor_ClampsToShrunkList(t *testing.T) {
 	// must clamp from 1 down to 0.
 	m = pressRune(t, m, 'h')
 
-	if m.backlinkCursor != 0 {
-		t.Fatalf("expected cursor clamped to 0 after list shrank, got %d", m.backlinkCursor)
+	if m.backlinks.cursor != 0 {
+		t.Fatalf("expected cursor clamped to 0 after list shrank, got %d", m.backlinks.cursor)
 	}
-	if len(m.backlinks) != 1 {
-		t.Fatalf("expected 1 backlink after refresh, got %d", len(m.backlinks))
+	if len(m.backlinks.items) != 1 {
+		t.Fatalf("expected 1 backlink after refresh, got %d", len(m.backlinks.items))
 	}
 }
 
@@ -406,8 +406,8 @@ func TestEsc_RestoresFocusFromBacklinksWithoutClosingPane(t *testing.T) {
 	m := sized(t, dir, "")
 	m.openFile(filepath.Join(dir, "c.md"))
 	m = pressRune(t, m, 'b')
-	if m.focus != focusBacklinks || !m.backlinksOpen {
-		t.Fatalf("setup: expected focusBacklinks and pane open, got focus=%v open=%v", m.focus, m.backlinksOpen)
+	if m.focus != focusBacklinks || !m.backlinks.open {
+		t.Fatalf("setup: expected focusBacklinks and pane open, got focus=%v open=%v", m.focus, m.backlinks.open)
 	}
 
 	m = pressKey(t, m, tea.KeyMsg{Type: tea.KeyEsc})
@@ -415,7 +415,7 @@ func TestEsc_RestoresFocusFromBacklinksWithoutClosingPane(t *testing.T) {
 	if m.focus == focusBacklinks {
 		t.Fatalf("Esc should restore prevFocus, but focus is still focusBacklinks")
 	}
-	if !m.backlinksOpen {
+	if !m.backlinks.open {
 		t.Fatalf("Esc should NOT close the pane")
 	}
 }
@@ -487,7 +487,7 @@ func TestFocus_NoBacklinksLeakAfterPaneCycleViaModal(t *testing.T) {
 	m = pressKey(t, m, tea.KeyMsg{Type: tea.KeyEsc})    // modal closes
 	m = pressRune(t, m, 'b')                            // pane closes
 
-	if m.backlinksOpen {
+	if m.backlinks.open {
 		t.Fatalf("expected pane closed after second b, got open")
 	}
 	if m.focus == focusBacklinks {

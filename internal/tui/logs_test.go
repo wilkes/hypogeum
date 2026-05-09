@@ -21,10 +21,10 @@ func TestLogsModalShowsRingBuffer(t *testing.T) {
 
 	out, _ := m.Update(ctrlL())
 	mm2 := out.(Model)
-	if mm2.modalOpen != modalLogs {
-		t.Fatalf("after ^l: expected modalLogs, got %v", mm2.modalOpen)
+	if mm2.modals.kind != modalLogs {
+		t.Fatalf("after ^l: expected modalLogs, got %v", mm2.modals.kind)
 	}
-	rendered := mm2.modalVP.View()
+	rendered := mm2.modals.vp.View()
 	if !strings.Contains(rendered, "a problem occurred") {
 		t.Fatalf("expected log entry in modal: %q", rendered)
 	}
@@ -40,11 +40,11 @@ func TestLogsModalReplacesBacklinksModal(t *testing.T) {
 	m = mm.(Model)
 
 	out1, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'B'}})
-	if out1.(Model).modalOpen != modalBacklinks {
+	if out1.(Model).modals.kind != modalBacklinks {
 		t.Fatalf("expected modalBacklinks")
 	}
 	out2, _ := out1.(Model).Update(ctrlL())
-	if out2.(Model).modalOpen != modalLogs {
-		t.Fatalf("expected modalLogs after ^l, got %v", out2.(Model).modalOpen)
+	if out2.(Model).modals.kind != modalLogs {
+		t.Fatalf("expected modalLogs after ^l, got %v", out2.(Model).modals.kind)
 	}
 }

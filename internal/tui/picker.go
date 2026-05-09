@@ -21,7 +21,7 @@ import (
 // the left pane (or vice versa). Expansion state is reset on each open.
 type pickerState struct {
 	cursor   int
-	expanded map[string]bool // path → true if expanded; missing = collapsed (opposite of m.expanded)
+	expanded map[string]bool // path → true if expanded; missing = collapsed (opposite of m.tree.expanded)
 	flat     []treeRow
 	vp       viewport.Model
 }
@@ -97,11 +97,7 @@ func (p *pickerState) toggleAt(root *tree.Node) {
 // row is in view. Mirrors Model.refreshTreeVP for the left pane.
 func (p *pickerState) refreshVP() {
 	p.vp.SetContent(p.renderRows())
-	if p.cursor < p.vp.YOffset {
-		p.vp.SetYOffset(p.cursor)
-	} else if last := p.vp.YOffset + p.vp.Height - 1; p.cursor > last {
-		p.vp.SetYOffset(p.cursor - p.vp.Height + 1)
-	}
+	viewportClamp(&p.vp, p.cursor, 1)
 }
 
 // renderRows builds the picker's display string: chevron-prefixed
@@ -153,9 +149,9 @@ func (m *Model) resizePicker() {
 	if ph < 1 {
 		ph = 1
 	}
-	m.picker.vp.Width = pw
-	m.picker.vp.Height = ph
-	m.picker.refreshVP()
+	m.modals.picker.vp.Width = pw
+	m.modals.picker.vp.Height = ph
+	m.modals.picker.refreshVP()
 }
 
 // pickerSelectedFile returns the file path under the picker cursor, or

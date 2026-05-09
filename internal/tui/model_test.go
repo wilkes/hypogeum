@@ -33,14 +33,14 @@ func TestModel_RefreshPopulatesLinks(t *testing.T) {
 	root := writeFixture(t)
 	m := sized(t, root, "")
 	// Auto-open lands on index.md, which has two links per writeFixture.
-	if got := len(m.links); got != 2 {
-		t.Fatalf("len(m.links) = %d, want 2 (index.md has [first] and [external])", got)
+	if got := len(m.content.links); got != 2 {
+		t.Fatalf("len(m.content.links) = %d, want 2 (index.md has [first] and [external])", got)
 	}
-	if m.links[0].Href != "notes/first.md" {
-		t.Errorf("links[0].Href = %q, want notes/first.md", m.links[0].Href)
+	if m.content.links[0].Href != "notes/first.md" {
+		t.Errorf("links[0].Href = %q, want notes/first.md", m.content.links[0].Href)
 	}
-	if m.links[1].Href != "https://x.test" {
-		t.Errorf("links[1].Href = %q, want https://x.test", m.links[1].Href)
+	if m.content.links[1].Href != "https://x.test" {
+		t.Errorf("links[1].Href = %q, want https://x.test", m.content.links[1].Href)
 	}
 }
 
@@ -96,15 +96,15 @@ func TestKeyBTogglesBacklinksOpen(t *testing.T) {
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
-	if m.backlinksOpen {
+	if m.backlinks.open {
 		t.Fatalf("expected backlinksOpen=false initially")
 	}
 	out, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'b'}})
-	if !out.(Model).backlinksOpen {
+	if !out.(Model).backlinks.open {
 		t.Fatalf("after b: expected backlinksOpen=true")
 	}
 	out2, _ := out.(Model).Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'b'}})
-	if out2.(Model).backlinksOpen {
+	if out2.(Model).backlinks.open {
 		t.Fatalf("after second b: expected backlinksOpen=false")
 	}
 }

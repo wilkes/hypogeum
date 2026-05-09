@@ -5,11 +5,25 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/charmbracelet/bubbles/viewport"
 	zone "github.com/lrstanley/bubblezone"
 
+	"github.com/wilkes/hypogeum/internal/markdown"
 	"github.com/wilkes/hypogeum/internal/tree"
 	"github.com/wilkes/hypogeum/internal/watch"
 )
+
+// contentUIState bundles the right content pane's render state. viewport
+// scrolls the rendered markdown; renderer is rebuilt at every WindowSizeMsg
+// so wrap width tracks pane width; links is the per-document link list
+// from the latest render; linkCursor indexes into links (-1 when nothing
+// is selected).
+type contentUIState struct {
+	viewport   viewport.Model
+	renderer   *markdown.Renderer
+	links      []markdown.Link
+	linkCursor int
+}
 
 // linkZoneID returns the BubbleZone id used to track the i-th link in
 // the rendered content. Stable across re-renders of the same document
@@ -71,25 +85,25 @@ func (m *Model) refreshContent(path string) {
 	src, err := os.ReadFile(path)
 	if err != nil {
 		m.status = err.Error()
-		m.viewport.SetContent(fmt.Sprintf("Error: %v", err))
-		m.links = nil
-		m.linkCursor = -1
+		m.content.viewport.SetContent(fmt.Sprintf("Error: %v", err))
+		m.content.links = nil
+		m.content.linkCursor = -1
 		return
 	}
-	m.renderer.SetFromFile(path)
-	out, links, err := m.renderer.RenderWithLinks(string(src), path, linkZoneMarker)
+	m.content.renderer.SetFromFile(path)
+	out, links, err := m.content.renderer.RenderWithLinks(string(src), path, linkZoneMarker)
 	if err != nil {
 		m.status = err.Error()
-		m.viewport.SetContent(fmt.Sprintf("Error: %v", err))
-		m.links = nil
-		m.linkCursor = -1
+		m.content.viewport.SetContent(fmt.Sprintf("Error: %v", err))
+		m.content.links = nil
+		m.content.linkCursor = -1
 		return
 	}
 	m.status = path
-	m.viewport.SetContent(out)
-	m.viewport.GotoTop()
-	m.links = links
-	m.linkCursor = -1
+	m.content.viewport.SetContent(out)
+	m.content.viewport.GotoTop()
+	m.content.links = links
+	m.content.linkCursor = -1
 	m.refreshBacklinks(path)
 }
 
@@ -98,10 +112,10 @@ func (m *Model) refreshContent(path string) {
 // subtree lands on a visible row.
 func (m *Model) selectInTree(path string) {
 	if m.expandAncestors(path) {
-		m.flatTree = m.flattenVisible()
+		m.tree.flat = m.flattenVisible()
 	}
 	if i := m.rowIndexByPath(path); i >= 0 {
-		m.treeCursor = i
+		m.tree.cursor = i
 	}
 	m.refreshTreeVP()
 }
@@ -109,7 +123,7 @@ func (m *Model) selectInTree(path string) {
 // rowIndexByPath returns the index of the visible tree row whose node
 // path equals path, or -1 if no such row is visible.
 func (m *Model) rowIndexByPath(path string) int {
-	for i, row := range m.flatTree {
+	for i, row := range m.tree.flat {
 		if row.node.Path == path {
 			return i
 		}
@@ -118,25 +132,25 @@ func (m *Model) rowIndexByPath(path string) int {
 }
 
 // cursorRow returns the row under the tree cursor, or zero-value+false
-// when flatTree is empty or the cursor is out of bounds.
+// when the flat tree is empty or the cursor is out of bounds.
 func (m *Model) cursorRow() (treeRow, bool) {
-	if m.treeCursor < 0 || m.treeCursor >= len(m.flatTree) {
+	if m.tree.cursor < 0 || m.tree.cursor >= len(m.tree.flat) {
 		return treeRow{}, false
 	}
-	return m.flatTree[m.treeCursor], true
+	return m.tree.flat[m.tree.cursor], true
 }
 
 // toggleFolder flips the collapsed state of the directory at path,
-// rebuilds flatTree, and keeps the cursor on that directory's row.
+// rebuilds the flat tree, and keeps the cursor on that directory's row.
 func (m *Model) toggleFolder(path string) {
 	if m.isCollapsed(path) {
-		delete(m.expanded, path) // back to default-expanded
+		delete(m.tree.expanded, path) // back to default-expanded
 	} else {
-		m.expanded[path] = false
+		m.tree.expanded[path] = false
 	}
-	m.flatTree = m.flattenVisible()
+	m.tree.flat = m.flattenVisible()
 	if i := m.rowIndexByPath(path); i >= 0 {
-		m.treeCursor = i
+		m.tree.cursor = i
 	}
 	m.refreshTreeVP()
 }
@@ -146,8 +160,8 @@ func (m *Model) toggleFolder(path string) {
 func (m *Model) expandAncestors(path string) bool {
 	changed := false
 	for dir := filepath.Dir(path); ; dir = filepath.Dir(dir) {
-		if v, ok := m.expanded[dir]; ok && !v {
-			delete(m.expanded, dir)
+		if v, ok := m.tree.expanded[dir]; ok && !v {
+			delete(m.tree.expanded, dir)
 			changed = true
 		}
 		// Stop at the configured root, or at the filesystem root where
@@ -188,8 +202,8 @@ func (m *Model) handleFSEvent(ev watch.Event) {
 			}
 		}
 		selectedPath := ""
-		if m.treeCursor < len(m.flatTree) {
-			selectedPath = m.flatTree[m.treeCursor].node.Path
+		if m.tree.cursor < len(m.tree.flat) {
+			selectedPath = m.tree.flat[m.tree.cursor].node.Path
 		}
 		newRoot, err := tree.Walk(m.root)
 		if err != nil {
@@ -197,18 +211,18 @@ func (m *Model) handleFSEvent(ev watch.Event) {
 			return
 		}
 		m.rootNode = newRoot
-		m.flatTree = m.flattenVisible()
+		m.tree.flat = m.flattenVisible()
 		// Restore cursor by path; if the previously selected node is gone,
 		// clamp to a valid index rather than dangling past the end.
-		m.treeCursor = 0
+		m.tree.cursor = 0
 		if i := m.rowIndexByPath(selectedPath); i >= 0 {
-			m.treeCursor = i
+			m.tree.cursor = i
 		}
-		if m.treeCursor >= len(m.flatTree) {
-			m.treeCursor = len(m.flatTree) - 1
+		if m.tree.cursor >= len(m.tree.flat) {
+			m.tree.cursor = len(m.tree.flat) - 1
 		}
-		if m.treeCursor < 0 {
-			m.treeCursor = 0
+		if m.tree.cursor < 0 {
+			m.tree.cursor = 0
 		}
 		m.refreshTreeVP()
 
@@ -226,11 +240,11 @@ func (m *Model) handleFSEvent(ev watch.Event) {
 		}
 		for _, p := range ev.Paths {
 			if p == cur {
-				offset := m.viewport.YOffset
+				offset := m.content.viewport.YOffset
 				m.refreshContent(cur)
 				// refreshContent calls GotoTop; restore scroll so a save
 				// in your editor doesn't jump the reader to the start.
-				m.viewport.SetYOffset(offset)
+				m.content.viewport.SetYOffset(offset)
 				return
 			}
 		}
@@ -259,7 +273,7 @@ func (m *Model) flattenVisible() []treeRow {
 
 // isCollapsed reports whether the directory at path is currently collapsed.
 func (m *Model) isCollapsed(path string) bool {
-	v, ok := m.expanded[path]
+	v, ok := m.tree.expanded[path]
 	return ok && !v
 }
 
@@ -276,23 +290,23 @@ func (m *Model) scrollToLine(n int) {
 	if n < 1 {
 		n = 1
 	}
-	total := m.viewport.TotalLineCount()
+	total := m.content.viewport.TotalLineCount()
 	if n > total {
 		n = total
 	}
 	// Position the target line ~25% from the top of the viewport so the
 	// user sees the lines preceding the reference for context.
-	pad := m.viewport.Height / 4
+	pad := m.content.viewport.Height / 4
 	target := n - 1 - pad
 	if target < 0 {
 		target = 0
 	}
-	maxOffset := total - m.viewport.Height
+	maxOffset := total - m.content.viewport.Height
 	if maxOffset < 0 {
 		maxOffset = 0
 	}
 	if target > maxOffset {
 		target = maxOffset
 	}
-	m.viewport.SetYOffset(target)
+	m.content.viewport.SetYOffset(target)
 }

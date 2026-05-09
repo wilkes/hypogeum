@@ -23,8 +23,8 @@ func TestHelpModalOpensOnQuestionMark(t *testing.T) {
 
 	out, _ := m.Update(pressQuestion())
 	got := out.(Model)
-	if got.modalOpen != modalHelp {
-		t.Fatalf("after ?: expected modalHelp, got %v", got.modalOpen)
+	if got.modals.kind != modalHelp {
+		t.Fatalf("after ?: expected modalHelp, got %v", got.modals.kind)
 	}
 
 	// Assert against the full formatted help text, not modalVP.View() —
@@ -57,12 +57,12 @@ func TestHelpModalEscCloses(t *testing.T) {
 
 	out, _ := m.Update(pressQuestion())
 	m = out.(Model)
-	if m.modalOpen != modalHelp {
+	if m.modals.kind != modalHelp {
 		t.Fatalf("precondition: help modal should be open")
 	}
 
 	out, _ = m.Update(tea.KeyMsg{Type: tea.KeyEsc})
-	if got := out.(Model).modalOpen; got != modalNone {
+	if got := out.(Model).modals.kind; got != modalNone {
 		t.Errorf("Esc should close help modal; modalOpen = %v", got)
 	}
 }
@@ -96,12 +96,12 @@ func TestHelpModalDoesNotSwap(t *testing.T) {
 
 			out, _ := m.Update(tc.key)
 			m = out.(Model)
-			if m.modalOpen != tc.want {
-				t.Fatalf("precondition: expected %v open, got %v", tc.want, m.modalOpen)
+			if m.modals.kind != tc.want {
+				t.Fatalf("precondition: expected %v open, got %v", tc.want, m.modals.kind)
 			}
 
 			out, _ = m.Update(pressQuestion())
-			if got := out.(Model).modalOpen; got != tc.want {
+			if got := out.(Model).modals.kind; got != tc.want {
 				t.Errorf("? should be a no-op while %s modal is open; got %v", tc.name, got)
 			}
 		})
@@ -122,12 +122,12 @@ func TestHelpModalSwapsToOtherModals(t *testing.T) {
 
 			out, _ := m.Update(pressQuestion())
 			m = out.(Model)
-			if m.modalOpen != modalHelp {
+			if m.modals.kind != modalHelp {
 				t.Fatalf("precondition: help modal should be open")
 			}
 
 			out, _ = m.Update(tc.key)
-			if got := out.(Model).modalOpen; got != tc.want {
+			if got := out.(Model).modals.kind; got != tc.want {
 				t.Errorf("expected %v after swap from help, got %v", tc.want, got)
 			}
 		})
@@ -161,12 +161,12 @@ func TestHelpModalTogglesClosed(t *testing.T) {
 
 	out, _ := m.Update(pressQuestion())
 	m = out.(Model)
-	if m.modalOpen != modalHelp {
+	if m.modals.kind != modalHelp {
 		t.Fatalf("precondition: help modal should be open")
 	}
 
 	out, _ = m.Update(pressQuestion())
-	if got := out.(Model).modalOpen; got != modalNone {
+	if got := out.(Model).modals.kind; got != modalNone {
 		t.Errorf("? while help is open should close it; got %v", got)
 	}
 }

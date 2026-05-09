@@ -9,13 +9,13 @@ import (
 	"github.com/charmbracelet/x/ansi"
 )
 
-// refreshHelpModal repopulates m.modalVP with the keybinding cheat sheet,
+// refreshHelpModal repopulates m.modals.vp with the keybinding cheat sheet,
 // grouped into logical sections. The section list in formatHelp is
 // curated for UX (ordering and grouping matter), so a new keyMap field
 // won't surface here automatically — add it to the right section below.
 func (m *Model) refreshHelpModal() {
 	m.resizeModalVP()
-	m.modalVP.SetContent(formatHelp(m.keys))
+	m.modals.vp.SetContent(formatHelp(m.keys))
 }
 
 // formatHelp renders the keymap into a sectioned cheat sheet.

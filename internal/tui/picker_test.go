@@ -13,17 +13,17 @@ func TestModel_OpenPickerModal(t *testing.T) {
 	root := writeFixture(t)
 	m := sized(t, root, "")
 
-	if m.modalOpen != modalNone {
+	if m.modals.kind != modalNone {
 		t.Fatalf("precondition: no modal should be open")
 	}
 
 	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyCtrlP})
 	m = updated.(Model)
 
-	if m.modalOpen != modalPicker {
-		t.Errorf("modalOpen = %v, want modalPicker", m.modalOpen)
+	if m.modals.kind != modalPicker {
+		t.Errorf("modalOpen = %v, want modalPicker", m.modals.kind)
 	}
-	if len(m.picker.flat) == 0 {
+	if len(m.modals.picker.flat) == 0 {
 		t.Errorf("picker.flat should be populated on open, got empty")
 	}
 }
@@ -37,7 +37,7 @@ func TestModel_PickerEscClosesFromAnyDepth(t *testing.T) {
 
 	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyCtrlP})
 	m = updated.(Model)
-	if m.modalOpen != modalPicker {
+	if m.modals.kind != modalPicker {
 		t.Fatalf("precondition: picker should be open")
 	}
 
@@ -47,8 +47,8 @@ func TestModel_PickerEscClosesFromAnyDepth(t *testing.T) {
 	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyEsc})
 	m = updated.(Model)
 
-	if m.modalOpen != modalNone {
-		t.Errorf("Esc should close picker from any depth; modalOpen = %v", m.modalOpen)
+	if m.modals.kind != modalNone {
+		t.Errorf("Esc should close picker from any depth; modalOpen = %v", m.modals.kind)
 	}
 }
 
@@ -71,23 +71,23 @@ func TestModel_PickerSelectOpensFile(t *testing.T) {
 	// Move down to notes/, expand it.
 	want := filepath.Join(root, "index.md")
 	target := -1
-	for i, row := range m.picker.flat {
+	for i, row := range m.modals.picker.flat {
 		if row.node.Path == want {
 			target = i
 			break
 		}
 	}
 	if target < 0 {
-		t.Fatalf("index.md not visible at depth-1; flat=%v", debugFlat(m.picker.flat))
+		t.Fatalf("index.md not visible at depth-1; flat=%v", debugFlat(m.modals.picker.flat))
 	}
-	for m.picker.cursor != target {
+	for m.modals.picker.cursor != target {
 		key := tea.KeyMsg{Type: tea.KeyDown}
-		if m.picker.cursor > target {
+		if m.modals.picker.cursor > target {
 			key = tea.KeyMsg{Type: tea.KeyUp}
 		}
-		prev := m.picker.cursor
+		prev := m.modals.picker.cursor
 		m = pressKey(t, m, key)
-		if m.picker.cursor == prev {
+		if m.modals.picker.cursor == prev {
 			t.Fatalf("picker cursor stuck at %d trying to reach %d", prev, target)
 		}
 	}
@@ -97,8 +97,8 @@ func TestModel_PickerSelectOpensFile(t *testing.T) {
 	if got := m.history.Current(); got != want {
 		t.Errorf("history.Current = %q, want %q", got, want)
 	}
-	if m.modalOpen != modalNone {
-		t.Errorf("picker should close after selection; modalOpen = %v", m.modalOpen)
+	if m.modals.kind != modalNone {
+		t.Errorf("picker should close after selection; modalOpen = %v", m.modals.kind)
 	}
 }
 
@@ -131,8 +131,8 @@ func TestModel_PickerHidesEmptyDirectories(t *testing.T) {
 	// Expand the root so subdirs are visible.
 	m = pressKey(t, m, tea.KeyMsg{Type: tea.KeySpace})
 
-	flatPaths := make([]string, len(m.picker.flat))
-	for i, r := range m.picker.flat {
+	flatPaths := make([]string, len(m.modals.picker.flat))
+	for i, r := range m.modals.picker.flat {
 		flatPaths[i] = r.node.Path
 	}
 	allFlat := strings.Join(flatPaths, "\n")
@@ -155,14 +155,14 @@ func TestModel_PickerExpansionIndependentFromTreePane(t *testing.T) {
 	m := sized(t, root, "")
 
 	// Snapshot left-pane expansion state before opening picker.
-	leftExpandedBefore := len(m.expanded)
+	leftExpandedBefore := len(m.tree.expanded)
 
 	// Open picker, expand a folder in it.
 	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyCtrlP})
 	m = updated.(Model)
 	m = pressKey(t, m, tea.KeyMsg{Type: tea.KeySpace}) // expand root
 
-	if len(m.picker.expanded) == 0 {
+	if len(m.modals.picker.expanded) == 0 {
 		t.Fatalf("precondition: picker should have at least one expanded entry")
 	}
 
@@ -170,8 +170,8 @@ func TestModel_PickerExpansionIndependentFromTreePane(t *testing.T) {
 	m = pressKey(t, m, tea.KeyMsg{Type: tea.KeyEsc})
 
 	// Left pane expansion should be unchanged.
-	if len(m.expanded) != leftExpandedBefore {
-		t.Errorf("left-pane expanded changed: before=%d after=%d", leftExpandedBefore, len(m.expanded))
+	if len(m.tree.expanded) != leftExpandedBefore {
+		t.Errorf("left-pane expanded changed: before=%d after=%d", leftExpandedBefore, len(m.tree.expanded))
 	}
 }
 

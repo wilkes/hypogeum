@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/charmbracelet/bubbles/viewport"
 	"github.com/charmbracelet/lipgloss"
 	zone "github.com/lrstanley/bubblezone"
 )
@@ -14,11 +15,24 @@ import (
 // the height axis.
 const twoPaneMinWidth = 80
 
-// shouldShowTree gates m.treeVisible (user intent) on terminal width.
+// treeUIState bundles the left tree pane's render state. flat is the
+// pre-flattened row list; cursor indexes into it; vp scrolls the pane
+// when flat exceeds pane height; visible is the user-facing intent
+// (gated by width via shouldShowTree); expanded stores deviations
+// from the default-expanded folder state.
+type treeUIState struct {
+	flat     []treeRow
+	cursor   int
+	vp       viewport.Model
+	visible  bool
+	expanded map[string]bool
+}
+
+// shouldShowTree gates m.tree.visible (user intent) on terminal width.
 // Below twoPaneMinWidth the tree is force-hidden so content gets the
 // full window. Parallels shouldShowBacklinks on the height axis.
 func (m Model) shouldShowTree() bool {
-	return m.treeVisible && m.width >= twoPaneMinWidth
+	return m.tree.visible && m.width >= twoPaneMinWidth
 }
 
 func (m Model) View() string {
@@ -26,14 +40,14 @@ func (m Model) View() string {
 		return "" // wait for first WindowSizeMsg
 	}
 
-	content := m.viewport.View()
+	content := m.content.viewport.View()
 
 	contentHeight := m.height - 4
 	if m.shouldShowBacklinks() {
 		contentHeight -= backlinksHeight
 	}
 	contentStyled := zone.Mark(zoneContentPane, paneStyle(m.focus == focusContent).
-		Width(m.viewport.Width).
+		Width(m.content.viewport.Width).
 		Height(contentHeight).
 		Render(content))
 
@@ -47,7 +61,7 @@ func (m Model) View() string {
 		treeStyled := zone.Mark(zoneTreePane, paneStyle(m.focus == focusTree).
 			Width(m.treeWidth()).
 			Height(m.height-4).
-			Render(m.treeVP.View()))
+			Render(m.tree.vp.View()))
 		body = lipgloss.JoinHorizontal(lipgloss.Top, treeStyled, contentColumn)
 	} else {
 		body = contentColumn
@@ -56,10 +70,10 @@ func (m Model) View() string {
 	// Scan must run on the final composed output so BubbleZone records
 	// each zone's absolute screen position.
 	base := zone.Scan(lipgloss.JoinVertical(lipgloss.Left, body, footer))
-	if m.modalOpen != modalNone {
-		body := m.modalVP.View()
-		if m.modalOpen == modalPicker {
-			body = m.picker.View()
+	if m.modals.kind != modalNone {
+		body := m.modals.vp.View()
+		if m.modals.kind == modalPicker {
+			body = m.modals.picker.View()
 		}
 		return overlayModal(base, m.renderModal(body), m.width, m.height)
 	}
@@ -67,23 +81,19 @@ func (m Model) View() string {
 }
 
 // refreshTreeVP populates the tree viewport with the current rendered
-// rows and scrolls so that m.treeCursor is within the visible window.
-// Call after every write to m.flatTree or m.treeCursor.
+// rows and scrolls so that m.tree.cursor is within the visible window.
+// Call after every write to m.tree.flat or m.tree.cursor.
 func (m *Model) refreshTreeVP() {
-	m.treeVP.SetContent(m.renderTree())
-	if m.treeCursor < m.treeVP.YOffset {
-		m.treeVP.SetYOffset(m.treeCursor)
-	} else if last := m.treeVP.YOffset + m.treeVP.Height - 1; m.treeCursor > last {
-		m.treeVP.SetYOffset(m.treeCursor - m.treeVP.Height + 1)
-	}
+	m.tree.vp.SetContent(m.renderTree())
+	viewportClamp(&m.tree.vp, m.tree.cursor, 1)
 }
 
 func (m Model) renderTree() string {
 	var b strings.Builder
-	for i, row := range m.flatTree {
+	for i, row := range m.tree.flat {
 		indent := strings.Repeat("  ", row.depth)
 		marker := " "
-		if i == m.treeCursor {
+		if i == m.tree.cursor {
 			marker = ">"
 		}
 		name := row.node.Name
@@ -125,7 +135,7 @@ func (m Model) renderFooter() string {
 
 	hasLink := false
 	if sel := m.selectedLink(); sel != nil {
-		loc = fmt.Sprintf("%s%s [%d/%d] %s", linkFooterMarker, loc, m.linkCursor+1, len(m.links), linkLabel(*sel, m.root))
+		loc = fmt.Sprintf("%s%s [%d/%d] %s", linkFooterMarker, loc, m.content.linkCursor+1, len(m.content.links), linkLabel(*sel, m.root))
 		hasLink = true
 	}
 	// The help row is always faint. The location row is faint by default

@@ -42,43 +42,20 @@ const (
 
 // Model is the top-level Bubble Tea model.
 type Model struct {
-	root       string
-	rootNode   *tree.Node
-	flatTree   []treeRow // pre-flattened for keyboard navigation
-	treeCursor int
+	root     string
+	rootNode *tree.Node
 
-	viewport viewport.Model
-	treeVP   viewport.Model // scrolls the tree pane when flatTree exceeds pane height
-	renderer *markdown.Renderer
+	tree      treeUIState
+	content   contentUIState
+	backlinks backlinksUIState
+	modals    modalUIState
 
 	history *nav.History
 	focus   focus
 
-	links      []markdown.Link // links extracted from the currently rendered file
-	linkCursor int             // -1 when no link is selected (Phase 1: always -1)
-
-	backlinksOpen  bool
-	backlinksVP    viewport.Model
-	backlinkCursor int
-	backlinks      []vault.Backlink // cached so cursor moves don't re-query the vault
-	prevFocus      focus            // saved when opening a backlinks surface, restored on close
-	returnCursor   *returnCursor    // set on follow, consumed on the next matching Back navigation
-
-	modalOpen modalKind
-	modalVP   viewport.Model
-	picker    pickerState
-
 	width, height int
 	keys          keyMap
 	status        string // last error or info message
-
-	// treeVisible toggles the left tree pane on/off (^b). When false, the
-	// content pane gets the full window width.
-	treeVisible bool
-	// expanded stores deviations from the default-expanded state, keyed by
-	// directory absolute path. expanded[path]==false means collapsed.
-	// Missing keys read as expanded — see isCollapsed.
-	expanded map[string]bool
 
 	// watcher observes the tree for live updates. nil if construction
 	// failed (we degrade gracefully — the browser still works without it).
@@ -151,24 +128,28 @@ func New(root, initialFile string) (Model, error) {
 	}
 
 	m := Model{
-		root:        root,
-		rootNode:    rootNode,
-		viewport:    viewport.New(0, 0),
-		renderer:    r,
-		history:     nav.New(),
-		focus:       focusTree,
-		keys:        defaultKeys(),
-		linkCursor:  -1,
-		vault:       v,
-		diag:        diag,
-		treeVisible: true,
-		expanded:    map[string]bool{},
+		root:     root,
+		rootNode: rootNode,
+		history:  nav.New(),
+		focus:    focusTree,
+		keys:     defaultKeys(),
+		vault:    v,
+		diag:     diag,
+		tree: treeUIState{
+			vp:       viewport.New(0, 0),
+			visible:  true,
+			expanded: map[string]bool{},
+		},
+		content: contentUIState{
+			viewport:   viewport.New(0, 0),
+			renderer:   r,
+			linkCursor: -1,
+		},
 	}
-	m.flatTree = m.flattenVisible()
-	m.backlinksVP = viewport.New(0, 0)
-	m.modalVP = newModalViewport()
-	m.treeVP = viewport.New(0, 0)
-	m.picker = newPicker()
+	m.tree.flat = m.flattenVisible()
+	m.backlinks.vp = viewport.New(0, 0)
+	m.modals.vp = newModalViewport()
+	m.modals.picker = newPicker()
 
 	// A watcher is best-effort: if it fails (e.g. inotify limits hit on
 	// Linux), we silently fall back to the previous reload-on-navigate
@@ -229,21 +210,21 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if contentWidth < 20 {
 			contentWidth = 20
 		}
-		m.viewport.Width = contentWidth
+		m.content.viewport.Width = contentWidth
 		// Leave room for the pane's top+bottom borders (2) and the
 		// two-line footer (2) so View() fits within m.height.
-		m.viewport.Height = m.height - 4
-		m.backlinksVP.Width = contentWidth
-		m.backlinksVP.Height = backlinksHeight - 2
+		m.content.viewport.Height = m.height - 4
+		m.backlinks.vp.Width = contentWidth
+		m.backlinks.vp.Height = backlinksHeight - 2
 		// The tree viewport gets the inside of the tree pane: width
 		// minus its border (2), height minus border + footer (4).
-		m.treeVP.Width = treeWidth - 2
-		if m.treeVP.Width < 0 {
-			m.treeVP.Width = 0
+		m.tree.vp.Width = treeWidth - 2
+		if m.tree.vp.Width < 0 {
+			m.tree.vp.Width = 0
 		}
-		m.treeVP.Height = m.height - 4 - 2 // pane border (2) on top of viewport's own
-		if m.treeVP.Height < 1 {
-			m.treeVP.Height = 1
+		m.tree.vp.Height = m.height - 4 - 2 // pane border (2) on top of viewport's own
+		if m.tree.vp.Height < 1 {
+			m.tree.vp.Height = 1
 		}
 		m.refreshTreeVP()
 		m.resizeModalVP()
@@ -256,7 +237,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			rOpts = append(rOpts, markdown.WithResolver(m.vault))
 		}
 		if r, err := markdown.NewRenderer(renderWidth, rOpts...); err == nil {
-			m.renderer = r
+			m.content.renderer = r
 		}
 		if cur := m.history.Current(); cur != "" {
 			m.refreshContent(cur)
@@ -285,7 +266,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	// Forward other messages to the viewport when content has focus.
 	if m.focus == focusContent {
 		var cmd tea.Cmd
-		m.viewport, cmd = m.viewport.Update(msg)
+		m.content.viewport, cmd = m.content.viewport.Update(msg)
 		return m, cmd
 	}
 	return m, nil

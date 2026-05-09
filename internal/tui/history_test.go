@@ -12,7 +12,7 @@ import (
 func openViaTree(t *testing.T, m Model, path string) Model {
 	t.Helper()
 	target := -1
-	for i, row := range m.flatTree {
+	for i, row := range m.tree.flat {
 		if row.node.Path == path {
 			target = i
 			break
@@ -21,9 +21,9 @@ func openViaTree(t *testing.T, m Model, path string) Model {
 	if target < 0 {
 		t.Fatalf("path %q not in flat tree", path)
 	}
-	for m.treeCursor != target {
+	for m.tree.cursor != target {
 		var key tea.KeyMsg
-		if m.treeCursor < target {
+		if m.tree.cursor < target {
 			key = tea.KeyMsg{Type: tea.KeyDown}
 		} else {
 			key = tea.KeyMsg{Type: tea.KeyUp}
@@ -53,8 +53,8 @@ func TestModel_BackKeyReturnsToPreviousFile(t *testing.T) {
 		t.Errorf("after 'h', history.Current = %q, want %q", got, indexPath)
 	}
 	// Tree cursor should follow the back-navigation.
-	if m.flatTree[m.treeCursor].node.Path != indexPath {
-		t.Errorf("tree cursor did not follow back navigation: %q", m.flatTree[m.treeCursor].node.Path)
+	if m.tree.flat[m.tree.cursor].node.Path != indexPath {
+		t.Errorf("tree cursor did not follow back navigation: %q", m.tree.flat[m.tree.cursor].node.Path)
 	}
 }
 
@@ -74,8 +74,8 @@ func TestModel_ForwardKeyAfterBack(t *testing.T) {
 	if got := m.history.Current(); got != firstPath {
 		t.Errorf("after h/l, history.Current = %q, want %q", got, firstPath)
 	}
-	if m.flatTree[m.treeCursor].node.Path != firstPath {
-		t.Errorf("tree cursor did not follow forward navigation: %q", m.flatTree[m.treeCursor].node.Path)
+	if m.tree.flat[m.tree.cursor].node.Path != firstPath {
+		t.Errorf("tree cursor did not follow forward navigation: %q", m.tree.flat[m.tree.cursor].node.Path)
 	}
 }
 
