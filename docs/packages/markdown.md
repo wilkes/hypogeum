@@ -58,7 +58,18 @@ type ASTLink struct {
 
 ## The sentinel trick
 
-The instrumented renderer injects two ASCII separator characters (`\x1c` FS, `\x1e` RS) into Glamour's `link_text` style. Glamour writes them around every link's visible text; a post-pass strips them and records `(row, text)`. The cleaned output is byte-equivalent to a plain `Render` on the same terminal — verified by `TestRenderWithLinks_OutputIsCleanRender`. Full design and rationale (including the alternatives we rejected): [[sentinel-render]].
+Two sentinel pairs are grafted onto Glamour's link primitives:
+
+- `\x1c` / `\x1e` (FS / RS) bracket `link_text`. Post-render the strip pass records each pair as a `(row, text)` span and (in `RenderWithLinks`) splices BubbleZone Mark/Close pairs and OSC 8 hyperlink wrappers in their place.
+- `\x1d` / `\x1f` (GS / US) bracket `link` (the URL Glamour writes after every link). The strip pass discards the bytes between, plus the leading space Glamour hardcodes — so rendered prose reads as `[text]` instead of `[text] /path/to/target.md`.
+
+The cleaned output is byte-equivalent to a plain `Render` on the same terminal after stripping CSI and OSC sequences — verified by `TestRenderWithLinks_OutputIsCleanRender`. Full design and rationale (including the alternatives we rejected): [[sentinel-render]].
+
+## Link styling
+
+`LinkText` carries a dotted-underline SGR pair (`\x1b[4:4m` … `\x1b[24m`) layered on top of the base theme's color + underline. Modern terminals (kitty, wezterm, foot, ghostty, alacritty, iTerm2 3.5+, Konsole 21+, gnome-terminal vte 0.74+) render `4:4` as dotted; older terminals fall back to a solid underline.
+
+In `RenderWithLinks` (the TUI path), each link's visible text is also wrapped in an OSC 8 hyperlink. Local files become `file://` URLs; external URLs pass through; anchor-only links skip OSC 8. Combined with URL suppression, this gives the user a click-to-open affordance without the URL appearing in prose.
 
 ## Why goldmark is a direct dependency
 
