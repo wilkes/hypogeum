@@ -207,3 +207,116 @@ func TestPreselect_Forward_RestoresLink(t *testing.T) {
 		t.Fatalf("preselected link target = %q, want %q", got, aAbs)
 	}
 }
+
+// TestPreselect_FirstMatchWins covers the ambiguity rule: when a source
+// file contains two inline links to the same target, the one with the
+// lower index in m.content.links is selected.
+func TestPreselect_FirstMatchWins(t *testing.T) {
+	root := t.TempDir()
+	files := map[string]string{
+		// Two distinct links to b.md, separated by some prose so they end
+		// up as two separate Link entries.
+		"a.md": "# A\n\nFirst [b](b.md), then more text, then [b again](b.md).\n",
+		"b.md": "# B\n\nLink to [a](a.md).\n",
+	}
+	for rel, body := range files {
+		if err := os.WriteFile(filepath.Join(root, rel), []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	aAbs := filepath.Join(root, "a.md")
+	bAbs := filepath.Join(root, "b.md")
+
+	m := sized(t, root, bAbs)
+	m = pressRune(t, m, 'b')
+	m = pressKey(t, m, tea.KeyMsg{Type: tea.KeyEnter}) // follow the b→a backlink, lands on a
+
+	if m.history.Current() != aAbs {
+		t.Fatalf("expected on a.md, got %q", m.history.Current())
+	}
+	if m.content.linkCursor != 0 {
+		t.Fatalf("expected first matching link (index 0), got %d", m.content.linkCursor)
+	}
+	// Sanity: a.md should have at least 2 links to b.md.
+	matches := 0
+	for _, l := range m.content.links {
+		if l.Resolved.Target == bAbs {
+			matches++
+		}
+	}
+	if matches < 2 {
+		t.Fatalf("fixture should have 2+ links to b.md, got %d", matches)
+	}
+}
+
+// TestPreselect_ClearedAfterConsumption confirms two consecutive
+// Back-then-Forward cycles each get an independent pre-select decision —
+// no leakage from one navigation to the next.
+func TestPreselect_ClearedAfterConsumption(t *testing.T) {
+	root, aAbs, bAbs := writePreselectFixture(t)
+	m := sized(t, root, aAbs)
+
+	m = switchToContent(t, m)
+	m = pressRune(t, m, 'n')
+	m = pressKey(t, m, tea.KeyMsg{Type: tea.KeyEnter}) // a → b
+	m = pressRune(t, m, 'h')                            // back to a
+	if m.pendingPreselectTarget != "" {
+		t.Fatalf("expected field cleared after Back consumed it, got %q", m.pendingPreselectTarget)
+	}
+
+	// Back again: should be a no-op (no further history). Pre-select
+	// field stays clear.
+	m = pressRune(t, m, 'h')
+	if m.pendingPreselectTarget != "" {
+		t.Fatalf("expected field cleared after no-op Back, got %q", m.pendingPreselectTarget)
+	}
+	_ = bAbs
+}
+
+// TestPreselect_WatcherEventConsumesQuietly documents the accepted race:
+// if a watcher refresh fires between leave and arrival, the field gets
+// consumed (cleared) by the unrelated refresh, so the next intentional
+// navigation gets no pre-select.
+func TestPreselect_WatcherEventConsumesQuietly(t *testing.T) {
+	root, aAbs, bAbs := writePreselectFixture(t)
+	m := sized(t, root, aAbs)
+
+	// Manually set the field to simulate "leave" without driving a navigation.
+	m.pendingPreselectTarget = bAbs
+
+	// Fire a redundant refreshContent for the current file (simulating a
+	// watcher FileModified). This consumes the field. a.md DOES contain
+	// a link to b.md, so the cursor will end up selected — but the field
+	// is now empty and won't fire on a subsequent intentional navigation.
+	m.refreshContent(aAbs)
+	if m.pendingPreselectTarget != "" {
+		t.Fatalf("expected field cleared after watcher refresh, got %q", m.pendingPreselectTarget)
+	}
+}
+
+// TestPreselect_OnlyLocalFileLinks confirms that links with non-local
+// kinds (external URLs, anchors) are skipped during matching even if
+// their Href happens to equal the pending target string.
+func TestPreselect_OnlyLocalFileLinks(t *testing.T) {
+	root := t.TempDir()
+	// a.md contains an external URL whose string we'll use as the target.
+	files := map[string]string{
+		"a.md": "# A\n\nExternal: [example](https://example.test/).\n",
+	}
+	for rel, body := range files {
+		if err := os.WriteFile(filepath.Join(root, rel), []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	aAbs := filepath.Join(root, "a.md")
+
+	m := sized(t, root, aAbs)
+	// Set the pending target to the external URL string. Even if there
+	// were a Link with Href == this URL, its Kind is LinkExternal not
+	// LinkLocalFile, so the consumer should skip it.
+	m.pendingPreselectTarget = "https://example.test/"
+	m.refreshContent(aAbs)
+	if m.content.linkCursor != -1 {
+		t.Fatalf("expected linkCursor=-1 (only LinkLocalFile is eligible), got %d", m.content.linkCursor)
+	}
+}
