@@ -69,7 +69,7 @@ Full plan and design rationale (including why we picked the sentinel-instrumente
 
 **Wikilinks and backlinks — Phase 1 shipped:** `[[wikilinks]]` resolve via vault index, backlinks pane (`b`), backlinks modal (`B`), log viewer (`^l`), and backlinks navigation (cursor `j`/`k`, `Enter` to follow with scroll-to-line, `h` restores cursor). Implementation lives in `internal/vault/` and the modal/pane logic in `internal/tui/`.
 
-**Wikilinks and backlinks — Phase 2 (not started):** block references (`[[note#^blockid]]`), broken-link tally in the status bar, and configurable vault root. Design outlined in [docs/superpowers/specs/2026-05-07-wikilinks-and-backlinks-design.md](docs/superpowers/specs/2026-05-07-wikilinks-and-backlinks-design.md).
+**Wikilinks and backlinks — Phase 2 in progress:** inline-link pre-selection on backlink-follow / Back / Forward shipped (see [pre-select-inline-link](docs/superpowers/specs/2026-05-09-pre-select-inline-link-design.md)). Remaining: block references (`[[note#^blockid]]`), broken-link tally in the status bar, and configurable vault root. Design outlined in [docs/superpowers/specs/2026-05-07-wikilinks-and-backlinks-design.md](docs/superpowers/specs/2026-05-07-wikilinks-and-backlinks-design.md).
 
 ## Documentation and plans
 

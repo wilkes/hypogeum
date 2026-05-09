@@ -28,7 +28,8 @@ Cross-cutting ideas that show up in multiple specs and packages. Each is its own
 
 - [Link following](link-following.md) — Phase 1 shipped (cursor-based selection). Phase 2 (inline highlight) and Phase 3 (external URL launch) outlined.
 - [Wikilinks and backlinks](superpowers/specs/2026-05-07-wikilinks-and-backlinks-design.md) — Phase 1 shipped: wikilinks resolve via vault index, backlinks pane (`b`), backlinks modal (`B`), log viewer (`?`). Phase 2 outlined in the spec.
-- [Backlinks navigation](superpowers/specs/2026-05-07-backlinks-navigation-design.md) — spec — adds cursor, `Enter`-to-follow, scroll-to-reference, and back-restores-cursor on top of the existing backlinks display.
+- [Backlinks navigation](superpowers/specs/2026-05-07-backlinks-navigation-design.md) — shipped — cursor, `Enter`-to-follow, scroll-to-reference, and back-restores-cursor on top of the backlinks display.
+- [Pre-select inline link](superpowers/specs/2026-05-09-pre-select-inline-link-design.md) — shipped — when arriving via backlink-follow / Back / Forward, pre-select the inline link that points back to where you came from, so `n`/`p` resumes from a meaningful position.
 - [Narrow-terminal layout](superpowers/specs/2026-05-07-narrow-terminal-layout-design.md) — spec — auto-hide the tree pane below an 80-col terminal width so the two-pane layout degrades gracefully on narrow terminals.
 - [Vault-rooted picker](superpowers/specs/2026-05-07-vault-rooted-picker-design.md) — spec — replace bubbles/filepicker with a picker over the existing pruned `*tree.Node`, so only directories containing markdown appear.
 

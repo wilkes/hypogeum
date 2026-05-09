@@ -63,6 +63,13 @@ type Model struct {
 
 	vault *vault.Vault
 	diag  *diagnostics
+
+	// pendingPreselectTarget is the absolute path of a file whose inline
+	// link should be pre-selected on the next refreshContent. Set by any
+	// navigation that has a meaningful "the link you were looking at"
+	// notion: backlink-follow, Back, Forward. Cleared by refreshContent
+	// after consumption (whether or not a match was found).
+	pendingPreselectTarget string
 }
 
 // linkFooterMarker is rendered into the footer when a link is selected.
