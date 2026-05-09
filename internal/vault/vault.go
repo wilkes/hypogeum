@@ -4,7 +4,6 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
-	"sort"
 	"strings"
 	"sync"
 
@@ -234,26 +233,5 @@ func (v *Vault) resolveLocked(fromFile, name string) (string, bool) {
 	if len(candidates) == 0 {
 		return "", false
 	}
-	if len(candidates) == 1 {
-		return candidates[0], true
-	}
-	type scored struct {
-		path string
-		dist int
-	}
-	scoredCands := make([]scored, 0, len(candidates))
-	for _, c := range candidates {
-		rel, err := filepath.Rel(filepath.Dir(fromFile), c)
-		if err != nil {
-			rel = c
-		}
-		scoredCands = append(scoredCands, scored{path: c, dist: len(rel)})
-	}
-	sort.Slice(scoredCands, func(i, j int) bool {
-		if scoredCands[i].dist != scoredCands[j].dist {
-			return scoredCands[i].dist < scoredCands[j].dist
-		}
-		return scoredCands[i].path < scoredCands[j].path
-	})
-	return scoredCands[0].path, true
+	return scoreProximity(candidates, fromFile), true
 }
