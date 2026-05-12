@@ -79,12 +79,19 @@ func (s *Store) Record(path string) error {
 }
 
 // Rank returns paths sorted by hybrid score (descending). os.Stat fails
-// drop the entry silently; we don't cache mtime because the watcher may
+// drop the entry silently; mtime isn't cached because the watcher may
 // have updated files since the last call.
 func (s *Store) Rank(paths []string) []Ranked {
 	now := s.nowFunc()
+
+	// Snapshot visits before any I/O so the lock isn't held across
+	// os.Stat. Cheap in practice — the map is bounded by vault size.
 	s.mu.Lock()
-	defer s.mu.Unlock()
+	visits := make(map[string]time.Time, len(s.visits))
+	for k, v := range s.visits {
+		visits[k] = v
+	}
+	s.mu.Unlock()
 
 	out := make([]Ranked, 0, len(paths))
 	for _, p := range paths {
@@ -93,7 +100,7 @@ func (s *Store) Rank(paths []string) []Ranked {
 			continue
 		}
 		mtime := info.ModTime()
-		visit := s.visits[p]
+		visit := visits[p]
 		out = append(out, Ranked{
 			Path:  p,
 			Score: score(now, mtime, visit),

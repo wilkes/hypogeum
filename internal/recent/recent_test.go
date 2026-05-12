@@ -145,8 +145,8 @@ func TestStoreRecordUpdatesVisitTime(t *testing.T) {
 	fixed := time.Date(2026, 5, 12, 12, 0, 0, 0, time.UTC)
 	s.nowFunc = func() time.Time { return fixed }
 
-	// Record into a Store with no stateFile — write should be a no-op
-	// (covered in Task 4); for now we just check the in-memory map.
+	// Persistence checks land in Task 4; for now we only verify the
+	// in-memory map is updated.
 	s.stateFile = "" // explicit: persistence disabled
 	if err := s.Record("/abs/path/x.md"); err != nil {
 		t.Fatalf("Record with empty stateFile: %v", err)
