@@ -1,6 +1,7 @@
 package recent
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"testing"
@@ -165,5 +166,139 @@ func TestStoreRankEmpty(t *testing.T) {
 	ranked := s.Rank(nil)
 	if len(ranked) != 0 {
 		t.Errorf("Rank(nil) returned %d entries, want 0", len(ranked))
+	}
+}
+
+func TestNewWithMissingFile(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "visits.json")
+
+	s, err := New(path)
+	if err != nil {
+		t.Fatalf("New on missing file: got error %v, want nil", err)
+	}
+	if s == nil {
+		t.Fatal("New returned nil Store")
+	}
+	if len(s.visits) != 0 {
+		t.Errorf("Store visits: got %d entries, want 0", len(s.visits))
+	}
+	if s.stateFile != path {
+		t.Errorf("Store.stateFile: got %q want %q", s.stateFile, path)
+	}
+}
+
+func TestRoundTrip(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "visits.json")
+	// Create a "vault" file so Rank has something stat-able.
+	vaultFile := filepath.Join(dir, "note.md")
+	if err := os.WriteFile(vaultFile, []byte("# N"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	s1, err := New(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s1.Record(vaultFile); err != nil {
+		t.Fatalf("Record: %v", err)
+	}
+
+	// New Store loaded from same path should see the visit.
+	s2, err := New(path)
+	if err != nil {
+		t.Fatalf("re-load: %v", err)
+	}
+	if _, ok := s2.visits[vaultFile]; !ok {
+		t.Errorf("re-loaded visits missing %q; have %v", vaultFile, s2.visits)
+	}
+}
+
+func TestNewWithMalformedFile(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "visits.json")
+	if err := os.WriteFile(path, []byte("not valid json"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	s, err := New(path)
+	if err == nil {
+		t.Error("New on malformed file: got nil error, want one")
+	}
+	if s == nil {
+		t.Fatal("New returned nil Store even on error")
+	}
+	if len(s.visits) != 0 {
+		t.Errorf("Store visits on malformed: got %d entries, want 0", len(s.visits))
+	}
+}
+
+func TestNewWithUnknownVersion(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "visits.json")
+	bad := `{"version":99,"visits":{}}`
+	if err := os.WriteFile(path, []byte(bad), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	s, err := New(path)
+	if err == nil {
+		t.Error("New on unknown version: got nil error, want one")
+	}
+	if s == nil || len(s.visits) != 0 {
+		t.Errorf("Store on unknown version: want non-nil empty Store")
+	}
+}
+
+func TestRecordWritesAtomically(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "visits.json")
+	s, err := New(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Record("/abs/x.md"); err != nil {
+		t.Fatalf("Record: %v", err)
+	}
+
+	// Real file exists, .tmp does not.
+	if _, err := os.Stat(path); err != nil {
+		t.Errorf("real visits.json missing: %v", err)
+	}
+	if _, err := os.Stat(path + ".tmp"); !os.IsNotExist(err) {
+		t.Errorf("temp file should have been renamed away; stat err=%v", err)
+	}
+
+	// Content is well-formed JSON with our format.
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var fileShape struct {
+		Version int                  `json:"version"`
+		Visits  map[string]time.Time `json:"visits"`
+	}
+	if err := json.Unmarshal(data, &fileShape); err != nil {
+		t.Fatalf("parse written file: %v", err)
+	}
+	if fileShape.Version != 1 {
+		t.Errorf("file version: got %d want 1", fileShape.Version)
+	}
+	if _, ok := fileShape.Visits["/abs/x.md"]; !ok {
+		t.Errorf("written visits missing /abs/x.md; got %v", fileShape.Visits)
+	}
+}
+
+func TestDefaultStateFile(t *testing.T) {
+	p, err := DefaultStateFile()
+	if err != nil {
+		t.Fatalf("DefaultStateFile: %v", err)
+	}
+	if !filepath.IsAbs(p) {
+		t.Errorf("DefaultStateFile returned non-absolute %q", p)
+	}
+	if filepath.Base(p) != "visits.json" {
+		t.Errorf("DefaultStateFile basename: got %q want visits.json", filepath.Base(p))
 	}
 }

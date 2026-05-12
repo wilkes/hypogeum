@@ -5,8 +5,11 @@
 package recent
 
 import (
+	"encoding/json"
+	"fmt"
 	"math"
 	"os"
+	"path/filepath"
 	"sort"
 	"sync"
 	"time"
@@ -70,12 +73,12 @@ type Store struct {
 	nowFunc   func() time.Time
 }
 
-// Record marks path as visited now. Persistence wired up in Task 4.
+// Record marks path as visited now and writes through to the state file.
 func (s *Store) Record(path string) error {
 	s.mu.Lock()
+	defer s.mu.Unlock()
 	s.visits[path] = s.nowFunc()
-	s.mu.Unlock()
-	return nil
+	return s.saveLocked()
 }
 
 // Rank returns paths sorted by hybrid score (descending). os.Stat fails
@@ -112,4 +115,79 @@ func (s *Store) Rank(paths []string) []Ranked {
 		return out[i].Score > out[j].Score
 	})
 	return out
+}
+
+type fileFormat struct {
+	Version int                  `json:"version"`
+	Visits  map[string]time.Time `json:"visits"`
+}
+
+const currentVersion = 1
+
+// New loads visits from stateFile and returns a ready Store. Missing file
+// is not an error; malformed file or unknown version returns a non-nil
+// error alongside an empty but usable Store so the caller can surface
+// the failure as a diagnostic.
+func New(stateFile string) (*Store, error) {
+	s := &Store{
+		stateFile: stateFile,
+		visits:    map[string]time.Time{},
+		nowFunc:   time.Now,
+	}
+	if stateFile == "" {
+		return s, nil
+	}
+
+	data, err := os.ReadFile(stateFile)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return s, nil
+		}
+		return s, fmt.Errorf("read %s: %w", stateFile, err)
+	}
+
+	var ff fileFormat
+	if err := json.Unmarshal(data, &ff); err != nil {
+		return s, fmt.Errorf("parse %s: %w", stateFile, err)
+	}
+	if ff.Version != currentVersion {
+		return s, fmt.Errorf("unsupported visits version %d in %s", ff.Version, stateFile)
+	}
+	for k, v := range ff.Visits {
+		s.visits[k] = v
+	}
+	return s, nil
+}
+
+// DefaultStateFile returns os.UserConfigDir() + "hypogeum/visits.json".
+func DefaultStateFile() (string, error) {
+	dir, err := os.UserConfigDir()
+	if err != nil {
+		return "", fmt.Errorf("user config dir: %w", err)
+	}
+	return filepath.Join(dir, "hypogeum", "visits.json"), nil
+}
+
+// saveLocked writes the current visits map atomically (temp file + rename).
+// Caller must hold s.mu. No-op when stateFile is empty.
+func (s *Store) saveLocked() error {
+	if s.stateFile == "" {
+		return nil
+	}
+	if err := os.MkdirAll(filepath.Dir(s.stateFile), 0o755); err != nil {
+		return fmt.Errorf("mkdir %s: %w", filepath.Dir(s.stateFile), err)
+	}
+	ff := fileFormat{Version: currentVersion, Visits: s.visits}
+	data, err := json.MarshalIndent(ff, "", "  ")
+	if err != nil {
+		return fmt.Errorf("marshal visits: %w", err)
+	}
+	tmp := s.stateFile + ".tmp"
+	if err := os.WriteFile(tmp, data, 0o644); err != nil {
+		return fmt.Errorf("write %s: %w", tmp, err)
+	}
+	if err := os.Rename(tmp, s.stateFile); err != nil {
+		return fmt.Errorf("rename %s -> %s: %w", tmp, s.stateFile, err)
+	}
+	return nil
 }
