@@ -28,14 +28,7 @@ const (
 	visitWeight = 1.5
 )
 
-// score computes the hybrid score for a file with the given mtime and
-// last-visit time, evaluated at now. The two terms decay exponentially
-// with different half-lives and the visit term is weighted; see package
-// constants.
-//
-// A zero visit time means "never visited" — the visit term is zero
-// (not exp(huge) — that would be 0 in practice but is semantically
-// confusing). We check IsZero explicitly to make the intent obvious.
+// score computes the exponential-decay hybrid score from mtime and visit times.
 func score(now, mtime, visit time.Time) float64 {
 	var s float64
 	if !mtime.IsZero() {
@@ -45,6 +38,7 @@ func score(now, mtime, visit time.Time) float64 {
 		}
 		s += math.Exp(-dtMtime / mtimeHalfLifeHours)
 	}
+	// Zero visit time means "never visited" — contribute 0, not exp(huge).
 	if !visit.IsZero() {
 		dtVisit := now.Sub(visit).Hours()
 		if dtVisit < 0 {
