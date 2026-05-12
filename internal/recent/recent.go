@@ -6,6 +6,9 @@ package recent
 
 import (
 	"math"
+	"os"
+	"sort"
+	"sync"
 	"time"
 )
 
@@ -55,4 +58,51 @@ type Ranked struct {
 	Score float64
 	MTime time.Time // file modification time at the moment of Rank
 	Visit time.Time // last visit; zero if never visited
+}
+
+// Store holds the persisted visit history and exposes scoring + ranking.
+// The mutex is defensive — in normal TUI use Store is touched from a
+// single goroutine.
+type Store struct {
+	stateFile string
+	visits    map[string]time.Time
+	mu        sync.Mutex
+	nowFunc   func() time.Time
+}
+
+// Record marks path as visited now. Persistence wired up in Task 4.
+func (s *Store) Record(path string) error {
+	s.mu.Lock()
+	s.visits[path] = s.nowFunc()
+	s.mu.Unlock()
+	return nil
+}
+
+// Rank returns paths sorted by hybrid score (descending). os.Stat fails
+// drop the entry silently; we don't cache mtime because the watcher may
+// have updated files since the last call.
+func (s *Store) Rank(paths []string) []Ranked {
+	now := s.nowFunc()
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	out := make([]Ranked, 0, len(paths))
+	for _, p := range paths {
+		info, err := os.Stat(p)
+		if err != nil {
+			continue
+		}
+		mtime := info.ModTime()
+		visit := s.visits[p]
+		out = append(out, Ranked{
+			Path:  p,
+			Score: score(now, mtime, visit),
+			MTime: mtime,
+			Visit: visit,
+		})
+	}
+	sort.SliceStable(out, func(i, j int) bool {
+		return out[i].Score > out[j].Score
+	})
+	return out
 }
