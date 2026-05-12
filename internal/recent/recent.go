@@ -4,7 +4,10 @@
 // in a slice of absolute paths and receive a sorted slice of Ranked entries.
 package recent
 
-import "time"
+import (
+	"math"
+	"time"
+)
 
 // Half-lives and weights for the hybrid score. Package-level constants
 // rather than configuration: tweaking is a one-line change, exposing
@@ -24,6 +27,33 @@ const (
 	// term. >1 means an equally-aged visit outranks an equally-aged edit.
 	visitWeight = 1.5
 )
+
+// score computes the hybrid score for a file with the given mtime and
+// last-visit time, evaluated at now. The two terms decay exponentially
+// with different half-lives and the visit term is weighted; see package
+// constants.
+//
+// A zero visit time means "never visited" — the visit term is zero
+// (not exp(huge) — that would be 0 in practice but is semantically
+// confusing). We check IsZero explicitly to make the intent obvious.
+func score(now, mtime, visit time.Time) float64 {
+	var s float64
+	if !mtime.IsZero() {
+		dtMtime := now.Sub(mtime).Hours()
+		if dtMtime < 0 {
+			dtMtime = 0
+		}
+		s += math.Exp(-dtMtime / mtimeHalfLifeHours)
+	}
+	if !visit.IsZero() {
+		dtVisit := now.Sub(visit).Hours()
+		if dtVisit < 0 {
+			dtVisit = 0
+		}
+		s += visitWeight * math.Exp(-dtVisit/visitHalfLifeHours)
+	}
+	return s
+}
 
 // Ranked carries one entry of the ordered Rank result.
 type Ranked struct {
