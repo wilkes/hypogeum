@@ -36,6 +36,13 @@ func TestRefreshContent_CodeFile_DispatchesToCodeRenderer(t *testing.T) {
 	if strings.TrimSpace(view) == "" {
 		t.Error("viewport empty after refreshContent on .go file")
 	}
+	// The dim SGR is emitted by formatLineNumber in internal/code/gutter.go
+	// for every gutter row. Glamour's markdown renderer doesn't use dim,
+	// so this is a marker that uniquely proves the dispatch routed
+	// through code.Renderer rather than the markdown path.
+	if !strings.Contains(view, "\x1b[2m") {
+		t.Error("viewport missing dim SGR (\\x1b[2m) — code renderer may not have been dispatched")
+	}
 	if len(m.content.links) != 0 {
 		t.Errorf("expected no links for code file, got %d", len(m.content.links))
 	}
@@ -71,5 +78,8 @@ func TestRefreshContent_CodeFileReadError_ClearsLinksAndReportsStatus(t *testing
 	}
 	if len(m.content.links) != 0 {
 		t.Errorf("expected links cleared after read error, got %d", len(m.content.links))
+	}
+	if m.content.linkCursor != -1 {
+		t.Errorf("expected linkCursor == -1 after read error, got %d", m.content.linkCursor)
 	}
 }
