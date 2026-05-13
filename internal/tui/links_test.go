@@ -114,19 +114,19 @@ func TestModel_EnterOnExternalLinkSetsStatus(t *testing.T) {
 	}
 }
 
-func TestModel_LinkKeysIgnoredWhenTreeFocused(t *testing.T) {
+func TestModel_LinkKeysIgnoredWhenTreeModalOpen(t *testing.T) {
 	root := writeFixture(t)
 	m := sized(t, root, "")
-	// Reveal+focus the tree so 'n' is routed to the tree handler, not content.
+	// Open the tree modal so 'n' is captured by the modal-key block,
+	// not routed to the content link-cycler.
 	m = pressKey(t, m, tea.KeyMsg{Type: tea.KeyCtrlB})
-	m = pressKey(t, m, tea.KeyMsg{Type: tea.KeyTab})
-	if m.focus != focusTree {
-		t.Fatalf("setup: expected focusTree, got %v", m.focus)
+	if m.modals.kind != modalTree {
+		t.Fatalf("setup: expected tree modal open, got kind=%v", m.modals.kind)
 	}
 	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'n'}})
 	m = updated.(Model)
 	if m.content.linkCursor != -1 {
-		t.Errorf("linkCursor after 'n' with tree focused = %d, want -1", m.content.linkCursor)
+		t.Errorf("linkCursor after 'n' with tree modal open = %d, want -1", m.content.linkCursor)
 	}
 }
 

@@ -20,6 +20,7 @@ const (
 	modalLogs
 	modalPicker
 	modalHelp
+	modalTree
 )
 
 // modalUIState bundles modal render state. kind is which modal is up

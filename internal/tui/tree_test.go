@@ -23,51 +23,82 @@ func TestModel_TreeNavigationAndOpen(t *testing.T) {
 	if got := m.history.Current(); got != want {
 		t.Errorf("after Enter, history.Current = %q, want %q", got, want)
 	}
+	if m.modals.kind != modalNone {
+		t.Errorf("Enter on a file row should close the tree modal, got kind=%v", m.modals.kind)
+	}
 }
 
-// TestModel_ToggleTreeShowsAndHidesPane checks that ^b reveals the tree
-// (hidden by default) and a second ^b hides it again: treeWidth toggles
-// between zero and nonzero, and the rendered View() gains/loses tree rows.
-func TestModel_ToggleTreeShowsAndHidesPane(t *testing.T) {
+// TestModel_ToggleTreeOpensAndClosesModal checks that ^b opens the tree
+// modal and a second ^b closes it. The tree renders only inside the
+// modal — there is no side pane.
+func TestModel_ToggleTreeOpensAndClosesModal(t *testing.T) {
 	root := writeFixture(t)
 	m := sized(t, root, "")
 
-	if m.tree.visible {
-		t.Fatalf("tree should default to hidden")
+	if m.modals.kind != modalNone {
+		t.Fatalf("modal should start closed, got %v", m.modals.kind)
 	}
-	if w := m.treeWidth(); w != 0 {
-		t.Fatalf("hidden tree should have zero width, got %d", w)
+	if strings.Contains(m.View(), "▾ notes/") || strings.Contains(m.View(), "▸ notes/") {
+		t.Fatalf("tree rows must not render outside the modal")
 	}
 
-	// First ^b reveals the tree.
+	// First ^b opens the tree modal.
 	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyCtrlB})
 	m = updated.(Model)
-	if !m.tree.visible {
-		t.Fatalf("first ^b should reveal tree")
-	}
-	if w := m.treeWidth(); w == 0 {
-		t.Errorf("visible tree should have nonzero width, got 0")
+	if m.modals.kind != modalTree {
+		t.Fatalf("first ^b should open tree modal, got kind=%v", m.modals.kind)
 	}
 	if !strings.Contains(m.View(), "notes") {
-		t.Errorf("expected tree pane to mention 'notes' after reveal")
+		t.Errorf("expected tree modal to mention 'notes' after open")
 	}
 
-	// Second ^b hides it again.
+	// Second ^b closes it.
 	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyCtrlB})
 	m = updated.(Model)
-	if m.tree.visible {
-		t.Errorf("treeVisible should be false after second ^b")
+	if m.modals.kind != modalNone {
+		t.Errorf("second ^b should close tree modal, got kind=%v", m.modals.kind)
 	}
-	if w := m.treeWidth(); w != 0 {
-		t.Errorf("hidden tree should have zero width, got %d", w)
+}
+
+// TestModel_TreeModalLandsOnCurrentFile checks that opening the tree
+// modal positions the cursor on the currently open file, not on the
+// vault root.
+func TestModel_TreeModalLandsOnCurrentFile(t *testing.T) {
+	root := writeFixture(t)
+	firstPath := filepath.Join(root, "notes", "first.md")
+	m := sized(t, root, firstPath)
+
+	m = pressKey(t, m, tea.KeyMsg{Type: tea.KeyCtrlB})
+	if m.modals.kind != modalTree {
+		t.Fatalf("^b should open tree modal, got kind=%v", m.modals.kind)
 	}
-	if m.focus == focusTree {
-		t.Errorf("focus should leave focusTree when tree is hidden")
+	if got := m.tree.flat[m.tree.cursor].node.Path; got != firstPath {
+		t.Errorf("tree cursor on open = %q, want %q", got, firstPath)
+	}
+}
+
+// TestModel_TreeModalEscClosesWithoutOpening checks that Esc closes the
+// tree modal without opening anything in the content pane.
+func TestModel_TreeModalEscClosesWithoutOpening(t *testing.T) {
+	root := writeFixture(t)
+	m := sized(t, root, "")
+	before := m.history.Current()
+
+	m = pressKey(t, m, tea.KeyMsg{Type: tea.KeyCtrlB})
+	if m.modals.kind != modalTree {
+		t.Fatalf("^b should open tree modal, got kind=%v", m.modals.kind)
+	}
+	m = pressKey(t, m, tea.KeyMsg{Type: tea.KeyEsc})
+	if m.modals.kind != modalNone {
+		t.Errorf("Esc should close tree modal, got kind=%v", m.modals.kind)
+	}
+	if m.history.Current() != before {
+		t.Errorf("Esc should not change history; was %q, now %q", before, m.history.Current())
 	}
 }
 
 // TestModel_CollapseFolderHidesChildren checks that pressing space on a
-// directory row removes its descendants from flatTree.
+// directory row inside the tree modal removes its descendants from flatTree.
 func TestModel_CollapseFolderHidesChildren(t *testing.T) {
 	root := writeFixture(t)
 	m := sized(t, root, "")
@@ -139,56 +170,22 @@ func TestModel_SelectInTreeExpandsAncestors(t *testing.T) {
 	}
 }
 
-// TestModel_TreeForceHiddenAt60Cols checks that below twoPaneMinWidth
-// the tree pane is rendered as 0 cells wide, its row text doesn't
-// appear in the View output, and focus snaps off the (now invisible)
-// tree onto the content pane so keystrokes route somewhere visible.
-func TestModel_TreeForceHiddenAt60Cols(t *testing.T) {
-	root := writeFixture(t)
-	m := sized(t, root, "")
-	// Reveal+focus the tree at full width so the narrow resize has
-	// something to force-hide and snap focus away from.
-	m = pressKey(t, m, tea.KeyMsg{Type: tea.KeyCtrlB})
-	m = pressKey(t, m, tea.KeyMsg{Type: tea.KeyTab})
-	if m.focus != focusTree {
-		t.Fatalf("precondition: tree should be focused after ^b+Tab, got %v", m.focus)
-	}
-
-	updated, _ := m.Update(tea.WindowSizeMsg{Width: 60, Height: 30})
-	m = updated.(Model)
-
-	if m.shouldShowTree() {
-		t.Errorf("shouldShowTree() should be false at 60 cols")
-	}
-	if w := m.treeWidth(); w != 0 {
-		t.Errorf("treeWidth() = %d at 60 cols, want 0", w)
-	}
-	if m.focus == focusTree {
-		t.Errorf("focus should snap off focusTree when the tree is force-hidden")
-	}
-	// The tree pane renders directory rows with a chevron prefix; the
-	// rendered content of index.md may contain "notes/" inside link
-	// text, so we match the chevron+name shape that only appears in the
-	// tree pane.
-	if strings.Contains(m.View(), "▾ notes/") || strings.Contains(m.View(), "▸ notes/") {
-		t.Errorf("View() should not contain tree row 'notes/' at 60 cols")
-	}
-}
-
 // TestModel_TreeScrollsToCursorOnTallTree checks that when the tree has
-// more rows than the pane is tall, moving the cursor down past the
-// visible window scrolls the tree pane so the cursor row stays visible.
-// Without scrolling, lipgloss truncates from the top and the cursor
-// disappears below the fold.
+// more rows than the modal is tall, moving the cursor down past the
+// visible window scrolls the modal's viewport so the cursor row stays visible.
 func TestModel_TreeScrollsToCursorOnTallTree(t *testing.T) {
 	root := writeTallFixture(t, 60)
 	m := sized(t, root, "")
-
-	if got := len(m.tree.flat); got <= m.tree.vp.Height {
-		t.Fatalf("precondition: flatTree (%d rows) should exceed pane height (%d)", got, m.tree.vp.Height)
+	// Open the modal so the tree viewport is sized.
+	m = pressKey(t, m, tea.KeyMsg{Type: tea.KeyCtrlB})
+	if m.modals.kind != modalTree {
+		t.Fatalf("^b should open tree modal")
 	}
 
-	// Drive the cursor down to a row well past the initial visible window.
+	if got := len(m.tree.flat); got <= m.tree.vp.Height {
+		t.Fatalf("precondition: flatTree (%d rows) should exceed modal height (%d)", got, m.tree.vp.Height)
+	}
+
 	target := m.tree.vp.Height + 10
 	if target >= len(m.tree.flat) {
 		t.Fatalf("test setup: target row %d out of range (flatTree=%d)", target, len(m.tree.flat))
@@ -206,14 +203,15 @@ func TestModel_TreeScrollsToCursorOnTallTree(t *testing.T) {
 }
 
 // TestModel_TreeScrollsBackUp checks that scrolling the cursor back up
-// past the top of the visible window scrolls the viewport back. Without
-// this, only the down direction scrolls and the cursor would go invisible
-// above the viewport.
+// past the top of the visible window scrolls the viewport back.
 func TestModel_TreeScrollsBackUp(t *testing.T) {
 	root := writeTallFixture(t, 60)
 	m := sized(t, root, "")
+	m = pressKey(t, m, tea.KeyMsg{Type: tea.KeyCtrlB})
+	if m.modals.kind != modalTree {
+		t.Fatalf("^b should open tree modal")
+	}
 
-	// Drive far down then back to row 0.
 	m = driveCursorTo(t, m, m.tree.vp.Height+10)
 	if m.tree.vp.YOffset == 0 {
 		t.Fatalf("precondition: viewport should have scrolled down before this test")
@@ -222,116 +220,5 @@ func TestModel_TreeScrollsBackUp(t *testing.T) {
 
 	if m.tree.vp.YOffset != 0 {
 		t.Errorf("YOffset should be 0 after scrolling back to row 0, got %d", m.tree.vp.YOffset)
-	}
-}
-
-// TestModel_TreeShownAtNarrowWidths checks that shouldShowTree() returns false
-// when the terminal is narrower than twoPaneMinWidth even if the user
-// has the tree visible — the threshold gates effective state.
-func TestModel_TreeShownAtNarrowWidths(t *testing.T) {
-	root := writeFixture(t)
-	m := sized(t, root, "")
-	// Reveal the tree (hidden by default) so the width-gate is what
-	// suppresses display, not the user's intent.
-	m = pressKey(t, m, tea.KeyMsg{Type: tea.KeyCtrlB})
-	if !m.tree.visible {
-		t.Fatalf("^b should reveal tree")
-	}
-
-	cases := []struct {
-		width int
-		want  bool
-	}{
-		{60, false},
-		{79, false},
-		{80, true},
-		{120, true},
-	}
-	for _, tc := range cases {
-		updated, _ := m.Update(tea.WindowSizeMsg{Width: tc.width, Height: 30})
-		mm := updated.(Model)
-		if got := mm.shouldShowTree(); got != tc.want {
-			t.Errorf("width=%d: shouldShowTree() = %v, want %v", tc.width, got, tc.want)
-		}
-	}
-}
-
-// TestModel_ToggleTreeNarrowFlipsIntentOnly checks that ^b at a narrow
-// terminal width flips treeVisible (so the user's preference survives
-// resize) but doesn't change effective state — shouldShowTree stays false
-// because the width gate fails.
-func TestModel_ToggleTreeNarrowFlipsIntentOnly(t *testing.T) {
-	root := writeFixture(t)
-	m := sized(t, root, "")
-	// Reveal the tree at full width so the precondition (intent=true) holds
-	// after the narrow resize.
-	m = pressKey(t, m, tea.KeyMsg{Type: tea.KeyCtrlB})
-	if !m.tree.visible {
-		t.Fatalf("^b should reveal tree")
-	}
-
-	updated, _ := m.Update(tea.WindowSizeMsg{Width: 60, Height: 30})
-	m = updated.(Model)
-	if !m.tree.visible {
-		t.Fatalf("precondition: treeVisible should still be true after a narrow resize")
-	}
-	if m.shouldShowTree() {
-		t.Fatalf("precondition: shouldShowTree should be false at 60 cols")
-	}
-
-	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyCtrlB})
-	m = updated.(Model)
-	if m.tree.visible {
-		t.Errorf("treeVisible should be false after ^b")
-	}
-	if m.shouldShowTree() {
-		t.Errorf("shouldShowTree should still be false at 60 cols")
-	}
-
-	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyCtrlB})
-	m = updated.(Model)
-	if !m.tree.visible {
-		t.Errorf("treeVisible should flip back to true on second ^b")
-	}
-	if m.shouldShowTree() {
-		t.Errorf("shouldShowTree should still be false at 60 cols")
-	}
-}
-
-// TestModel_TreeReturnsOnGrow checks that after a narrow resize hides
-// the tree, growing the terminal back above the threshold restores it
-// without any user interaction — m.tree.visible is preserved. Focus
-// stays on content (where it was snapped during the narrow window);
-// restoring it to the tree on grow would yank focus away from whatever
-// the user was reading.
-func TestModel_TreeReturnsOnGrow(t *testing.T) {
-	root := writeFixture(t)
-	m := sized(t, root, "")
-	// Reveal the tree at full width so the grow restores something
-	// the user actually asked for.
-	m = pressKey(t, m, tea.KeyMsg{Type: tea.KeyCtrlB})
-	if !m.tree.visible {
-		t.Fatalf("^b should reveal tree")
-	}
-
-	updated, _ := m.Update(tea.WindowSizeMsg{Width: 60, Height: 30})
-	m = updated.(Model)
-	if m.shouldShowTree() {
-		t.Fatalf("precondition: shouldShowTree should be false at 60 cols")
-	}
-	if m.focus == focusTree {
-		t.Fatalf("precondition: narrow resize should have snapped focus off the tree")
-	}
-
-	updated, _ = m.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
-	m = updated.(Model)
-	if !m.shouldShowTree() {
-		t.Errorf("shouldShowTree should be true after growing to 100 cols")
-	}
-	if w := m.treeWidth(); w == 0 {
-		t.Errorf("treeWidth should be nonzero after growing to 100 cols")
-	}
-	if m.focus == focusTree {
-		t.Errorf("focus should not be restored to tree on grow; stays where the user left it")
 	}
 }

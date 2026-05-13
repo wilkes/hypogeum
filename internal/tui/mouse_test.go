@@ -10,21 +10,16 @@ import (
 	"github.com/wilkes/hypogeum/internal/markdown"
 )
 
-func TestModel_MouseClick_OnTreeRow_SelectsAndOpens(t *testing.T) {
+func TestModel_MouseClick_OnTreeRow_OpensFileAndClosesModal(t *testing.T) {
 	root := writeFixture(t)
 	m := sized(t, root, "")
-	// Reveal the tree (hidden by default) so its row zones are registered.
+	// Open the tree modal so the row zones get registered.
 	m = pressKey(t, m, tea.KeyMsg{Type: tea.KeyCtrlB})
-	if !m.tree.visible {
-		t.Fatalf("^b should reveal the tree; tree.visible = false")
+	if m.modals.kind != modalTree {
+		t.Fatalf("^b should open tree modal, got kind=%v", m.modals.kind)
 	}
 	renderAndScan(t, m, zoneContentPane)
-	// Focus moves back to tree on tree click, so leave it on content first.
-	m = switchToContent(t, m)
 
-	// Find a known row in the flat tree (notes/first.md) and compute where
-	// it appears on screen: row index inside the tree pane + 1 for the top
-	// border. X just needs to be inside the tree pane.
 	wantPath := filepath.Join(root, "notes", "first.md")
 	target := -1
 	for i, row := range m.tree.flat {
@@ -38,8 +33,8 @@ func TestModel_MouseClick_OnTreeRow_SelectsAndOpens(t *testing.T) {
 	}
 
 	// Pull the row's actual screen position from BubbleZone instead of
-	// hand-computing it; that keeps the test honest if the View layout
-	// changes (e.g. extra padding around the tree pane).
+	// hand-computing it; that keeps the test honest if the modal layout
+	// changes.
 	rowZone := zone.Get(treeRowZoneID(target))
 	if rowZone.IsZero() {
 		t.Fatalf("tree row zone for index %d not registered", target)
@@ -47,8 +42,11 @@ func TestModel_MouseClick_OnTreeRow_SelectsAndOpens(t *testing.T) {
 	updated, _ := m.Update(leftClick(rowZone.StartX+1, rowZone.StartY))
 	m = updated.(Model)
 
-	if m.focus != focusTree {
-		t.Errorf("focus after tree click = %v, want focusTree", m.focus)
+	if m.modals.kind != modalNone {
+		t.Errorf("modal should close after file click, got kind=%v", m.modals.kind)
+	}
+	if m.focus != focusContent {
+		t.Errorf("focus after tree click on a file = %v, want focusContent", m.focus)
 	}
 	if m.tree.cursor != target {
 		t.Errorf("treeCursor after click = %d, want %d", m.tree.cursor, target)

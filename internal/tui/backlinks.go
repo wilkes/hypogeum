@@ -267,32 +267,15 @@ func (m *Model) maybeRestoreReturnCursor(path string) {
 	}
 }
 
-// nextFocus returns the focus that Tab should move to. The cycle
-// only visits panes that are currently rendered: tree (if shown),
-// content (always), backlinks (if shown). Hidden panes are skipped
-// rather than cycled into and snapped back.
+// nextFocus returns the focus that Tab should move to. Cycle:
+// content ↔ backlinks (when the backlinks pane is visible). The tree
+// is no longer a Tab destination — it lives in a modal opened with ^b.
 func (m Model) nextFocus() focus {
-	showTree := m.shouldShowTree()
-	showBacklinks := m.shouldShowBacklinks()
-	switch m.focus {
-	case focusTree:
-		if showBacklinks {
-			return focusContent
-		}
+	if !m.shouldShowBacklinks() {
 		return focusContent
-	case focusContent:
-		if showBacklinks {
-			return focusBacklinks
-		}
-		if showTree {
-			return focusTree
-		}
-		return focusContent
-	case focusBacklinks:
-		if showTree {
-			return focusTree
-		}
-		return focusContent
+	}
+	if m.focus == focusContent {
+		return focusBacklinks
 	}
 	return focusContent
 }

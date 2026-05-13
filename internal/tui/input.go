@@ -22,11 +22,7 @@ func debugMouse(msg tea.MouseMsg, m *Model) {
 		return
 	}
 	defer f.Close()
-	fmt.Fprintf(f, "click X=%d Y=%d  treePane=", msg.X, msg.Y)
-	if z := zone.Get(zoneTreePane); !z.IsZero() {
-		fmt.Fprintf(f, "(%d,%d)-(%d,%d)", z.StartX, z.StartY, z.EndX, z.EndY)
-	}
-	fmt.Fprintf(f, "  rows:")
+	fmt.Fprintf(f, "click X=%d Y=%d  rows:", msg.X, msg.Y)
 	for i := range m.tree.flat {
 		z := zone.Get(treeRowZoneID(i))
 		if z.IsZero() {
@@ -66,10 +62,10 @@ func (m *Model) handleMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 
 	// Tree row hit. Iterate visible rows; the first that contains the
 	// click wins. Stops at len(m.tree.flat) so out-of-range zones from a
-	// previous longer document don't match. Skipped entirely when the
-	// tree pane isn't on screen — BubbleZone keeps stale zones across
-	// re-renders, so a hidden pane mustn't catch clicks.
-	if m.shouldShowTree() {
+	// previous longer document don't match. Active only when the tree
+	// modal is open — BubbleZone keeps stale zones across re-renders,
+	// so a closed modal mustn't catch clicks.
+	if m.modals.kind == modalTree {
 		for i := range m.tree.flat {
 			if zone.Get(treeRowZoneID(i)).InBounds(msg) {
 				return m.clickTree(i)
@@ -102,17 +98,22 @@ func (m *Model) handleMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 }
 
 // clickTree selects the tree row at index row (relative to the visible
-// flat tree top), opens it if it's a file, and switches focus.
+// flat tree top). On a directory it toggles collapse; on a file it
+// opens the file and closes the modal (matching keyboard Enter).
 func (m *Model) clickTree(row int) (tea.Model, tea.Cmd) {
 	if row < 0 || row >= len(m.tree.flat) {
 		return *m, nil
 	}
-	m.focus = focusTree
 	m.tree.cursor = row
 	m.refreshTreeVP()
-	if !m.tree.flat[row].node.IsDir {
-		m.openFile(m.tree.flat[row].node.Path)
+	node := m.tree.flat[row].node
+	if node.IsDir {
+		m.toggleFolder(node.Path)
+		return *m, nil
 	}
+	m.modals.kind = modalNone
+	m.focus = m.modals.prevFocus
+	m.openFile(node.Path)
 	return *m, nil
 }
 
@@ -155,13 +156,16 @@ func (m *Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			}
 			m.modals.picker.reset(ranked, m.root)
 		})
-	}
-
-	// Toggle the tree pane. Synthesize a resize so the renderer and
-	// viewport widths recompute through the existing WindowSizeMsg path.
-	if key.Matches(msg, m.keys.ToggleTree) {
-		m.tree.visible = !m.tree.visible
-		return m.Update(tea.WindowSizeMsg{Width: m.width, Height: m.height})
+	case key.Matches(msg, m.keys.ToggleTree):
+		return *m, m.openModalWith(modalTree, func() {
+			// Ensure the cursor points at the file currently open so the
+			// modal lands the user where they are in the vault.
+			if cur := m.history.Current(); cur != "" {
+				m.selectInTree(cur)
+			} else {
+				m.refreshTreeVP()
+			}
+		})
 	}
 
 	// While a modal is open, Esc closes it. Backlinks modal gets explicit
@@ -218,6 +222,9 @@ func (m *Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.modals.kind = modalNone
 			m.focus = m.modals.prevFocus
 			return *m, nil
+		}
+		if m.modals.kind == modalTree {
+			return m.handleTreeModalKey(msg)
 		}
 		if m.modals.kind == modalBacklinks {
 			refresh := func() {
@@ -284,8 +291,6 @@ func (m *Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 
 	switch m.focus {
-	case focusTree:
-		return m.handleTreeKey(msg)
 	case focusBacklinks:
 		return m.handleBacklinksKey(msg)
 	default:
@@ -347,7 +352,10 @@ func (m *Model) handleBacklinksKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return *m, nil
 }
 
-func (m *Model) handleTreeKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+// handleTreeModalKey routes keystrokes while the tree modal is open.
+// Up/Down/k/j move the cursor; Space toggles a folder; Enter opens a
+// file (closing the modal) or toggles a folder.
+func (m *Model) handleTreeModalKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch {
 	case key.Matches(msg, m.keys.Up):
 		if m.tree.cursor > 0 {
@@ -370,9 +378,11 @@ func (m *Model) handleTreeKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		if row.node.IsDir {
 			m.toggleFolder(row.node.Path)
-		} else {
-			m.openFile(row.node.Path)
+			return *m, nil
 		}
+		m.modals.kind = modalNone
+		m.focus = m.modals.prevFocus
+		m.openFile(row.node.Path)
 	}
 	return *m, nil
 }
