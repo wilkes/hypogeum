@@ -306,9 +306,6 @@ func TestFollowBacklink_CapturesPendingPreselectRange(t *testing.T) {
 	if len(m.backlinks.items) < 1 {
 		t.Fatalf("expected at least 1 backlink (source.md → dest.md), got %d", len(m.backlinks.items))
 	}
-	// Re-apply rangeHighlight: refreshBacklinksModal doesn't touch it,
-	// but defensive in case anything in between did.
-	m.content.rangeHighlight = &markdown.LineRange{Start: 10, End: 20}
 
 	m = pressKey(t, m, tea.KeyMsg{Type: tea.KeyEnter})
 
