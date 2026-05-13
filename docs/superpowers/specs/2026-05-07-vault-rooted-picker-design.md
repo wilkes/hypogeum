@@ -1,5 +1,9 @@
 # Vault-rooted picker — design
 
+**Superseded by:** [unified-finder-recency](2026-05-12-unified-finder-recency-design.md). The tree-rooted picker described below has been replaced by a flat recency-ranked finder. This document remains for historical context.
+
+---
+
 **Status:** spec — not yet implemented.
 **Scope:** replace `bubbles/filepicker` with a vault-rooted modal picker that consumes the same pruned `*tree.Node` the left pane does. By construction, directories without markdown descendants don't appear; files outside `tree.MarkdownExts` don't appear.
 **Out of scope:** out-of-vault navigation (the existing picker doesn't really support this anyway — it resets `CurrentDirectory = m.root` on every open). Fuzzy-search input. Directory selection (Enter on a directory only expands/collapses; doesn't "select").

@@ -91,9 +91,27 @@ The cursor-move-and-refresh pattern and the viewport-clamp pattern are extracted
 
 `renderFooter` always shows the current file path (relative to the tree root) plus the help string. When a link is selected, it prepends `"→ "` and appends `[k/n] <target>`. The marker constant (`linkFooterMarker`) is package-public for tests to assert on.
 
+### Flat file finder (`^p`)
+
+`^p` opens `modalPicker` — a flat list of every markdown file in the
+vault, ranked by `recent.Store.Rank`. The picker holds a `[]recent.Ranked`
+and an integer cursor; there is no expansion state and no tree walk
+on render. Each row shows the path relative to the vault root and a
+human-friendly recency label ("2h ago", "yesterday", "3d ago · edited"
+when the recency comes from a file edit rather than a visit). Keys: `j`/`k`
+or `↑`/`↓` move the cursor, `Enter` opens, `Esc` or `^p` closes.
+
+Visits are recorded on every `openFile` call (tree, link, backlink, history,
+finder) via `m.recent.Record(path)`. The Store persists to
+`os.UserConfigDir()/hypogeum/visits.json` atomically. Both Record errors
+and load errors surface as `diag.Warn` and never block navigation.
+
+See [unified-finder-recency](../superpowers/specs/2026-05-12-unified-finder-recency-design.md)
+for the full design.
+
 ## Backlinks and modal surfaces
 
-The TUI hosts five additional surfaces beyond the two-pane core: the persistent backlinks pane (`b`), the backlinks modal (`B`), the log viewer modal (`^l`), the help modal (`?`), and the file picker modal (`^p`). They share input rules, geometry, and a single `modals.prevFocus` slot. Each has its own concept doc:
+The TUI hosts five additional surfaces beyond the two-pane core: the persistent backlinks pane (`b`), the backlinks modal (`B`), the log viewer modal (`^l`), the help modal (`?`), and the file finder modal (`^p`). They share input rules, geometry, and a single `modals.prevFocus` slot. Each has its own concept doc:
 
 - [[modal-geometry]] — single-modal invariant, layout recompute on open, auto-collapse below height 20, `Esc` priority chain. `?` is anchored (no swap); `B` and `^l` swap with each other.
 - [[diagnostics]] — the warn/error stream that feeds the footer transient and the `^l` modal.
