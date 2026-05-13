@@ -110,3 +110,74 @@ func TestRefilterCursorResetsToZero(t *testing.T) {
 		t.Errorf("cursor after refilter: %d want 0", got)
 	}
 }
+
+func TestPickerTypingFiltersList(t *testing.T) {
+	dir := t.TempDir()
+	writePickerFile(t, filepath.Join(dir, "alpha.md"), "# A")
+	writePickerFile(t, filepath.Join(dir, "beta.md"), "# B")
+	writePickerFile(t, filepath.Join(dir, "alphabet.md"), "# AB")
+
+	m := sized(t, dir, "")
+	m = pressKey(t, m, tea.KeyMsg{Type: tea.KeyCtrlP})
+
+	m = pressRune(t, m, 'a')
+	if got := m.modals.picker.input.Value(); got != "a" {
+		t.Errorf("input.Value after 'a': %q want %q", got, "a")
+	}
+	if got := len(m.modals.picker.ranked); got != 3 {
+		t.Errorf("ranked after 'a': %d want 3", got)
+	}
+
+	m = pressRune(t, m, 'l')
+	if got := len(m.modals.picker.ranked); got != 2 {
+		t.Errorf("ranked after 'al': %d want 2", got)
+	}
+}
+
+func TestPickerEscClearsQueryBeforeClosing(t *testing.T) {
+	dir := t.TempDir()
+	writePickerFile(t, filepath.Join(dir, "a.md"), "# A")
+	writePickerFile(t, filepath.Join(dir, "b.md"), "# B")
+
+	m := sized(t, dir, "")
+	m = pressKey(t, m, tea.KeyMsg{Type: tea.KeyCtrlP})
+	m = pressRune(t, m, 'a')
+
+	if m.modals.picker.input.Value() == "" {
+		t.Fatal("setup: query should be non-empty")
+	}
+
+	m = pressKey(t, m, tea.KeyMsg{Type: tea.KeyEsc})
+	if m.modals.kind != modalPicker {
+		t.Errorf("after first Esc: modal kind=%d, want modalPicker", m.modals.kind)
+	}
+	if m.modals.picker.input.Value() != "" {
+		t.Errorf("after first Esc: query=%q, want empty", m.modals.picker.input.Value())
+	}
+
+	m = pressKey(t, m, tea.KeyMsg{Type: tea.KeyEsc})
+	if m.modals.kind != modalNone {
+		t.Errorf("after second Esc: modal kind=%d, want modalNone", m.modals.kind)
+	}
+}
+
+func TestPickerEnterOpensFilteredSelection(t *testing.T) {
+	dir := t.TempDir()
+	p1 := filepath.Join(dir, "alpha.md")
+	p2 := filepath.Join(dir, "beta.md")
+	writePickerFile(t, p1, "# A")
+	writePickerFile(t, p2, "# B")
+
+	m := sized(t, dir, "")
+	m = pressKey(t, m, tea.KeyMsg{Type: tea.KeyCtrlP})
+
+	m = pressRune(t, m, 'b')
+	if got := len(m.modals.picker.ranked); got != 1 {
+		t.Fatalf("after 'b': %d matches, want 1", got)
+	}
+
+	m = pressKey(t, m, tea.KeyMsg{Type: tea.KeyEnter})
+	if got := m.history.Current(); got != p2 {
+		t.Errorf("Enter after filter: opened %q want %q", got, p2)
+	}
+}

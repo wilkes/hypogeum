@@ -167,26 +167,44 @@ func (m *Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if m.modals.kind == modalPicker {
 			switch {
 			case key.Matches(msg, m.keys.ClearLink): // Esc
+				if m.modals.picker.input.Value() != "" {
+					m.modals.picker.input.SetValue("")
+					m.modals.picker.refilter()
+					return *m, nil
+				}
 				m.modals.kind = modalNone
 				m.focus = m.modals.prevFocus
-			case key.Matches(msg, m.keys.Up):
-				if m.modals.picker.cursor > 0 {
-					m.modals.picker.cursor--
-					m.modals.picker.refreshVP()
-				}
-			case key.Matches(msg, m.keys.Down):
-				if m.modals.picker.cursor < len(m.modals.picker.ranked)-1 {
-					m.modals.picker.cursor++
-					m.modals.picker.refreshVP()
-				}
+				return *m, nil
 			case key.Matches(msg, m.keys.Open):
 				if path, ok := m.modals.picker.selectedPath(); ok {
 					m.modals.kind = modalNone
 					m.focus = m.modals.prevFocus
 					m.navigateTo(path)
 				}
+				return *m, nil
+			case key.Matches(msg, m.keys.Up),
+				key.Matches(msg, m.keys.PickerCursorUp):
+				if m.modals.picker.cursor > 0 {
+					m.modals.picker.cursor--
+					m.modals.picker.refreshVP()
+				}
+				return *m, nil
+			case key.Matches(msg, m.keys.Down),
+				key.Matches(msg, m.keys.PickerCursorDown):
+				if m.modals.picker.cursor < len(m.modals.picker.ranked)-1 {
+					m.modals.picker.cursor++
+					m.modals.picker.refreshVP()
+				}
+				return *m, nil
 			}
-			return *m, nil
+			// Forward anything else to the textinput; refilter on change.
+			before := m.modals.picker.input.Value()
+			var cmd tea.Cmd
+			m.modals.picker.input, cmd = m.modals.picker.input.Update(msg)
+			if m.modals.picker.input.Value() != before {
+				m.modals.picker.refilter()
+			}
+			return *m, cmd
 		}
 		if key.Matches(msg, m.keys.ClearLink) { // Esc
 			m.modals.kind = modalNone
