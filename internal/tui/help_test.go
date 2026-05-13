@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/x/ansi"
 )
 
 // pressQuestion synthesizes the `?` keypress.
@@ -33,6 +34,11 @@ func TestHelpModalOpensOnQuestionMark(t *testing.T) {
 	// at typical terminal sizes the bottom of the cheat sheet is below
 	// the fold. The source of truth is formatHelp(m.keys).
 	body := formatHelp(got.keys)
+	// Strip ANSI before checking section headers: lipgloss renders
+	// underlined text character-by-character when a colour profile is
+	// active, so "Navigation" becomes individual styled runes that don't
+	// form a contiguous plain-text substring.
+	plainBody := ansi.Strip(body)
 	wantSubstrings := []string{
 		"Navigation", "Tree", "Links", "Modals", // section headers
 		"^l", "logs", // moved logs binding
@@ -42,7 +48,7 @@ func TestHelpModalOpensOnQuestionMark(t *testing.T) {
 		"esc", "clear link",
 	}
 	for _, s := range wantSubstrings {
-		if !strings.Contains(body, s) {
+		if !strings.Contains(plainBody, s) {
 			t.Errorf("help body missing %q\nbody:\n%s", s, body)
 		}
 	}

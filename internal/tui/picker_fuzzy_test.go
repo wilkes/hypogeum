@@ -229,3 +229,39 @@ func TestPickerOverflowCap(t *testing.T) {
 		t.Errorf("expected footer %q in View; got:\n%s", want, view)
 	}
 }
+
+func TestPickerHighlightsMatchedChars(t *testing.T) {
+	dir := t.TempDir()
+	writePickerFile(t, filepath.Join(dir, "hypogeum.md"), "# H")
+
+	m := sized(t, dir, "")
+	m = pressKey(t, m, tea.KeyMsg{Type: tea.KeyCtrlP})
+	m = pressRune(t, m, 'h')
+	m = pressRune(t, m, 'y')
+	m = pressRune(t, m, 'p')
+
+	view := m.modals.picker.View()
+	if !strings.Contains(view, "\x1b[") {
+		t.Errorf("expected ANSI escape in view; got:\n%q", view)
+	}
+	if !strings.Contains(view, "hypogeum.md") {
+		t.Errorf("expected basename in view; got:\n%q", view)
+	}
+}
+
+func TestPickerHighlightMultibyte(t *testing.T) {
+	dir := t.TempDir()
+	writePickerFile(t, filepath.Join(dir, "日本語.md"), "# JA")
+
+	m := sized(t, dir, "")
+	m = pressKey(t, m, tea.KeyMsg{Type: tea.KeyCtrlP})
+	m = pressKey(t, m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'日'}})
+
+	if got := len(m.modals.picker.ranked); got != 1 {
+		t.Fatalf("expected 1 match for '日', got %d", got)
+	}
+	view := m.modals.picker.View()
+	if !strings.Contains(view, "日本語.md") {
+		t.Errorf("expected multibyte basename in view; got:\n%q", view)
+	}
+}

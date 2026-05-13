@@ -124,7 +124,11 @@ func (p *pickerState) renderRows() string {
 		if edited {
 			suffix += " · edited"
 		}
-		line := formatPickerRow(rel, suffix, width)
+		pathDisplay := preTruncatePath(rel, suffix, width)
+		if p.input.Value() != "" && i != p.cursor {
+			pathDisplay = highlightMatch(pathDisplay, p.input.Value())
+		}
+		line := formatPickerRow(pathDisplay, suffix, width)
 		if i == p.cursor {
 			line = lipgloss.NewStyle().Reverse(true).Render(line)
 		}
@@ -210,6 +214,68 @@ func formatPickerRow(left, right string, width int) string {
 		pad = gap
 	}
 	return leftTrunc + strings.Repeat(" ", pad) + right
+}
+
+// highlightStyle is the lipgloss style for matched characters in a row.
+var highlightStyle = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("14"))
+
+// highlightMatch wraps the bytes of display that match query (via a
+// fresh fuzzy.Find pass) in highlightStyle. Returns display unchanged
+// if query is empty or doesn't match. Called per visible row after
+// truncation, so indices map to the truncated string.
+func highlightMatch(display, query string) string {
+	if query == "" {
+		return display
+	}
+	src := strings.ToLower(display)
+	matches := fuzzy.Find(strings.ToLower(query), []string{src})
+	if len(matches) == 0 {
+		return display
+	}
+	idx := matches[0].MatchedIndexes
+	if len(idx) == 0 {
+		return display
+	}
+	// sahilm/fuzzy MatchedIndexes are rune positions, not byte offsets.
+	// Range over runes to keep multibyte characters intact.
+	var b strings.Builder
+	runePos := 0
+	for _, r := range display {
+		if containsInt(idx, runePos) {
+			b.WriteString(highlightStyle.Render(string(r)))
+		} else {
+			b.WriteRune(r)
+		}
+		runePos++
+	}
+	return b.String()
+}
+
+// containsInt reports whether n is in the (small) sorted slice s.
+func containsInt(s []int, n int) bool {
+	for _, v := range s {
+		if v == n {
+			return true
+		}
+		if v > n {
+			return false
+		}
+	}
+	return false
+}
+
+// preTruncatePath returns the path trimmed to whatever column budget
+// formatPickerRow would have available for the left side. Centralizes
+// the width math so highlightMatch operates on the actually-visible
+// characters.
+func preTruncatePath(path, suffix string, width int) string {
+	const gap = 2
+	rightW := ansi.StringWidth(suffix)
+	leftBudget := width - rightW - gap
+	if leftBudget < 5 {
+		return path
+	}
+	return truncateLeadingEllipsis(path, leftBudget)
 }
 
 // truncateLeadingEllipsis truncates s to fit max, preferring to drop
