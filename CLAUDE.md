@@ -60,6 +60,7 @@ The packages are layered: `tui` depends on `tree`, `markdown`, `nav`, `watch`; t
 - **`^p` opens a flat recency-ranked finder with type-to-filter.** Opens as a `modalKind`. The textinput is focused from the moment the picker opens; printable keystrokes go to the query, and the result list re-filters via `sahilm/fuzzy` (subsequence, case-insensitive). Sort is match score first with the source-order index (i.e. recency rank in `p.all`) as a stable tiebreaker. Empty query falls back to the pure recency list. `^j` / `^k` move the cursor since `j` / `k` now type into the query; arrow keys also move the cursor. `Esc` clears a non-empty query before closing on the second press. Visible rows are capped at `pickerMaxVisible` (200); overflow shows a faint `… N more` footer. The hybrid recency score (filesystem mtime, 7-day half-life + persisted visits, 2-day half-life × 1.5) lives in `internal/recent`. See [finder-fuzzy-filter](docs/superpowers/specs/2026-05-12-finder-fuzzy-filter-design.md) and [unified-finder-recency](docs/superpowers/specs/2026-05-12-unified-finder-recency-design.md).
 - **Snippet highlight uses ASCII control chars (`\x11` / `\x12`).** Don't use these bytes in user content (extremely unlikely) and don't rewrite snippets through any pipeline that would strip control chars.
 - **Unresolved wikilinks aren't in the link cycler.** They render as plain text with a `?` suffix — visible to the user but not selectable with `n`/`p`. This is intentional: a broken link can't be followed, so adding it to the cycler would be a confusing no-op.
+- **Non-markdown files render via `internal/code`, not Glamour.** `refreshContent` (`internal/tui/content.go`) branches on `tree.IsMarkdown(path)`. Markdown goes through `markdown.Renderer.RenderWithLinks`; everything else goes through `code.Renderer.Render`, which is a Chroma → 256-color ANSI → line-number gutter → soft-wrap pipeline. Code files have no `markdown.Link` slice — link cycling (`n`/`p`/`Enter`) is a natural no-op. Tree modal and the `^p` picker stay markdown-only; code files are reachable only via CLI arg or an inline relative link from a markdown file. The watcher's *write* classifier (`internal/watch/classify.go`) accepts any path so live-reload works for the open code file; the *structure* classifier (`stage()`) stays markdown-only so a new `.py` doesn't trigger a tree re-walk.
 
 ## What's not built yet
 
@@ -72,6 +73,12 @@ Full plan and design rationale (including why we picked the sentinel-instrumente
 **Wikilinks and backlinks — Phase 1 shipped:** `[[wikilinks]]` resolve via vault index, backlinks modal (`b`), log viewer (`^l`), and backlinks navigation (cursor `j`/`k`, `Enter` to follow with scroll-to-line, `h` restores cursor). Implementation lives in `internal/vault/` and the modal logic in `internal/tui/`.
 
 **Wikilinks and backlinks — Phase 2 in progress:** inline-link pre-selection on backlink-follow / Back / Forward shipped (see [pre-select-inline-link](docs/superpowers/specs/2026-05-09-pre-select-inline-link-design.md)). Remaining: block references (`[[note#^blockid]]`), broken-link tally in the status bar, and configurable vault root. Design outlined in [docs/superpowers/specs/2026-05-07-wikilinks-and-backlinks-design.md](docs/superpowers/specs/2026-05-07-wikilinks-and-backlinks-design.md).
+
+## Workflow
+
+Every feature lives on its own branch. Before writing a design spec, an implementation plan, or any code for a new feature, `git checkout -b <topic>` off `main` (or use a worktree). The spec, plan, and implementation commits all land on that branch and ship together via PR. Don't commit feature work — including docs-only artifacts that originated from a brainstorming session — directly to `main`.
+
+PRs merge with `gh pr merge --merge`, not squash. Squashing is disabled by repo settings.
 
 ## Documentation and plans
 
