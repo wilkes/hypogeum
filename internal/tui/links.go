@@ -36,10 +36,21 @@ func (m *Model) applyLinkHighlight() {
 	if path == "" {
 		return
 	}
-	src, err := os.ReadFile(path)
-	if err != nil {
-		m.status = err.Error()
-		return
+	var src []byte
+	if info, statErr := os.Stat(path); statErr == nil && info.IsDir() {
+		listing, dirErr := renderDirListing(path)
+		if dirErr != nil {
+			m.status = dirErr.Error()
+			return
+		}
+		src = []byte(listing)
+	} else {
+		var err error
+		src, err = os.ReadFile(path)
+		if err != nil {
+			m.status = err.Error()
+			return
+		}
 	}
 	m.content.renderer.SetFromFile(path)
 	out, _, _, err := m.content.renderer.RenderWithLinks(string(src), path, markdown.HighlightMarker(m.content.linkCursor))
