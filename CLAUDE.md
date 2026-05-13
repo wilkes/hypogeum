@@ -73,6 +73,12 @@ Full plan and design rationale (including why we picked the sentinel-instrumente
 
 **Wikilinks and backlinks — Phase 2 in progress:** inline-link pre-selection on backlink-follow / Back / Forward shipped (see [pre-select-inline-link](docs/superpowers/specs/2026-05-09-pre-select-inline-link-design.md)). Remaining: block references (`[[note#^blockid]]`), broken-link tally in the status bar, and configurable vault root. Design outlined in [docs/superpowers/specs/2026-05-07-wikilinks-and-backlinks-design.md](docs/superpowers/specs/2026-05-07-wikilinks-and-backlinks-design.md).
 
+## Workflow
+
+Every feature lives on its own branch. Before writing a design spec, an implementation plan, or any code for a new feature, `git checkout -b <topic>` off `main` (or use a worktree). The spec, plan, and implementation commits all land on that branch and ship together via PR. Don't commit feature work — including docs-only artifacts that originated from a brainstorming session — directly to `main`.
+
+PRs merge with `gh pr merge --merge`, not squash. Squashing is disabled by repo settings.
+
 ## Documentation and plans
 
 Write design docs, implementation plans, and investigation notes to `docs/` at the repo root. Start at [docs/index.md](docs/index.md) — it points at the [architecture overview](docs/architecture.md) (which links to per-package docs in `docs/packages/`) and to active feature plans like [link-following](docs/link-following.md).

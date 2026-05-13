@@ -34,6 +34,7 @@ Cross-cutting ideas that show up in multiple specs and packages. Each is its own
 - [Vault-rooted picker](superpowers/specs/2026-05-07-vault-rooted-picker-design.md) — shipped — `^p` modal over the pruned `*tree.Node`, so only directories containing markdown appear.
 - [Unified finder with recency](superpowers/specs/2026-05-12-unified-finder-recency-design.md) — shipped — `^p` opens a flat list of every vault markdown file, ranked by a hybrid mtime + persisted-visit score.
 - [finder-fuzzy-filter](superpowers/specs/2026-05-12-finder-fuzzy-filter-design.md) — type-to-filter on top of the recency-ranked picker. Shipped 2026-05-12.
+- [Code-file syntax highlighting](superpowers/specs/2026-05-12-code-file-rendering-design.md) — design approved 2026-05-12 — Chroma-driven highlighting + line-number gutter for non-md files opened by CLI arg or inline link. Tree, picker, and vault stay markdown-only.
 
 ## Conventions for adding to this folder
 
