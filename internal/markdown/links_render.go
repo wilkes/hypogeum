@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/charmbracelet/x/ansi"
 	"github.com/wilkes/hypogeum/internal/embed"
 	"github.com/wilkes/hypogeum/internal/wikilink"
 )
@@ -234,19 +235,12 @@ func stripSentinels(raw string, marker LinkMarker) (string, []sentinelSpan) {
 			i++
 		case urlSuppressStart:
 			// Drop everything until urlSuppressEnd, including any ANSI
-			// styling Glamour applied to the URL. Also peel back the
-			// single space immediately before this sentinel so the
-			// "[text] /url" form collapses cleanly. Never strip a
-			// newline — that would join paragraphs.
-			trimTrailingSpace(&out)
-			j := i + 1
-			for j < len(raw) && raw[j] != urlSuppressEnd {
-				j++
-			}
-			if j < len(raw) {
-				j++ // consume the urlSuppressEnd byte too
-			}
-			i = j
+			// styling Glamour applied to the URL. In prose mid-sentence
+			// we peel back the leading space too; in table cells / at
+			// end of a wrapped line we replace the range with spaces of
+			// equivalent visible width so column borders stay aligned.
+			// Never strip a newline — that would join paragraphs.
+			i = urlSuppressStrip(&out, raw, i)
 		case '\n':
 			if inLink && openEmit {
 				// Close the highlight before the newline so Glamour's
@@ -275,6 +269,99 @@ func stripSentinels(raw string, marker LinkMarker) (string, []sentinelSpan) {
 		}
 	}
 	return out.String(), spans
+}
+
+// urlSuppressStrip handles the urlSuppressStart..urlSuppressEnd range
+// at raw[startIdx]. Returns the new index past the range and the bytes
+// to emit in place of the stripped range.
+//
+// In prose mid-sentence (the next non-space content byte is a letter,
+// digit, etc.), we strip cleanly: the leading space before urlSuppressStart
+// is peeled back, and the entire sentinel range is dropped. Result:
+// "[text] /url body" collapses to "[text] body" without doubling the space.
+//
+// In tables and at end-of-line, Glamour sized the cell or wrap line
+// counting the URL bytes as visible content. Dropping them mid-rendered
+// output shortens that column or line by exactly the URL's display width,
+// which is why tables with link cells render with ragged right edges and
+// misaligned column borders. We keep the leading space and replace the
+// sentinel range with spaces of equivalent width so the visible column /
+// padding stays exactly what Glamour intended.
+//
+// Used by stripSentinels and stripURLSentinels — keep both call sites in
+// sync.
+func urlSuppressStrip(out *strings.Builder, raw string, startIdx int) int {
+	end := startIdx + 1
+	for end < len(raw) && raw[end] != urlSuppressEnd {
+		end++
+	}
+	if end < len(raw) {
+		end++ // consume urlSuppressEnd
+	}
+
+	if isPaddingContextAfter(raw, end) {
+		// Don't trim the leading space; replace the URL range with spaces
+		// of equivalent visible width so column borders stay aligned.
+		width := ansi.StringWidth(raw[startIdx+1 : end-1])
+		for k := 0; k < width; k++ {
+			out.WriteByte(' ')
+		}
+		return end
+	}
+
+	trimTrailingSpace(out)
+	return end
+}
+
+// isPaddingContextAfter reports whether the bytes after idx — up to the
+// next newline — are entirely spaces, ANSI escapes, and (optionally) a
+// table column-border character. This is true when the URL sits inside a
+// table cell or at the visible end of a wrapped/padded line.
+func isPaddingContextAfter(raw string, idx int) bool {
+	for idx < len(raw) {
+		c := raw[idx]
+		switch {
+		case c == '\n':
+			return true
+		case c == ' ':
+			idx++
+		case c == 0x1b:
+			j := skipEscape(raw, idx)
+			if j == idx {
+				return false
+			}
+			idx = j
+		case isTableBorderByte(raw, idx):
+			return true
+		default:
+			return false
+		}
+	}
+	return true
+}
+
+// skipEscape returns the index past the ANSI escape sequence at s[i], or
+// i unchanged if no escape starts there. Recognizes CSI (\x1b[...m).
+func skipEscape(s string, i int) int {
+	if i+1 >= len(s) || s[i] != 0x1b || s[i+1] != '[' {
+		return i
+	}
+	j := i + 2
+	for j < len(s) && s[j] != 'm' {
+		j++
+	}
+	if j < len(s) {
+		return j + 1
+	}
+	return i
+}
+
+// isTableBorderByte reports whether s[i] starts a UTF-8 box-drawing
+// character used by Glamour's table renderer. Currently only │ (U+2502,
+// 0xE2 0x94 0x82) appears in cell rows; the horizontal rules (── ┼ ─) are
+// on their own line and don't interfere with width math.
+func isTableBorderByte(s string, i int) bool {
+	return i+2 < len(s) && s[i] == 0xE2 && s[i+1] == 0x94 && s[i+2] == 0x82
 }
 
 // trimTrailingSpace removes the most recent printable space byte from b,
@@ -599,15 +686,7 @@ func stripURLSentinels(raw string) string {
 	for i := 0; i < len(raw); {
 		c := raw[i]
 		if c == urlSuppressStart {
-			trimTrailingSpace(&out)
-			j := i + 1
-			for j < len(raw) && raw[j] != urlSuppressEnd {
-				j++
-			}
-			if j < len(raw) {
-				j++
-			}
-			i = j
+			i = urlSuppressStrip(&out, raw, i)
 			continue
 		}
 		out.WriteByte(c)
