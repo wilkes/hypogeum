@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/x/ansi"
 	"github.com/sahilm/fuzzy"
 )
 
@@ -244,8 +245,10 @@ func TestPickerHighlightsMatchedChars(t *testing.T) {
 	if !strings.Contains(view, "\x1b[") {
 		t.Errorf("expected ANSI escape in view; got:\n%q", view)
 	}
-	if !strings.Contains(view, "hypogeum.md") {
-		t.Errorf("expected basename in view; got:\n%q", view)
+	// The cursor row has highlight ANSI interspersed with the basename — use
+	// ansi.Strip to assert the plain-text content is present regardless of styling.
+	if !strings.Contains(ansi.Strip(view), "hypogeum.md") {
+		t.Errorf("expected basename in view (stripped); got:\n%q", view)
 	}
 }
 
@@ -261,7 +264,8 @@ func TestPickerHighlightMultibyte(t *testing.T) {
 		t.Fatalf("expected 1 match for '日', got %d", got)
 	}
 	view := m.modals.picker.View()
-	if !strings.Contains(view, "日本語.md") {
+	// ANSI highlight codes are interspersed in the basename; strip before asserting.
+	if !strings.Contains(ansi.Strip(view), "日本語.md") {
 		t.Errorf("expected multibyte basename in view; got:\n%q", view)
 	}
 }

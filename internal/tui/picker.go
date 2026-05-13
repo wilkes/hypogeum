@@ -125,7 +125,7 @@ func (p *pickerState) renderRows() string {
 			suffix += " · edited"
 		}
 		pathDisplay := preTruncatePath(rel, suffix, width)
-		if p.input.Value() != "" && i != p.cursor {
+		if p.input.Value() != "" {
 			pathDisplay = highlightMatch(pathDisplay, p.input.Value())
 		}
 		line := formatPickerRow(pathDisplay, suffix, width)
@@ -236,17 +236,19 @@ func highlightMatch(display, query string) string {
 	if len(idx) == 0 {
 		return display
 	}
-	// sahilm/fuzzy MatchedIndexes are rune positions, not byte offsets.
-	// Range over runes to keep multibyte characters intact.
+	// sahilm/fuzzy MatchedIndexes are byte offsets (the inner loop variable j
+	// in fuzzy.go advances by candidateSize bytes via utf8.DecodeRuneInString).
+	// Iterate by byte offset so multibyte runes are addressed correctly.
 	var b strings.Builder
-	runePos := 0
+	bytePos := 0
 	for _, r := range display {
-		if containsInt(idx, runePos) {
+		runeLen := len(string(r))
+		if containsInt(idx, bytePos) {
 			b.WriteString(highlightStyle.Render(string(r)))
 		} else {
 			b.WriteRune(r)
 		}
-		runePos++
+		bytePos += runeLen
 	}
 	return b.String()
 }
