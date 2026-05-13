@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -106,5 +107,21 @@ func TestKeyBTogglesBacklinksOpen(t *testing.T) {
 	out2, _ := out.(Model).Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'b'}})
 	if out2.(Model).backlinks.open {
 		t.Fatalf("after second b: expected backlinksOpen=false")
+	}
+}
+
+func TestNewInitializesRecentStore(t *testing.T) {
+	dir := t.TempDir()
+	notePath := filepath.Join(dir, "n.md")
+	if err := os.WriteFile(notePath, []byte("# N"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	m, err := New(dir, "")
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	if m.recent == nil {
+		t.Fatal("Model.recent is nil; want non-nil Store")
 	}
 }
