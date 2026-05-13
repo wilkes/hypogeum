@@ -66,10 +66,14 @@ func (m *Model) handleMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 
 	// Tree row hit. Iterate visible rows; the first that contains the
 	// click wins. Stops at len(m.tree.flat) so out-of-range zones from a
-	// previous longer document don't match.
-	for i := range m.tree.flat {
-		if zone.Get(treeRowZoneID(i)).InBounds(msg) {
-			return m.clickTree(i)
+	// previous longer document don't match. Skipped entirely when the
+	// tree pane isn't on screen — BubbleZone keeps stale zones across
+	// re-renders, so a hidden pane mustn't catch clicks.
+	if m.shouldShowTree() {
+		for i := range m.tree.flat {
+			if zone.Get(treeRowZoneID(i)).InBounds(msg) {
+				return m.clickTree(i)
+			}
 		}
 	}
 

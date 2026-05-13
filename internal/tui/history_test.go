@@ -9,8 +9,22 @@ import (
 
 // openViaTree walks the cursor to path and presses Enter to open it. Used
 // to drive history without going through the link-following path.
+//
+// Reveals the tree and focuses it first — the tree is hidden by default
+// and KeyDown/KeyUp only move the tree cursor when the tree pane has focus.
 func openViaTree(t *testing.T, m Model, path string) Model {
 	t.Helper()
+	if !m.tree.visible {
+		updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyCtrlB})
+		m = updated.(Model)
+	}
+	if m.focus != focusTree {
+		updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyTab})
+		m = updated.(Model)
+	}
+	if m.focus != focusTree {
+		t.Fatalf("openViaTree: could not focus tree (visible=%v, focus=%v)", m.tree.visible, m.focus)
+	}
 	target := -1
 	for i, row := range m.tree.flat {
 		if row.node.Path == path {
@@ -108,19 +122,33 @@ func TestModel_ForwardAtEndIsNoop(t *testing.T) {
 func TestModel_TabTogglesFocus(t *testing.T) {
 	root := writeFixture(t)
 	m := sized(t, root, "")
-	if m.focus != focusTree {
-		t.Fatalf("default focus = %v, want focusTree", m.focus)
+	if m.focus != focusContent {
+		t.Fatalf("default focus = %v, want focusContent", m.focus)
 	}
 
+	// With the tree hidden by default, Tab has nowhere else to go.
 	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyTab})
 	m = updated.(Model)
 	if m.focus != focusContent {
-		t.Errorf("after first Tab, focus = %v, want focusContent", m.focus)
+		t.Errorf("Tab with tree hidden: focus = %v, want focusContent (no-op)", m.focus)
+	}
+
+	// Reveal the tree and confirm Tab cycles tree ↔ content.
+	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyCtrlB})
+	m = updated.(Model)
+	if !m.tree.visible {
+		t.Fatalf("^b should reveal tree; tree.visible = false")
 	}
 
 	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyTab})
 	m = updated.(Model)
 	if m.focus != focusTree {
-		t.Errorf("after second Tab, focus = %v, want focusTree", m.focus)
+		t.Errorf("after first Tab (tree visible), focus = %v, want focusTree", m.focus)
+	}
+
+	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyTab})
+	m = updated.(Model)
+	if m.focus != focusContent {
+		t.Errorf("after second Tab, focus = %v, want focusContent", m.focus)
 	}
 }

@@ -17,16 +17,21 @@ func TestModel_BootsAndRendersFirstFile(t *testing.T) {
 	if view == "" {
 		t.Fatal("View returned empty string after WindowSizeMsg")
 	}
-	// Tree pane should mention the markdown files we wrote.
-	if !strings.Contains(view, "index.md") {
-		t.Errorf("expected tree to contain index.md, got:\n%s", view)
-	}
-	if !strings.Contains(view, "first.md") {
-		t.Errorf("expected tree to contain first.md, got:\n%s", view)
-	}
-	// Auto-opened first file should land us on Index content.
+	// Auto-opened first file should land us on Index content. (Tree is
+	// hidden by default, so we only assert the content render.)
 	if !strings.Contains(view, "Index") {
 		t.Errorf("expected rendered content to contain 'Index', got:\n%s", view)
+	}
+
+	// After ^b, the tree pane should mention the markdown files we wrote.
+	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyCtrlB})
+	m = updated.(Model)
+	view = m.View()
+	if !strings.Contains(view, "index.md") {
+		t.Errorf("expected tree to contain index.md after ^b, got:\n%s", view)
+	}
+	if !strings.Contains(view, "first.md") {
+		t.Errorf("expected tree to contain first.md after ^b, got:\n%s", view)
 	}
 }
 

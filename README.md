@@ -1,6 +1,6 @@
 # hypogeum
 
-A terminal browser for markdown directories. Point it at a folder of `.md` files and wander through them — the left pane is the directory tree, the right pane renders the file you're on, and links between files navigate with `Enter`. `h` and `l` go back and forward through your history, like a browser.
+A terminal browser for markdown directories. Point it at a folder of `.md` files and wander through them — the rendered file fills the screen, `^p` opens a fuzzy file finder, and links between files navigate with `Enter`. `h` and `l` go back and forward through your history, like a browser. A directory tree is available on the side (`^b` to toggle) when you'd rather browse than search.
 
 The name is the Greek word for an underground chamber or network of chambers (*hupó* "under" + *gê* "earth"). It shares a root with *hyperlink* (*hupér* "above") — the references float above the text, the chambers wait below.
 

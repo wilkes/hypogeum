@@ -4,6 +4,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	tea "github.com/charmbracelet/bubbletea"
 	zone "github.com/lrstanley/bubblezone"
 
 	"github.com/wilkes/hypogeum/internal/markdown"
@@ -12,7 +13,13 @@ import (
 func TestModel_MouseClick_OnTreeRow_SelectsAndOpens(t *testing.T) {
 	root := writeFixture(t)
 	m := sized(t, root, "")
-	// Switch focus to content first so we can confirm a tree click moves it back.
+	// Reveal the tree (hidden by default) so its row zones are registered.
+	m = pressKey(t, m, tea.KeyMsg{Type: tea.KeyCtrlB})
+	if !m.tree.visible {
+		t.Fatalf("^b should reveal the tree; tree.visible = false")
+	}
+	renderAndScan(t, m, zoneContentPane)
+	// Focus moves back to tree on tree click, so leave it on content first.
 	m = switchToContent(t, m)
 
 	// Find a known row in the flat tree (notes/first.md) and compute where
