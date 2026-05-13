@@ -36,16 +36,15 @@ type modalUIState struct {
 }
 
 // toggleModal closes the modal of `kind` if it's currently open;
-// otherwise it saves the current focus (unless the persistent backlinks
-// pane has it — that pane stays sticky across modal opens), sets the
-// modal open, and runs onOpen for per-modal init. The returned Cmd is
-// whatever onOpen produced, threaded back to Bubble Tea.
+// otherwise it saves the current focus, sets the modal open, and runs
+// onOpen for per-modal init. The returned Cmd is whatever onOpen
+// produced, threaded back to Bubble Tea.
 func (m *Model) toggleModal(kind modalKind, onOpen func() tea.Cmd) tea.Cmd {
 	if m.modals.kind == kind {
 		m.closeModal()
 		return nil
 	}
-	if m.modals.kind == modalNone && m.focus != focusBacklinks {
+	if m.modals.kind == modalNone {
 		m.modals.prevFocus = m.focus
 	}
 	m.modals.kind = kind

@@ -41,7 +41,7 @@ func TestLogsModalReplacesBacklinksModal(t *testing.T) {
 	mm, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 40})
 	m = mm.(Model)
 
-	out1, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'B'}})
+	out1, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'b'}})
 	if out1.(Model).modals.kind != modalBacklinks {
 		t.Fatalf("expected modalBacklinks")
 	}

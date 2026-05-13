@@ -11,29 +11,16 @@ import (
 	"github.com/wilkes/hypogeum/internal/vault"
 )
 
-// backlinksUIState bundles the backlinks pane/modal render state. open
-// is the user-facing intent for the persistent pane (gated by height
-// via shouldShowBacklinks); vp scrolls the persistent pane; cursor
-// indexes into items; items is cached so cursor moves don't re-query
-// the vault; returnCursor is set when following a backlink and consumed
-// on the next matching Back navigation.
+// backlinksUIState bundles the backlinks modal's render state. cursor
+// indexes into items; items is cached so cursor moves don't re-query the
+// vault; returnCursor is set when following a backlink and consumed on
+// the next matching Back navigation so the modal reopens at the saved
+// cursor position.
 type backlinksUIState struct {
-	open         bool
-	vp           viewport.Model
 	cursor       int
 	items        []vault.Backlink
 	returnCursor *returnCursor
 }
-
-// backlinksHeight is the row count of the persistent bottom-split pane,
-// including its border. Two visible rows per backlink × ~3 backlinks
-// visible at a time + border (2) = 8.
-const backlinksHeight = 8
-
-// backlinksMinTotalHeight is the minimum terminal height at which the
-// persistent backlinks pane is shown. Below this, the pane state is
-// preserved but the pane is suppressed in View().
-const backlinksMinTotalHeight = 20
 
 // snippetHighlightOpenChar / CloseChar mirror the markers vault embeds
 // in Backlink.Snippet. Defined here so the TUI doesn't import vault's
@@ -44,23 +31,12 @@ const (
 	snippetHighlightCloseChar = "\x12"
 )
 
-// backlinksSurface identifies which backlinks UI surface (persistent
-// pane vs modal) the user was navigating when they followed a backlink.
-// Used by returnCursor so Back can restore them to the same surface.
-type backlinksSurface int
-
-const (
-	surfacePane backlinksSurface = iota
-	surfaceModal
-)
-
 // returnCursor remembers where the user was in the backlinks list
 // before following a backlink. Single-slot: we only restore on the
 // next Back navigation, and only if it lands on the file we recorded.
 type returnCursor struct {
 	sourceFile string
 	cursor     int
-	surface    backlinksSurface
 }
 
 // clamp returns v constrained to [lo, hi]. If hi < lo (e.g. when the
@@ -79,47 +55,14 @@ func clamp(v, lo, hi int) int {
 	return v
 }
 
-// shouldShowBacklinks returns true when the persistent pane is open
-// AND the terminal is tall enough for it.
-func (m Model) shouldShowBacklinks() bool {
-	return m.backlinks.open && m.height >= backlinksMinTotalHeight
-}
-
-// refreshBacklinks repopulates m.backlinks.vp from the vault for the
-// currently-open file. Called on file change and on toggle.
-func (m *Model) refreshBacklinks(currentPath string) {
-	if m.vault == nil || currentPath == "" {
-		m.backlinks.items = nil
-		m.backlinks.vp.SetContent("")
-		return
-	}
-	links := m.vault.Backlinks(currentPath)
-	m.backlinks.items = links
-	m.backlinks.vp.SetContent(formatBacklinks(links, m.root, m.content.viewport.Width, m.backlinks.cursor))
-}
-
-// renderBacklinks returns the rendered string of the persistent pane,
-// styled to match the rest of the UI. Empty string when the pane is
-// suppressed.
-func (m Model) renderBacklinks() string {
-	if !m.shouldShowBacklinks() {
-		return ""
-	}
-	return paneStyle(false).
-		Width(m.content.viewport.Width).
-		Height(backlinksHeight - 2). // -2 for top/bottom border
-		Render(m.backlinks.vp.View())
-}
-
 // cursorMarkerStyle is the left-edge highlight for the selected entry.
 // Distinct from the snippet's yellow highlight (which marks the matched
 // display text) — this one signals structural position in the list.
 var cursorMarkerStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("62")).Bold(true)
 
 // formatBacklinks renders a slice of vault.Backlink as the two-row-per-
-// entry text used in both the persistent pane and the modal. If
-// cursor is in [0, len(links)), the row at that index gets a left-edge
-// marker; pass -1 for no selection.
+// entry text used by the backlinks modal. If cursor is in [0, len(links)),
+// the row at that index gets a left-edge marker; pass -1 for no selection.
 func formatBacklinks(links []vault.Backlink, root string, width, cursor int) string {
 	if len(links) == 0 {
 		return lipgloss.NewStyle().Faint(true).Render("(no backlinks)")
@@ -191,22 +134,10 @@ func truncateOneLine(s string, width int) string {
 	return s[:width-1] + "…"
 }
 
-// activeBacklinksSurface reports which backlinks surface is currently
-// receiving the user's navigation input. Used at follow time so the
-// returnCursor records where to restore on Back.
-//
-// Modal takes precedence: if both are open and we're following from
-// the modal, we want to come back to the modal.
-func (m Model) activeBacklinksSurface() backlinksSurface {
-	if m.modals.kind == modalBacklinks {
-		return surfaceModal
-	}
-	return surfacePane
-}
-
 // followBacklink navigates to the SourceFile of the currently selected
 // backlink, recording return state for a subsequent h (Back) restore.
-// No-op if no backlink is selected (e.g. empty list).
+// No-op if no backlink is selected (e.g. empty list). Closes the modal
+// and re-derives tree expansion for the new file.
 func (m *Model) followBacklink() {
 	if m.backlinks.cursor < 0 || m.backlinks.cursor >= len(m.backlinks.items) {
 		return
@@ -217,14 +148,9 @@ func (m *Model) followBacklink() {
 	m.backlinks.returnCursor = &returnCursor{
 		sourceFile: m.history.Current(),
 		cursor:     m.backlinks.cursor,
-		surface:    m.activeBacklinksSurface(),
 	}
 
-	// Close modal if active; persistent pane stays open and
-	// re-populates for the new file's own backlinks.
-	if m.modals.kind == modalBacklinks {
-		m.modals.kind = modalNone
-	}
+	m.closeModal()
 	m.focus = focusContent
 
 	// Pre-select the inline link in the source file that points back to
@@ -245,10 +171,8 @@ func (m *Model) followBacklink() {
 }
 
 // maybeRestoreReturnCursor checks if a returnCursor was set and the
-// path we just navigated to matches it. If so, restores the cursor
-// position and the surface (focus on pane, or reopen modal). Consumes
-// the slot regardless of the surface restore actually being possible
-// (e.g. the user closed the pane while away).
+// path we just navigated to matches it. If so, reopens the backlinks
+// modal at the saved cursor position. Consumes the slot regardless.
 func (m *Model) maybeRestoreReturnCursor(path string) {
 	if m.backlinks.returnCursor == nil || path != m.backlinks.returnCursor.sourceFile {
 		return
@@ -256,30 +180,14 @@ func (m *Model) maybeRestoreReturnCursor(path string) {
 	rc := m.backlinks.returnCursor
 	m.backlinks.returnCursor = nil
 
-	m.refreshBacklinks(path)
+	if m.modals.kind == modalNone {
+		m.modals.prevFocus = m.focus
+	}
+	m.modals.kind = modalBacklinks
+	// Refresh first to populate items; clamp the saved cursor to the
+	// (possibly shrunk) list; refresh again so the cursor highlight
+	// appears on the correct row.
+	m.refreshBacklinksModal(path)
 	m.backlinks.cursor = clamp(rc.cursor, 0, len(m.backlinks.items)-1)
-
-	switch rc.surface {
-	case surfacePane:
-		if m.shouldShowBacklinks() {
-			m.focus = focusBacklinks
-		}
-		m.refreshBacklinks(path) // re-render with cursor highlighted
-	case surfaceModal:
-		m.modals.kind = modalBacklinks
-		m.refreshBacklinksModal(path)
-	}
-}
-
-// nextFocus returns the focus that Tab should move to. Cycle:
-// content ↔ backlinks (when the backlinks pane is visible). The tree
-// is no longer a Tab destination — it lives in a modal opened with ^b.
-func (m Model) nextFocus() focus {
-	if !m.shouldShowBacklinks() {
-		return focusContent
-	}
-	if m.focus == focusContent {
-		return focusBacklinks
-	}
-	return focusContent
+	m.refreshBacklinksModal(path)
 }

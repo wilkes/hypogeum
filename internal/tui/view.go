@@ -30,18 +30,11 @@ func (m Model) View() string {
 	content := m.content.viewport.View()
 
 	contentHeight := m.height - 4
-	if m.shouldShowBacklinks() {
-		contentHeight -= backlinksHeight
-	}
-	contentStyled := zone.Mark(zoneContentPane, paneStyle(m.focus == focusContent).
+	body := zone.Mark(zoneContentPane, paneStyle(true).
 		Width(m.content.viewport.Width).
 		Height(contentHeight).
 		Render(content))
 
-	body := contentStyled
-	if bl := m.renderBacklinks(); bl != "" {
-		body = lipgloss.JoinVertical(lipgloss.Left, contentStyled, bl)
-	}
 	footer := m.renderFooter()
 	composed := lipgloss.JoinVertical(lipgloss.Left, body, footer)
 	if m.modals.kind != modalNone {

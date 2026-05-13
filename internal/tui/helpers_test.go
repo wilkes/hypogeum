@@ -106,20 +106,12 @@ func renderAndScan(t *testing.T, m Model, waitID string) {
 	t.Fatalf("zone %q never registered after View()", waitID)
 }
 
-// switchToContent ensures focus is on the content pane. Since `New`
-// starts on content, this is usually a no-op — but tests that have
-// moved focus elsewhere (e.g. opened the backlinks pane) call it to
-// return.
+// switchToContent ensures focus is on the content pane. With the
+// backlinks pane removed, focus is now a single-value enum and this is
+// always a no-op — kept for callsite stability across the many tests
+// that invoke it as a setup step.
 func switchToContent(t *testing.T, m Model) Model {
 	t.Helper()
-	if m.focus == focusContent {
-		return m
-	}
-	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyTab})
-	m = updated.(Model)
-	if m.focus != focusContent {
-		t.Fatalf("expected focusContent after Tab, got %v", m.focus)
-	}
 	return m
 }
 

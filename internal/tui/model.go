@@ -32,14 +32,15 @@ func clearTransientAfter(d time.Duration) tea.Cmd {
 	return tea.Tick(d, func(time.Time) tea.Msg { return transientClearMsg{} })
 }
 
-// Focus indicates which pane currently receives keyboard input for movement.
-// The tree is no longer a Tab destination — it lives in a modal opened with
-// ^b — so the cycle is content ↔ backlinks (when that pane is visible).
+// Focus indicates which pane currently receives keyboard input.
+// Content is the only pane now — the tree is a modal (^b) and backlinks
+// are a modal (b). focus is retained as a one-value enum because
+// modalUIState.prevFocus saves/restores it across modal lifecycles; the
+// type leaves room for future panes without churning the modal code.
 type focus int
 
 const (
 	focusContent focus = iota
-	focusBacklinks
 )
 
 // Model is the top-level Bubble Tea model.
@@ -165,7 +166,6 @@ func New(root, initialFile string) (Model, error) {
 		},
 	}
 	m.tree.flat = m.flattenVisible()
-	m.backlinks.vp = viewport.New(0, 0)
 	m.modals.vp = newModalViewport()
 	m.modals.picker = newPicker()
 
@@ -227,8 +227,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Leave room for the pane's top+bottom borders (2) and the
 		// two-line footer (2) so View() fits within m.height.
 		m.content.viewport.Height = m.height - 4
-		m.backlinks.vp.Width = contentWidth
-		m.backlinks.vp.Height = backlinksHeight - 2
 		m.resizeModalVP()
 		m.resizePicker()
 		m.resizeTreeModalVP()

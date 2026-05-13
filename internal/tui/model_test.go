@@ -99,23 +99,23 @@ func TestNewBuildsVault(t *testing.T) {
 	}
 }
 
-func TestKeyBTogglesBacklinksOpen(t *testing.T) {
+func TestKeyBTogglesBacklinksModal(t *testing.T) {
 	isolatedHome(t)
 	dir := t.TempDir()
 	m, err := New(dir, "")
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
-	if m.backlinks.open {
-		t.Fatalf("expected backlinksOpen=false initially")
+	if m.modals.kind != modalNone {
+		t.Fatalf("expected no modal initially, got %v", m.modals.kind)
 	}
 	out, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'b'}})
-	if !out.(Model).backlinks.open {
-		t.Fatalf("after b: expected backlinksOpen=true")
+	if out.(Model).modals.kind != modalBacklinks {
+		t.Fatalf("after b: expected modalBacklinks, got %v", out.(Model).modals.kind)
 	}
 	out2, _ := out.(Model).Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'b'}})
-	if out2.(Model).backlinks.open {
-		t.Fatalf("after second b: expected backlinksOpen=false")
+	if out2.(Model).modals.kind != modalNone {
+		t.Fatalf("after second b: expected modalNone, got %v", out2.(Model).modals.kind)
 	}
 }
 

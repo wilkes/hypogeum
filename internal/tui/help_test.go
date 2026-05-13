@@ -84,7 +84,7 @@ var modalCases = []struct {
 	key  tea.KeyMsg
 	want modalKind
 }{
-	{"backlinks", tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'B'}}, modalBacklinks},
+	{"backlinks", tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'b'}}, modalBacklinks},
 	{"logs", ctrlL(), modalLogs},
 	{"picker", tea.KeyMsg{Type: tea.KeyCtrlP}, modalPicker},
 }

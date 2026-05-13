@@ -117,6 +117,16 @@ func (m *Model) clickTree(row int) (tea.Model, tea.Cmd) {
 }
 
 func (m *Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	// The picker's text input claims every printable keystroke. Route
+	// printable keys to it first so global modal-toggle keys that are
+	// plain letters (b, ?) don't swap the picker out when the user
+	// types them into the query. ^P / ^L still toggle modals (they're
+	// not text-input candidates), so the user can close the picker the
+	// same way they opened it.
+	if m.modals.kind == modalPicker && msg.Type == tea.KeyRunes {
+		return m.handlePickerKey(msg)
+	}
+
 	// Modal-toggle keys take priority — they open/close modals regardless
 	// of which pane has focus. They must run before the modal-forwarding
 	// block below so that pressing a toggle while a modal is open swaps
@@ -249,10 +259,6 @@ func (m *Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case key.Matches(msg, m.keys.Quit):
 		return *m, tea.Quit
 
-	case key.Matches(msg, m.keys.FocusTog):
-		m.focus = m.nextFocus()
-		return *m, nil
-
 	case key.Matches(msg, m.keys.Back):
 		leaving := m.history.Current()
 		if path, ok := m.history.Back(); ok {
@@ -271,27 +277,25 @@ func (m *Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.selectInTree(path)
 		}
 		return *m, nil
-
-	case key.Matches(msg, m.keys.ToggleBacklinks):
-		if m.backlinks.open {
-			m.backlinks.open = false
-			m.focus = m.modals.prevFocus
-		} else {
-			m.backlinks.open = true
-			m.modals.prevFocus = m.focus
-			m.focus = focusBacklinks
-			m.backlinks.cursor = 0
-			m.refreshBacklinks(m.history.Current())
-		}
-		return *m, nil
 	}
 
-	switch m.focus {
-	case focusBacklinks:
-		return m.handleBacklinksKey(msg)
-	default:
-		return m.handleContentKey(msg)
+	return m.handleContentKey(msg)
+}
+
+// handlePickerKey forwards printable runes to the picker's text input
+// and refilters the result list. Called from handleKey's pre-dispatch
+// guard so plain-letter modal-toggle keys (b, ?) don't swap the picker
+// out when the user is typing into the query. Non-rune picker keys
+// (Esc, Enter, Up/Down, ^j/^k) still flow through the main modal block
+// below in handleKey.
+func (m *Model) handlePickerKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	before := m.modals.picker.input.Value()
+	var cmd tea.Cmd
+	m.modals.picker.input, cmd = m.modals.picker.input.Update(msg)
+	if m.modals.picker.input.Value() != before {
+		m.modals.picker.refilter()
 	}
+	return *m, cmd
 }
 
 // handleContentKey routes keystrokes received while the content pane has
@@ -323,30 +327,6 @@ func (m *Model) handleContentKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return *m, cmd
 }
 
-// handleBacklinksKey routes keystrokes received while the persistent
-// backlinks pane has focus. j/k move the cursor; Enter follows
-// (added in Task 9); Esc restores focus to prevFocus without closing the pane.
-func (m *Model) handleBacklinksKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	refresh := func() {
-		m.refreshBacklinks(m.history.Current())
-		m.ensureCursorVisible(&m.backlinks.vp)
-	}
-	switch {
-	case key.Matches(msg, m.keys.ClearLink): // Esc
-		m.focus = m.modals.prevFocus
-		return *m, nil
-	case key.Matches(msg, m.keys.Down):
-		cursorMoveAndRefresh(&m.backlinks.cursor, len(m.backlinks.items), +1, refresh)
-		return *m, nil
-	case key.Matches(msg, m.keys.Up):
-		cursorMoveAndRefresh(&m.backlinks.cursor, len(m.backlinks.items), -1, refresh)
-		return *m, nil
-	case key.Matches(msg, m.keys.Open):
-		m.followBacklink()
-		return *m, nil
-	}
-	return *m, nil
-}
 
 // handleTreeModalKey routes keystrokes while the tree modal is open.
 // Up/Down/k/j move the cursor; Space toggles a folder; Left/h collapses
