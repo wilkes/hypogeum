@@ -1,6 +1,8 @@
 package tui
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/charmbracelet/bubbles/viewport"
@@ -128,5 +130,44 @@ func TestViewportClamp_RowsPerEntryGreaterThanOne(t *testing.T) {
 	viewportClamp(&vp, 5, 2)
 	if vp.YOffset != 2 {
 		t.Errorf("rowsPerEntry=2 cursor=5 scrolls; YOffset=%d want 2", vp.YOffset)
+	}
+}
+
+func TestOpenFileRecordsVisit(t *testing.T) {
+	dir := t.TempDir()
+	// Create an initial file so New won't fail on an empty tree.
+	initFile := filepath.Join(dir, "init.md")
+	if err := os.WriteFile(initFile, []byte("# Init"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	m, err := New(dir, initFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Create a new file that wasn't opened by New.
+	p := filepath.Join(dir, "n.md")
+	if err := os.WriteFile(p, []byte("# N"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Sanity: Recent rank before openFile shouldn't include p as visited.
+	pre := m.recent.Rank([]string{p})
+	if len(pre) != 1 {
+		t.Fatalf("pre Rank: got %d, want 1", len(pre))
+	}
+	if !pre[0].Visit.IsZero() {
+		t.Errorf("pre Rank: visit should be zero, got %v", pre[0].Visit)
+	}
+
+	m.openFile(p)
+
+	post := m.recent.Rank([]string{p})
+	if len(post) != 1 {
+		t.Fatalf("post Rank: got %d, want 1", len(post))
+	}
+	if post[0].Visit.IsZero() {
+		t.Error("post Rank: visit should be non-zero after openFile")
 	}
 }

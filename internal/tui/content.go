@@ -56,6 +56,11 @@ func linkZoneMarker(i int) (string, string) {
 // openFile records a visit in history and renders the file.
 func (m *Model) openFile(path string) {
 	m.history.Visit(path)
+	if m.recent != nil {
+		if err := m.recent.Record(path); err != nil && m.diag != nil {
+			m.diag.Warn("recent: " + err.Error())
+		}
+	}
 	m.refreshContent(path)
 }
 
