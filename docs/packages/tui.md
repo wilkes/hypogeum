@@ -1,12 +1,12 @@
 # `internal/tui`
 
-Bubble Tea Model that wires the directory tree, the markdown viewport, and the navigation history into the content-first UI. The only package that knows about the terminal. The tree lives in a modal (`^b`); content fills the screen, with a persistent backlinks pane that can open below it (`b`).
+Bubble Tea Model that wires the directory tree, the markdown viewport, and the navigation history into the content-first UI. The only package that knows about the terminal. Content fills the screen; every other surface (tree, file finder, backlinks, logs, help) is a modal — at most one open at a time.
 
 See also: [architecture overview](../architecture.md), [`internal/tree`](tree.md), [`internal/markdown`](markdown.md), [`internal/nav`](nav.md), [link-following plan](../link-following.md).
 
 ## Purpose
 
-Implement the `tea.Model` interface (`Init` / `Update` / `View`) on top of the lower-layer packages. Manage focus between content and the optional backlinks pane, dispatch keystrokes, render the styled output Lip Gloss assembles into a frame. The tree, file finder, backlinks list, log viewer, and help cheat sheet share a single modal surface — at most one is open at a time.
+Implement the `tea.Model` interface (`Init` / `Update` / `View`) on top of the lower-layer packages. Dispatch keystrokes, render the styled output Lip Gloss assembles into a frame. The tree, file finder, backlinks list, log viewer, and help cheat sheet share a single modal surface — at most one is open at a time. Focus is content-only; the `focus` type is a single-value enum that exists to keep `modalUIState.prevFocus` save/restore symmetric.
 
 ## Types
 
@@ -19,11 +19,11 @@ type Model struct {
 
     tree      treeUIState      // flat, cursor, vp, expanded
     content   contentUIState   // viewport, renderer, links, linkCursor
-    backlinks backlinksUIState // open, vp, cursor, items, returnCursor
+    backlinks backlinksUIState // cursor, items, returnCursor
     modals    modalUIState     // kind, vp, picker, prevFocus
 
     history *nav.History
-    focus   focus            // focusContent, focusBacklinks
+    focus   focus            // focusContent (single-value enum)
     width, height int
     keys          keyMap
     status        string
@@ -53,29 +53,26 @@ Everything else is package-private. The Bubble Tea runtime drives the model thro
 - **Auto-open is top-level only.** When `initialFile == ""`, `firstTopLevelFile` picks the first non-directory child of the root. *Don't* descend into subdirectories — earlier versions did, and the result was landing on the deepest leaf alphabetically because directories sort first. ([model.go:319](../../internal/tui/model.go))
 - **Resize rebuilds the renderer.** `WindowSizeMsg` recreates `markdown.Renderer` at the new wrap width and re-renders the current file. Anything that changes content width must do the same.
 - **`refreshContent` resets the link cursor to `-1`, except when `m.pendingPreselectTarget` is set.** Most refreshes (file open, resize, watcher events) reset the cursor. But navigation sources — `followBacklink`, Back (`h`), Forward (`l`) — set `m.pendingPreselectTarget` to the path being left, and `refreshContent` consumes it: scans the new document's link list for the first `LinkLocalFile` whose `Resolved.Target` matches and selects it. The field is single-shot and is cleared on every `refreshContent`. Full rules: [[link-cursor]].
-- **Link bindings are content-pane scoped.** `n`/`p`/`Esc` and link-aware `Enter` only fire when `focus == focusContent` and no modal is open. The tree-modal's own bindings (cursor / Space / Enter) are unaffected. Full state model: [[link-cursor]].
+- **Link bindings are content-scoped.** `n`/`p`/`Esc` and link-aware `Enter` only fire when no modal is open. Each modal's own bindings (tree's cursor/Space/Enter, picker's text-input + ^j/^k, backlinks' j/k/Enter) take precedence. Full state model: [[link-cursor]].
 
 ## Key dispatch shape
 
 ```
 Update(KeyMsg)
-  ├── global: Quit, FocusTog, Back, Forward
-  ├── modal-toggle (B, ^l, ?, ^p, ^b) → openModalWith(kind, prepare)
+  ├── picker text-input grab: if picker is open AND key is KeyRunes → handlePickerKey
+  ├── global: Quit, Back, Forward
+  ├── modal-toggle (b, ^l, ?, ^p, ^b) → openModalWith(kind, prepare)
   ├── modal-open: route to modalTree / modalPicker / modalBacklinks / modalLogs / modalHelp
-  │    └── modalTree: Up/Down/Space/Enter/Esc — Enter on a file closes the modal
-  └── per-focus (modal closed):
-       ├── focusContent   → handleContentKey
-       │    ├── NextLink (n)   → cycleLink(+1) + scrollToLink
-       │    ├── PrevLink (p)   → cycleLink(-1) + scrollToLink
-       │    ├── ClearLink (Esc) → content.linkCursor = -1
-       │    ├── Open (Enter, when a link is selected) → followLink
-       │    └── otherwise      → viewport.Update(msg)  // scrolling
-       └── focusBacklinks → handleBacklinksKey
-            ├── Up/Down → cursorMoveAndRefresh + viewportClamp
-            └── Enter   → followBacklink (records returnCursor)
+  │    └── modalTree: Up/Down/Space/Enter/Esc, ←/h/→/l collapse/expand
+  └── modal closed → handleContentKey
+       ├── NextLink (n)   → cycleLink(+1) + scrollToLink
+       ├── PrevLink (p)   → cycleLink(-1) + scrollToLink
+       ├── ClearLink (Esc) → content.linkCursor = -1
+       ├── Open (Enter, when a link is selected) → followLink
+       └── otherwise      → viewport.Update(msg)  // scrolling
 ```
 
-The cursor-move-and-refresh pattern and the viewport-clamp pattern are extracted into [`dispatch.go`](../../internal/tui/dispatch.go) and shared by the tree, picker, backlinks pane, and backlinks modal.
+The cursor-move-and-refresh pattern and the viewport-clamp pattern are extracted into [`dispatch.go`](../../internal/tui/dispatch.go) and shared by the tree, picker, and backlinks modal.
 
 `followLink` switches on `Resolved.Kind`:
 
@@ -104,9 +101,9 @@ Specs: [unified-finder-recency](../superpowers/specs/2026-05-12-unified-finder-r
 
 ## Backlinks and modal surfaces
 
-The TUI hosts these surfaces beyond the content viewport: the persistent backlinks pane (`b`), the directory tree modal (`^b`), the file finder modal (`^p`), the backlinks modal (`B`), the log viewer modal (`^l`), and the help modal (`?`). They share input rules, geometry, and a single `modals.prevFocus` slot. Each has its own concept doc:
+The TUI hosts these modal surfaces beyond the content viewport: the directory tree (`^b`), the file finder (`^p`), the backlinks list (`b`), the log viewer (`^l`), and the help cheat sheet (`?`). They share input rules, geometry, and a single `modals.prevFocus` slot. Each has its own concept doc:
 
-- [[modal-geometry]] — single-modal invariant, layout recompute on open, auto-collapse below height 20, `Esc` priority chain. `?` is anchored (no swap); `B` and `^l` swap with each other.
+- [[modal-geometry]] — single-modal invariant, layout recompute on open, `Esc` priority chain. `?` is anchored (no swap); the rest swap with each other.
 - [[diagnostics]] — the warn/error stream that feeds the footer transient and the `^l` modal.
 - [[return-cursor]] — single-slot cursor restoration that survives `Enter`-follow → `h`-back round trips on backlinks.
 

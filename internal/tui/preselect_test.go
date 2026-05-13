@@ -92,14 +92,14 @@ func TestPreselect_ConsumerNoMatchLeavesUnselected(t *testing.T) {
 }
 
 // TestPreselect_FollowBacklink_PicksMatchingLink covers the primary case:
-// from a.md, open the backlinks pane, press Enter on the (only) backlink
+// from a.md, open the backlinks modal, press Enter on the (only) backlink
 // (which points at b.md, the file whose only link points to a.md). After
 // follow, we should be on b.md with its [a](a.md) link pre-selected.
 func TestPreselect_FollowBacklink_PicksMatchingLink(t *testing.T) {
 	root, aAbs, bAbs := writePreselectFixture(t)
 	m := sized(t, root, aAbs) // start on a.md
 
-	m = pressRune(t, m, 'b') // open backlinks pane
+	m = pressRune(t, m, 'b') // open backlinks modal
 	if len(m.backlinks.items) != 1 {
 		t.Fatalf("expected 1 backlink (b.md → a.md), got %d", len(m.backlinks.items))
 	}
@@ -140,7 +140,7 @@ func TestPreselect_FollowBacklink_NoMatchFallsThroughToScrollToLine(t *testing.T
 	bAbs := filepath.Join(root, "b.md")
 
 	m := sized(t, root, bAbs) // start on b.md
-	m = pressRune(t, m, 'b')   // open backlinks pane (a.md links to b.md)
+	m = pressRune(t, m, 'b')   // open backlinks modal (a.md links to b.md)
 	if len(m.backlinks.items) != 1 {
 		t.Fatalf("expected 1 backlink (a.md → b.md), got %d", len(m.backlinks.items))
 	}

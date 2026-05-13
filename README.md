@@ -30,14 +30,12 @@ hypogeum ~/notes/index.md # open a specific file; tree roots at its directory
 | `Enter` | Open the selected file |
 | `h` / `←` | Back (collapse folder when tree modal is open) |
 | `l` / `→` | Forward (expand folder when tree modal is open) |
-| `Tab` | Switch between content and backlinks (when backlinks pane is open) |
 | `n` / `p` | Cycle to next / previous link |
 | `Enter` | Follow selected link |
 | `Esc` | Clear link selection |
-| `b` | Toggle backlinks pane |
-| `B` | Backlinks modal |
+| `b` | Open backlinks (modal) |
 | `^b` | Open directory tree (modal) |
-| `^p`          | Open file finder (type to fuzzy-filter; ^j/^k cursor)                |
+| `^p` | Open file finder (type to fuzzy-filter; `^j`/`^k` cursor) |
 | `^l` | Log viewer |
 | `?` | Help (cheat sheet) |
 | `q` | Quit |

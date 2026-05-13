@@ -6,9 +6,9 @@ See also: [architecture](../architecture.md), [docs index](../index.md). Used pr
 
 ## Why it exists
 
-The "scan backlinks one at a time" workflow is: open the pane (`b`), move cursor (`j`/`k`) to an entry, follow it (`Enter`), read the source file briefly, return (`h`), move to the next entry (`j`), repeat. Without restoration, every return drops the user at backlink cursor 0 — they have to scroll back to where they were. With restoration, the loop is tight and the cursor matches their mental model.
+The "scan backlinks one at a time" workflow is: open the modal (`b`), move cursor (`j`/`k`) to an entry, follow it (`Enter`), read the source file briefly, return (`h`), reopen the modal at the same cursor, move to the next entry (`j`), repeat. Without restoration, every return drops the user at backlink cursor 0 — they have to scroll back to where they were. With restoration, the loop is tight and the cursor matches their mental model.
 
-The state to restore is small (which file, which cursor index, which surface — pane or modal), and it's only valid for *one* return — going back twice, forward, or to an unrelated file via the tree should discard it.
+The state to restore is small (which file, which cursor index), and it's only valid for *one* return — going back twice, forward, or to an unrelated file via the tree should discard it.
 
 ## How it works
 
@@ -16,9 +16,8 @@ Single-slot state on the model:
 
 ```go
 type returnCursor struct {
-    sourceFile string             // the file whose backlinks were being navigated
-    cursor     int                // backlinks.cursor at follow time
-    surface    backlinksSurface   // surfacePane | surfaceModal
+    sourceFile string // the file whose backlinks were being navigated
+    cursor     int    // backlinks.cursor at follow time
 }
 
 // stored on the model as m.backlinks.returnCursor (nil when no follow is pending return)
@@ -30,7 +29,6 @@ type returnCursor struct {
 m.backlinks.returnCursor = &returnCursor{
     sourceFile: m.history.Current(),
     cursor:     m.backlinks.cursor,
-    surface:    m.activeBacklinksSurface(),
 }
 ```
 
@@ -38,17 +36,11 @@ m.backlinks.returnCursor = &returnCursor{
 
 ```go
 if rc := m.backlinks.returnCursor; rc != nil && path == rc.sourceFile {
-    m.refreshBacklinks(path)
-    m.backlinks.cursor = clamp(rc.cursor, 0, len(m.backlinks.items)-1)
-    switch rc.surface {
-    case surfacePane:
-        if m.shouldShowBacklinks() {
-            m.focus = focusBacklinks
-        }
-    case surfaceModal:
-        m.modals.kind = modalBacklinks
-        m.refreshBacklinksModal(path)
-    }
+    links := vaultBacklinks(m.vault, path)
+    m.backlinks.items = links
+    m.backlinks.cursor = clamp(rc.cursor, 0, len(links)-1)
+    m.modals.kind = modalBacklinks
+    m.refreshBacklinksModal(path)
     m.backlinks.returnCursor = nil
 }
 ```
@@ -60,6 +52,5 @@ The `path == rc.sourceFile` check is path-keyed, not time-keyed: if the user nav
 - **Single-slot.** Only the most recent follow is remembered. Following a second backlink before returning overwrites the slot. This matches the user's mental model — "the last place I came from" is what `h` should restore.
 - **Path-keyed lifetime, not time-keyed.** A stale `returnCursor` is harmless: it sits there until either the user returns to its `sourceFile` (consumed) or some unrelated path eventually matches `sourceFile` (rare; restoration would still be valid because the cached cursor was at that file's backlink list).
 - **Cursor is clamped on restore.** If the vault refreshed between follow and return and the selected backlink no longer exists, the cursor lands on a neighbor. Test: `TestReturnCursor_ClampsToShrunkList` in `internal/tui/backlinks_test.go`.
-- **Surface restoration matters.** A user who followed from a modal expects to land back in a modal, not in the pane. The slot records which surface was active at follow time; the restore branches on it.
-- **The pane being closed at return time is fine.** If the user closed the pane between follow and return, `m.backlinks.open` is false; we don't reopen it. Cursor is still restored in case they reopen later.
-- **Vault refresh between follow and return is also fine.** `refreshBacklinks` re-queries; the clamp handles list-shrink.
+- **Always restores to the modal.** Earlier versions tracked which surface (pane vs modal) the user was on; the pane was later removed in favor of a modal-only backlinks surface, so the restore now unconditionally reopens the modal.
+- **Vault refresh between follow and return is fine.** The restore re-queries `vault.Backlinks` for the path; the clamp handles list-shrink.

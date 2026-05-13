@@ -19,7 +19,7 @@ func cursorMoveAndRefresh(cursor *int, max, delta int, refresh func()) {
 
 // viewportClamp scrolls vp so the row at cursor*rowsPerEntry is visible.
 // rowsPerEntry is 1 for line-based viewports (tree, picker), and the
-// number of rows each backlinks entry occupies for the backlinks panes.
+// number of rows each backlinks entry occupies in the backlinks modal.
 func viewportClamp(vp *viewport.Model, cursor, rowsPerEntry int) {
 	target := cursor * rowsPerEntry
 	if target < vp.YOffset {

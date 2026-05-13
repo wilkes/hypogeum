@@ -116,8 +116,6 @@ func (m *Model) refreshContent(path string) {
 		m.scrollToLink(m.content.links[m.content.linkCursor])
 		m.applyLinkHighlight()
 	}
-
-	m.refreshBacklinks(path)
 }
 
 // handleFSEvent reacts to a debounced filesystem event. Structure changes
@@ -191,7 +189,7 @@ func (m *Model) handleFSEvent(ev watch.Event) {
 // Caveat: source-file line numbers don't perfectly correspond to
 // rendered-output line numbers (Glamour adjusts for headings, code
 // fences, etc.). The user lands "near" the reference, not exactly on
-// it; the snippet shown in the backlinks pane gives them a visual
+// it; the snippet shown in the backlinks modal gives them a visual
 // landmark to confirm.
 func (m *Model) scrollToLine(n int) {
 	if n < 1 {

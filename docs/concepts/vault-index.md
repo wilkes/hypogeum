@@ -36,9 +36,9 @@ The "name" stored in the index is `strings.ToLower(basenameWithoutExt(path))`. T
 
 ## Invariants / gotchas
 
-- **Vault is best-effort.** If `vault.Build` fails, `tui.New` continues with a nil vault — wikilinks render as broken, backlinks pane stays empty. Same graceful-degradation rule as the watcher.
+- **Vault is best-effort.** If `vault.Build` fails, `tui.New` continues with a nil vault — wikilinks render as broken, the backlinks modal opens empty. Same graceful-degradation rule as the watcher.
 - **`markdown` does not import `vault`.** It defines a `Resolver` interface that `*vault.Vault` happens to satisfy. Tests of `markdown` use a fake. Keeps the package layering clean.
 - **Mixed-syntax indexing is uniform.** A backlink to `notes/foo.md` shows up regardless of whether the linking file used `[[Foo]]` or `[Foo](notes/foo.md)`. The `Kind` field on `Backlink` lets the UI optionally render a small badge.
 - **Renames are not auto-rewritten.** A rename that breaks `[[Old Name]]` in other files surfaces as broken links. This is the desired feedback loop — Claude owns content, hypogeum is a viewer.
 - **Case-insensitive matching is locale-naive.** `strings.ToLower` is ASCII-safe in practice. Vaults with non-ASCII filenames may have surprising matches. Acceptable.
-- **Reverse index is recomputed per call.** A backlinks pane that re-renders on every cursor move would re-iterate. The TUI caches `m.backlinks` after `refreshBacklinks` to avoid this.
+- **Reverse index is recomputed per call.** A backlinks modal that re-queried on every cursor move would re-iterate. The TUI caches `m.backlinks.items` after the modal opens to avoid this.

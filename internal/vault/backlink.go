@@ -6,7 +6,7 @@ import (
 )
 
 // Backlink is one cross-reference *to* a given file. Returned by Backlinks
-// for the TUI to render in the persistent pane and modal.
+// for the TUI to render in the backlinks modal.
 type Backlink struct {
 	SourceFile  string
 	DisplayText string
