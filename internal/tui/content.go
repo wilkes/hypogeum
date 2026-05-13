@@ -7,6 +7,7 @@ import (
 	"github.com/charmbracelet/bubbles/viewport"
 	zone "github.com/lrstanley/bubblezone"
 
+	"github.com/wilkes/hypogeum/internal/code"
 	"github.com/wilkes/hypogeum/internal/markdown"
 	"github.com/wilkes/hypogeum/internal/tree"
 	"github.com/wilkes/hypogeum/internal/watch"
@@ -18,10 +19,11 @@ import (
 // from the latest render; linkCursor indexes into links (-1 when nothing
 // is selected).
 type contentUIState struct {
-	viewport   viewport.Model
-	renderer   *markdown.Renderer
-	links      []markdown.Link
-	linkCursor int
+	viewport     viewport.Model
+	renderer     *markdown.Renderer
+	codeRenderer *code.Renderer
+	links        []markdown.Link
+	linkCursor   int
 }
 
 // linkZoneID returns the BubbleZone id used to track the i-th link in

@@ -10,6 +10,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	zone "github.com/lrstanley/bubblezone"
 
+	"github.com/wilkes/hypogeum/internal/code"
 	"github.com/wilkes/hypogeum/internal/markdown"
 	"github.com/wilkes/hypogeum/internal/nav"
 	"github.com/wilkes/hypogeum/internal/recent"
@@ -156,6 +157,8 @@ func New(root, initialFile string) (Model, error) {
 		return Model{}, err
 	}
 
+	cr := code.NewRenderer(80)
+
 	m := Model{
 		root:         root,
 		rootNode:     rootNode,
@@ -171,9 +174,10 @@ func New(root, initialFile string) (Model, error) {
 			expanded: map[string]bool{},
 		},
 		content: contentUIState{
-			viewport:   viewport.New(0, 0),
-			renderer:   r,
-			linkCursor: -1,
+			viewport:     viewport.New(0, 0),
+			renderer:     r,
+			codeRenderer: cr,
+			linkCursor:   -1,
 		},
 	}
 	m.tree.flat = m.flattenVisible()
@@ -252,6 +256,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if r, err := markdown.NewRenderer(renderWidth, rOpts...); err == nil {
 			m.content.renderer = r
 		}
+		m.content.codeRenderer = code.NewRenderer(renderWidth)
 		if cur := m.history.Current(); cur != "" {
 			m.refreshContent(cur)
 		}
