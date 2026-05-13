@@ -419,7 +419,10 @@ func (r *Renderer) preprocessEmbeds(src, base string) (string, []string, []Link)
 		l := Link{
 			Text: em.Path,
 			Href: body,
-			Row:  -1,
+			// Row=-1 is the no-scroll sentinel honored by
+			// (*Model).scrollToLink — embeds have no representative
+			// single line, so cursor moves but viewport stays put.
+			Row: -1,
 			Resolved: ResolvedLink{
 				Kind:   LinkLocalFile,
 				Target: absPath,
