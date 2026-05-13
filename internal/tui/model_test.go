@@ -23,15 +23,17 @@ func TestModel_BootsAndRendersFirstFile(t *testing.T) {
 		t.Errorf("expected rendered content to contain 'Index', got:\n%s", view)
 	}
 
-	// After ^b, the tree pane should mention the markdown files we wrote.
+	// After ^b, the tree modal shows the root level: index.md is at the
+	// top level so it's visible; notes/ is a folder at the top level and
+	// also visible (its children are hidden until the user expands).
 	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyCtrlB})
 	m = updated.(Model)
 	view = m.View()
 	if !strings.Contains(view, "index.md") {
 		t.Errorf("expected tree to contain index.md after ^b, got:\n%s", view)
 	}
-	if !strings.Contains(view, "first.md") {
-		t.Errorf("expected tree to contain first.md after ^b, got:\n%s", view)
+	if !strings.Contains(view, "notes") {
+		t.Errorf("expected tree to contain notes folder after ^b, got:\n%s", view)
 	}
 }
 

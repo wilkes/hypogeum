@@ -80,9 +80,9 @@ func (m Model) renderTree() string {
 		}
 		name := row.node.Name
 		if row.node.IsDir {
-			chevron := "▾ "
-			if m.isCollapsed(row.node.Path) {
-				chevron = "▸ "
+			chevron := "▸ "
+			if m.isExpanded(row.node) {
+				chevron = "▾ "
 			}
 			name = chevron + name + "/"
 		} else {

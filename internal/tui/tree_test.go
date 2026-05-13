@@ -13,6 +13,12 @@ func TestModel_TreeNavigationAndOpen(t *testing.T) {
 	m := sized(t, root, "")
 
 	want := filepath.Join(root, "notes", "first.md")
+	// Open the modal first (which calls expandAncestorsOf and clears the
+	// map), then expand notes/ so first.md becomes reachable.
+	m = pressKey(t, m, tea.KeyMsg{Type: tea.KeyCtrlB})
+	m.tree.expanded[filepath.Join(root, "notes")] = true
+	m.tree.flat = m.flattenVisible()
+	m.refreshTreeVP()
 	target := m.rowIndexByPath(want)
 	if target < 0 {
 		t.Fatalf("first.md not found in flattened tree: %+v", m.tree.flat)
@@ -97,47 +103,58 @@ func TestModel_TreeModalEscClosesWithoutOpening(t *testing.T) {
 	}
 }
 
-// TestModel_CollapseFolderHidesChildren checks that pressing space on a
-// directory row inside the tree modal removes its descendants from flatTree.
-func TestModel_CollapseFolderHidesChildren(t *testing.T) {
+// TestModel_ToggleFolderShowsAndHidesChildren checks that Space on a
+// collapsed folder reveals its children, and a second Space hides them
+// again. Default-collapsed means a fresh tree has all non-ancestor
+// folders closed, so the first toggle is the expand, the second is the
+// collapse.
+func TestModel_ToggleFolderShowsAndHidesChildren(t *testing.T) {
 	root := writeFixture(t)
-	m := sized(t, root, "")
+	// Open on a top-level file so notes/ stays off the ancestor chain
+	// (i.e. starts collapsed).
+	m := sized(t, root, filepath.Join(root, "index.md"))
 
 	notesDir := filepath.Join(root, "notes")
 	target := m.rowIndexByPath(notesDir)
 	if target < 0 || !m.tree.flat[target].node.IsDir {
 		t.Fatalf("notes/ directory row not found in flatTree")
 	}
-	m = driveCursorTo(t, m, target)
-
+	for _, row := range m.tree.flat {
+		if strings.HasPrefix(row.node.Path, notesDir+string(filepath.Separator)) {
+			t.Fatalf("notes/ children should be hidden by default, got %s", row.node.Path)
+		}
+	}
 	before := len(m.tree.flat)
+
+	// Drive cursor + Space to expand.
+	m = driveCursorTo(t, m, target)
 	m = pressKey(t, m, tea.KeyMsg{Type: tea.KeySpace})
 
-	if !m.isCollapsed(notesDir) {
-		t.Fatalf("notes/ should be collapsed after space")
+	if !m.tree.expanded[notesDir] {
+		t.Fatalf("notes/ should be expanded after first Space")
 	}
-	if len(m.tree.flat) >= before {
-		t.Errorf("flatTree should shrink on collapse: before=%d after=%d", before, len(m.tree.flat))
+	if len(m.tree.flat) <= before {
+		t.Errorf("flatTree should grow on expand: before=%d after=%d", before, len(m.tree.flat))
+	}
+
+	// Second Space collapses.
+	m = pressKey(t, m, tea.KeyMsg{Type: tea.KeySpace})
+	if m.tree.expanded[notesDir] {
+		t.Fatalf("notes/ should be collapsed after second Space")
+	}
+	if len(m.tree.flat) != before {
+		t.Errorf("flatTree should return to original size after collapse: before=%d after=%d", before, len(m.tree.flat))
 	}
 	for _, row := range m.tree.flat {
 		if strings.HasPrefix(row.node.Path, notesDir+string(filepath.Separator)) {
 			t.Errorf("collapsed descendant still in flatTree: %s", row.node.Path)
 		}
 	}
-
-	// Toggling again restores the descendants.
-	m = pressKey(t, m, tea.KeyMsg{Type: tea.KeySpace})
-	if m.isCollapsed(notesDir) {
-		t.Fatalf("notes/ should be expanded again")
-	}
-	if len(m.tree.flat) != before {
-		t.Errorf("flatTree should restore on re-expand: before=%d after=%d", before, len(m.tree.flat))
-	}
 }
 
-// TestModel_SelectInTreeExpandsAncestors checks that navigating to a file
-// inside a collapsed folder auto-expands it so the cursor lands on a
-// visible row.
+// TestModel_SelectInTreeExpandsAncestors checks that selectInTree
+// expands every directory on the target file's ancestor chain so the
+// cursor lands on a visible row, and collapses everything else.
 func TestModel_SelectInTreeExpandsAncestors(t *testing.T) {
 	root := writeFixture(t)
 	m := sized(t, root, "")
@@ -145,25 +162,24 @@ func TestModel_SelectInTreeExpandsAncestors(t *testing.T) {
 	deep := filepath.Join(root, "notes", "sub", "deep.md")
 	notesDir := filepath.Join(root, "notes")
 	subDir := filepath.Join(root, "notes", "sub")
+	otherDir := filepath.Join(root, "other") // expanded by user before navigation
 
-	// Force both ancestors collapsed.
-	m.tree.expanded[notesDir] = false
-	m.tree.expanded[subDir] = false
+	// User manually expands an unrelated branch; selectInTree should
+	// re-derive expansion state from the new file's chain only, so this
+	// expansion must not survive the call.
+	m.tree.expanded[otherDir] = true
 	m.tree.flat = m.flattenVisible()
-
-	for _, row := range m.tree.flat {
-		if row.node.Path == deep {
-			t.Fatalf("precondition: deep.md should be hidden under collapsed parents")
-		}
-	}
 
 	m.selectInTree(deep)
 
-	if m.isCollapsed(notesDir) {
+	if !m.tree.expanded[notesDir] {
 		t.Errorf("notes/ should be expanded after selectInTree(deep)")
 	}
-	if m.isCollapsed(subDir) {
+	if !m.tree.expanded[subDir] {
 		t.Errorf("notes/sub should be expanded after selectInTree(deep)")
+	}
+	if m.tree.expanded[otherDir] {
+		t.Errorf("other/ (off the ancestor chain) should be collapsed after selectInTree(deep)")
 	}
 	if m.tree.cursor >= len(m.tree.flat) || m.tree.flat[m.tree.cursor].node.Path != deep {
 		t.Errorf("cursor should land on deep.md, got row %d in tree of %d", m.tree.cursor, len(m.tree.flat))
