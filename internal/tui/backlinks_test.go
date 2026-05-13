@@ -430,6 +430,11 @@ func TestTab_ThreeWayCycleWhenPaneVisible(t *testing.T) {
 
 	m := sized(t, dir, "")
 	m.openFile(filepath.Join(dir, "c.md"))
+	// Reveal the tree so the three-way cycle has all three panes to visit.
+	m = pressKey(t, m, tea.KeyMsg{Type: tea.KeyCtrlB})
+	if !m.tree.visible {
+		t.Fatalf("setup: ^b should reveal tree")
+	}
 	m = pressRune(t, m, 'b')          // pane open, focus on backlinks
 	if m.focus != focusBacklinks {
 		t.Fatalf("setup: expected focusBacklinks, got %v", m.focus)
@@ -459,18 +464,23 @@ func TestTab_TwoWayWhenPaneClosed(t *testing.T) {
 	writeTUITestFile(t, dir, "a.md", "hi.")
 	m := sized(t, dir, "")
 	m.openFile(filepath.Join(dir, "a.md"))
+	// Reveal the tree to exercise the two-way tree ↔ content cycle.
+	m = pressKey(t, m, tea.KeyMsg{Type: tea.KeyCtrlB})
+	if !m.tree.visible {
+		t.Fatalf("setup: ^b should reveal tree")
+	}
 
-	// Pane closed (default). Cycle: tree ↔ content.
+	// Backlinks pane closed. Cycle: tree ↔ content (backlinks skipped).
+	if m.focus != focusContent {
+		t.Fatalf("after ^b reveals tree, focus stays on content, got %v", m.focus)
+	}
+	m = pressKey(t, m, tea.KeyMsg{Type: tea.KeyTab})
 	if m.focus != focusTree {
-		t.Fatalf("default focus should be tree, got %v", m.focus)
+		t.Fatalf("expected focusTree, got %v", m.focus)
 	}
 	m = pressKey(t, m, tea.KeyMsg{Type: tea.KeyTab})
 	if m.focus != focusContent {
-		t.Fatalf("expected focusContent, got %v", m.focus)
-	}
-	m = pressKey(t, m, tea.KeyMsg{Type: tea.KeyTab})
-	if m.focus != focusTree {
-		t.Fatalf("expected focusTree (skipping invisible backlinks), got %v", m.focus)
+		t.Fatalf("expected focusContent (skipping invisible backlinks), got %v", m.focus)
 	}
 }
 
@@ -481,14 +491,14 @@ func TestFocus_NoBacklinksLeakAfterPaneCycleViaModal(t *testing.T) {
 
 	m := sized(t, dir, "")
 	m.openFile(filepath.Join(dir, "c.md"))
-	if m.focus != focusTree {
-		t.Fatalf("setup: expected focusTree, got %v", m.focus)
+	if m.focus != focusContent {
+		t.Fatalf("setup: expected focusContent, got %v", m.focus)
 	}
 
-	m = pressRune(t, m, 'b')                            // pane open, focus=backlinks, prevFocus=tree
-	m = pressRune(t, m, 'B')                            // modal opens (BUG: prevFocus stomped to backlinks)
-	m = pressKey(t, m, tea.KeyMsg{Type: tea.KeyEsc})    // modal closes
-	m = pressRune(t, m, 'b')                            // pane closes
+	m = pressRune(t, m, 'b')                         // pane open, focus=backlinks, prevFocus=content
+	m = pressRune(t, m, 'B')                         // modal opens (BUG: prevFocus stomped to backlinks)
+	m = pressKey(t, m, tea.KeyMsg{Type: tea.KeyEsc}) // modal closes
+	m = pressRune(t, m, 'b')                         // pane closes
 
 	if m.backlinks.open {
 		t.Fatalf("expected pane closed after second b, got open")

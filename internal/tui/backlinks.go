@@ -267,22 +267,32 @@ func (m *Model) maybeRestoreReturnCursor(path string) {
 	}
 }
 
-// nextFocus returns the focus that Tab should move to. Three-way
-// cycle (tree → content → backlinks → tree) when the persistent pane
-// is open and visible; otherwise two-way (tree ↔ content).
+// nextFocus returns the focus that Tab should move to. The cycle
+// only visits panes that are currently rendered: tree (if shown),
+// content (always), backlinks (if shown). Hidden panes are skipped
+// rather than cycled into and snapped back.
 func (m Model) nextFocus() focus {
-	if m.shouldShowBacklinks() {
-		switch m.focus {
-		case focusTree:
+	showTree := m.shouldShowTree()
+	showBacklinks := m.shouldShowBacklinks()
+	switch m.focus {
+	case focusTree:
+		if showBacklinks {
 			return focusContent
-		case focusContent:
+		}
+		return focusContent
+	case focusContent:
+		if showBacklinks {
 			return focusBacklinks
-		case focusBacklinks:
+		}
+		if showTree {
 			return focusTree
 		}
-	}
-	if m.focus == focusTree {
+		return focusContent
+	case focusBacklinks:
+		if showTree {
+			return focusTree
+		}
 		return focusContent
 	}
-	return focusTree
+	return focusContent
 }

@@ -117,7 +117,12 @@ func TestModel_EnterOnExternalLinkSetsStatus(t *testing.T) {
 func TestModel_LinkKeysIgnoredWhenTreeFocused(t *testing.T) {
 	root := writeFixture(t)
 	m := sized(t, root, "")
-	// Don't switch focus — tree is focused by default.
+	// Reveal+focus the tree so 'n' is routed to the tree handler, not content.
+	m = pressKey(t, m, tea.KeyMsg{Type: tea.KeyCtrlB})
+	m = pressKey(t, m, tea.KeyMsg{Type: tea.KeyTab})
+	if m.focus != focusTree {
+		t.Fatalf("setup: expected focusTree, got %v", m.focus)
+	}
 	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'n'}})
 	m = updated.(Model)
 	if m.content.linkCursor != -1 {

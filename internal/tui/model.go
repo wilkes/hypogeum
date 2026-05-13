@@ -149,14 +149,14 @@ func New(root, initialFile string) (Model, error) {
 		root:     root,
 		rootNode: rootNode,
 		history:  nav.New(),
-		focus:    focusTree,
+		focus:    focusContent,
 		keys:     defaultKeys(),
 		vault:    v,
 		recent:   rstore,
 		diag:     diag,
 		tree: treeUIState{
 			vp:       viewport.New(0, 0),
-			visible:  true,
+			visible:  false,
 			expanded: map[string]bool{},
 		},
 		content: contentUIState{

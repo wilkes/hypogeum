@@ -25,29 +25,38 @@ func TestModel_TreeNavigationAndOpen(t *testing.T) {
 	}
 }
 
-// TestModel_ToggleTreeHidesPane checks that ^b hides the tree pane: the
-// rendered View() drops tree row names and treeWidth() falls to 0 so the
-// content pane gets the full width.
-func TestModel_ToggleTreeHidesPane(t *testing.T) {
+// TestModel_ToggleTreeShowsAndHidesPane checks that ^b reveals the tree
+// (hidden by default) and a second ^b hides it again: treeWidth toggles
+// between zero and nonzero, and the rendered View() gains/loses tree rows.
+func TestModel_ToggleTreeShowsAndHidesPane(t *testing.T) {
 	root := writeFixture(t)
 	m := sized(t, root, "")
 
-	if !m.tree.visible {
-		t.Fatalf("tree should default to visible")
+	if m.tree.visible {
+		t.Fatalf("tree should default to hidden")
 	}
-	if w := m.treeWidth(); w == 0 {
-		t.Fatalf("visible tree should have nonzero width, got 0")
-	}
-	beforeView := m.View()
-	if !strings.Contains(beforeView, "notes") {
-		t.Fatalf("expected tree pane to mention 'notes' before hide, got: %q", beforeView)
+	if w := m.treeWidth(); w != 0 {
+		t.Fatalf("hidden tree should have zero width, got %d", w)
 	}
 
+	// First ^b reveals the tree.
 	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyCtrlB})
 	m = updated.(Model)
+	if !m.tree.visible {
+		t.Fatalf("first ^b should reveal tree")
+	}
+	if w := m.treeWidth(); w == 0 {
+		t.Errorf("visible tree should have nonzero width, got 0")
+	}
+	if !strings.Contains(m.View(), "notes") {
+		t.Errorf("expected tree pane to mention 'notes' after reveal")
+	}
 
+	// Second ^b hides it again.
+	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyCtrlB})
+	m = updated.(Model)
 	if m.tree.visible {
-		t.Errorf("treeVisible should be false after ^b")
+		t.Errorf("treeVisible should be false after second ^b")
 	}
 	if w := m.treeWidth(); w != 0 {
 		t.Errorf("hidden tree should have zero width, got %d", w)
@@ -137,8 +146,12 @@ func TestModel_SelectInTreeExpandsAncestors(t *testing.T) {
 func TestModel_TreeForceHiddenAt60Cols(t *testing.T) {
 	root := writeFixture(t)
 	m := sized(t, root, "")
+	// Reveal+focus the tree at full width so the narrow resize has
+	// something to force-hide and snap focus away from.
+	m = pressKey(t, m, tea.KeyMsg{Type: tea.KeyCtrlB})
+	m = pressKey(t, m, tea.KeyMsg{Type: tea.KeyTab})
 	if m.focus != focusTree {
-		t.Fatalf("precondition: model defaults to focusTree, got %v", m.focus)
+		t.Fatalf("precondition: tree should be focused after ^b+Tab, got %v", m.focus)
 	}
 
 	updated, _ := m.Update(tea.WindowSizeMsg{Width: 60, Height: 30})
@@ -218,9 +231,11 @@ func TestModel_TreeScrollsBackUp(t *testing.T) {
 func TestModel_TreeShownAtNarrowWidths(t *testing.T) {
 	root := writeFixture(t)
 	m := sized(t, root, "")
-
+	// Reveal the tree (hidden by default) so the width-gate is what
+	// suppresses display, not the user's intent.
+	m = pressKey(t, m, tea.KeyMsg{Type: tea.KeyCtrlB})
 	if !m.tree.visible {
-		t.Fatalf("tree should default to visible")
+		t.Fatalf("^b should reveal tree")
 	}
 
 	cases := []struct {
@@ -248,6 +263,12 @@ func TestModel_TreeShownAtNarrowWidths(t *testing.T) {
 func TestModel_ToggleTreeNarrowFlipsIntentOnly(t *testing.T) {
 	root := writeFixture(t)
 	m := sized(t, root, "")
+	// Reveal the tree at full width so the precondition (intent=true) holds
+	// after the narrow resize.
+	m = pressKey(t, m, tea.KeyMsg{Type: tea.KeyCtrlB})
+	if !m.tree.visible {
+		t.Fatalf("^b should reveal tree")
+	}
 
 	updated, _ := m.Update(tea.WindowSizeMsg{Width: 60, Height: 30})
 	m = updated.(Model)
@@ -286,6 +307,12 @@ func TestModel_ToggleTreeNarrowFlipsIntentOnly(t *testing.T) {
 func TestModel_TreeReturnsOnGrow(t *testing.T) {
 	root := writeFixture(t)
 	m := sized(t, root, "")
+	// Reveal the tree at full width so the grow restores something
+	// the user actually asked for.
+	m = pressKey(t, m, tea.KeyMsg{Type: tea.KeyCtrlB})
+	if !m.tree.visible {
+		t.Fatalf("^b should reveal tree")
+	}
 
 	updated, _ := m.Update(tea.WindowSizeMsg{Width: 60, Height: 30})
 	m = updated.(Model)

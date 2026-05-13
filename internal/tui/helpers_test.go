@@ -106,10 +106,14 @@ func renderAndScan(t *testing.T, m Model, waitID string) {
 	t.Fatalf("zone %q never registered after View()", waitID)
 }
 
-// switchToContent presses Tab to move focus to the content pane.
-// Used as a setup step for link-cursor tests.
+// switchToContent ensures focus is on the content pane. Since the tree
+// is hidden by default and `New` starts on content, this is usually a
+// no-op — but tests that have moved focus elsewhere call it to return.
 func switchToContent(t *testing.T, m Model) Model {
 	t.Helper()
+	if m.focus == focusContent {
+		return m
+	}
 	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyTab})
 	m = updated.(Model)
 	if m.focus != focusContent {
@@ -147,8 +151,19 @@ func pressRune(t *testing.T, m Model, r rune) Model {
 // driveCursorTo presses up/down until m.tree.cursor reaches target, failing
 // the test if the cursor ever fails to advance (a stuck cursor would
 // otherwise loop forever).
+//
+// Reveals the tree and focuses it first — the tree is hidden by default,
+// so without revealing it, KeyDown/KeyUp wouldn't reach the tree handler.
 func driveCursorTo(t *testing.T, m Model, target int) Model {
 	t.Helper()
+	if !m.tree.visible {
+		updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyCtrlB})
+		m = updated.(Model)
+	}
+	if m.focus != focusTree && m.shouldShowTree() {
+		updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyTab})
+		m = updated.(Model)
+	}
 	for m.tree.cursor != target {
 		key := tea.KeyMsg{Type: tea.KeyDown}
 		if m.tree.cursor > target {
