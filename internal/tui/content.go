@@ -88,11 +88,13 @@ func (m *Model) navigateTo(path string) {
 // touching history. Used by back/forward and on resize. Also refreshes
 // the link list and clears any active link selection.
 func (m *Model) refreshContent(path string) {
-	// Single-shot pre-select: clear the field unconditionally before any
+	// Single-shot pre-select: clear the fields unconditionally before any
 	// early return, so a read or render failure here can't leak a stale
 	// target into the next refreshContent.
 	target := m.pendingPreselectTarget
+	preselectRange := m.pendingPreselectRange
 	m.pendingPreselectTarget = ""
+	m.pendingPreselectRange = nil
 
 	src, err := os.ReadFile(path)
 	if err != nil {
@@ -153,11 +155,24 @@ func (m *Model) refreshContent(path string) {
 
 	m.content.linkCursor = -1
 	if target != "" {
+		// Find the best match: same target, and if multiple, prefer the
+		// one whose Range matches preselectRange (set by the originating
+		// navigation). Falls back to first target match.
+		best := -1
 		for i, l := range links {
-			if l.Resolved.Kind == markdown.LinkLocalFile && l.Resolved.Target == target {
-				m.content.linkCursor = i
+			if l.Resolved.Kind != markdown.LinkLocalFile || l.Resolved.Target != target {
+				continue
+			}
+			if best < 0 {
+				best = i
+			}
+			if rangesEqual(l.Resolved.Range, preselectRange) {
+				best = i
 				break
 			}
+		}
+		if best >= 0 {
+			m.content.linkCursor = best
 		}
 	}
 	if m.content.linkCursor >= 0 {
@@ -268,6 +283,15 @@ func (m *Model) scrollToLine(n int) {
 		target = maxOffset
 	}
 	m.content.viewport.SetYOffset(target)
+}
+
+// rangesEqual reports whether two *LineRange values describe the same
+// range. Two nil pointers are equal; one nil and one not are unequal.
+func rangesEqual(a, b *markdown.LineRange) bool {
+	if a == nil || b == nil {
+		return a == nil && b == nil
+	}
+	return a.Start == b.Start && a.End == b.End
 }
 
 // allVaultMarkdownPaths walks m.rootNode and returns every markdown file

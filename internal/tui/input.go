@@ -262,8 +262,10 @@ func (m *Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	case key.Matches(msg, m.keys.Back):
 		leaving := m.history.Current()
+		leavingRange := m.content.rangeHighlight
 		if path, ok := m.history.Back(); ok {
 			m.pendingPreselectTarget = leaving
+			m.pendingPreselectRange = leavingRange
 			m.refreshContent(path)
 			m.selectInTree(path)
 			m.maybeRestoreReturnCursor(path)
@@ -272,8 +274,10 @@ func (m *Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	case key.Matches(msg, m.keys.Forward):
 		leaving := m.history.Current()
+		leavingRange := m.content.rangeHighlight
 		if path, ok := m.history.Forward(); ok {
 			m.pendingPreselectTarget = leaving
+			m.pendingPreselectRange = leavingRange
 			m.refreshContent(path)
 			m.selectInTree(path)
 		}

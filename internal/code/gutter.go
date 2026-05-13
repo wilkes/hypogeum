@@ -171,23 +171,12 @@ func stripSGR(s string) string {
 	return b.String()
 }
 
-// formatLineNumber right-aligns n in a field of width w, wrapped in a
-// dim SGR sequence and reset, with a trailing separator space. The
+// formatLineNumberFor right-aligns n in a field of width w, wrapped in
+// a dim SGR sequence and reset, with a trailing separator space. The
 // reset is critical — without it the dim attribute would bleed into
 // the source-line tokens that follow.
-func formatLineNumber(n, w int) string {
-	return formatLineNumberFor(n, w, nil)
-}
-
-// blankGutter is formatLineNumber for continuation rows. Same width
-// (w padding + 1 separator) as a numbered gutter so columns align;
-// no SGR attribute applied so no color can leak into the column.
-func blankGutter(w int) string {
-	return blankGutterFor(w, 0, nil)
-}
-
-// formatLineNumberFor is formatLineNumber with an optional highlight
-// range. When n falls inside hi, the gutter cell renders in
+//
+// When hi is non-nil and n falls inside hi, the gutter cell renders in
 // reverse-video instead of dim so the eye can find the referenced
 // span. The reverse attribute is closed with \x1b[27m (not the full
 // 0m reset) so any SGR state in the source body that follows is

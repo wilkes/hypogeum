@@ -146,8 +146,9 @@ func nodeText(n ast.Node, source []byte) string {
 }
 
 // lineFragmentRegex matches "L<n>" or "L<n>-L<n>" with no surrounding
-// characters. Kept separate from internal/embed.lineSpec so the markdown
-// package doesn't import embed.
+// characters. Kept separate from internal/embed.lineSpec because the
+// two grammars differ — embed.lineSpec also accepts a +<context>
+// suffix, which is not part of the markdown link fragment grammar.
 var lineFragmentRegex = regexp.MustCompile(`^L(\d+)(?:-L(\d+))?$`)
 
 // parseLineFragment returns a *LineRange when fragment is exactly a

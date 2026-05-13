@@ -36,7 +36,7 @@ func TestRefreshContent_CodeFile_DispatchesToCodeRenderer(t *testing.T) {
 	if strings.TrimSpace(view) == "" {
 		t.Error("viewport empty after refreshContent on .go file")
 	}
-	// The dim SGR is emitted by formatLineNumber in internal/code/gutter.go
+	// The dim SGR is emitted by formatLineNumberFor in internal/code/gutter.go
 	// for every gutter row. Glamour's markdown renderer doesn't use dim,
 	// so this is a marker that uniquely proves the dispatch routed
 	// through code.Renderer rather than the markdown path.

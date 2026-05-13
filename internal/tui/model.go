@@ -76,6 +76,13 @@ type Model struct {
 	// after consumption (whether or not a match was found).
 	pendingPreselectTarget string
 
+	// pendingPreselectRange disambiguates when several inline links share
+	// the same target (e.g. two #L-range links into the same source
+	// file). When set, refreshContent prefers a link whose Resolved.Range
+	// matches; otherwise it falls back to the first target match. Set
+	// alongside pendingPreselectTarget and cleared on the same lifecycle.
+	pendingPreselectRange *markdown.LineRange
+
 	// pendingExternal is set when the user presses Enter on an external
 	// link. The footer shows a "press Enter again to open <url>" prompt;
 	// a second Enter exec's the opener and clears the field, any other
