@@ -7,6 +7,7 @@ package embed
 
 import (
 	"errors"
+	"fmt"
 	"regexp"
 	"strconv"
 	"strings"
@@ -47,8 +48,11 @@ func ParseEmbedToken(body string) (*Embed, error) {
 	}
 	m := lineSpec.FindStringSubmatch(frag)
 	if m == nil {
-		return nil, errors.New("invalid line spec: " + frag)
+		return nil, fmt.Errorf("invalid line spec: %q", frag)
 	}
+	// strconv.Atoi never returns an error here because the regex `\d+`
+	// matched: any overflowing digit run produces 0, which fails the
+	// start < 1 check below.
 	start, _ := strconv.Atoi(m[1])
 	if start < 1 {
 		return nil, errors.New("line numbers are 1-indexed")

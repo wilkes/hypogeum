@@ -2,6 +2,7 @@ package embed
 
 import (
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -60,22 +61,32 @@ func TestParseEmbedToken_TrimmedWhitespace(t *testing.T) {
 }
 
 func TestParseEmbedToken_Errors(t *testing.T) {
-	cases := []string{
-		"",                    // empty
-		"  ",                  // whitespace only
-		"main.go#L",           // empty line spec
-		"main.go#L0",          // zero is invalid (1-indexed)
-		"main.go#Labc",        // non-numeric
-		"main.go#L10-L5",      // inverted range
-		"main.go#L10-L20+",    // missing context number
-		"main.go#L10-L20+abc", // non-numeric context
-		"main.go#L10-",        // partial range
-		"main.go#L-L20",       // partial range
-		"main.go#XYZ",         // not a line spec at all (would route to wikilink/anchor elsewhere)
+	cases := []struct {
+		name       string
+		body       string
+		wantSubstr string // substring of the expected error message
+	}{
+		{"empty", "", "empty embed token"},
+		{"whitespace_only", "  ", "empty embed token"},
+		{"empty_line_spec", "main.go#L", "invalid line spec"},
+		{"zero_start", "main.go#L0", "1-indexed"},
+		{"non_numeric_line", "main.go#Labc", "invalid line spec"},
+		{"inverted_range", "main.go#L10-L5", "inverted range"},
+		{"missing_context_number", "main.go#L10-L20+", "invalid line spec"},
+		{"non_numeric_context", "main.go#L10-L20+abc", "invalid line spec"},
+		{"partial_range_trailing", "main.go#L10-", "invalid line spec"},
+		{"partial_range_leading", "main.go#L-L20", "invalid line spec"},
+		{"non_line_fragment", "main.go#XYZ", "invalid line spec"},
 	}
-	for _, body := range cases {
-		if got, err := ParseEmbedToken(body); err == nil {
-			t.Errorf("body %q: expected error, got %+v", body, got)
-		}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := ParseEmbedToken(tc.body)
+			if err == nil {
+				t.Fatalf("body %q: expected error, got %+v", tc.body, got)
+			}
+			if !strings.Contains(err.Error(), tc.wantSubstr) {
+				t.Errorf("body %q: error %q does not contain %q", tc.body, err.Error(), tc.wantSubstr)
+			}
+		})
 	}
 }
