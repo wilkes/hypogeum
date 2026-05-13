@@ -353,3 +353,18 @@ func TestHighlightMarker_NoneSelectedWhenIndexNegative(t *testing.T) {
 	}
 }
 
+func TestHighlightMarker_WrappedLinkHighlightsEverySegment(t *testing.T) {
+	// A sentinel-bracketed link whose visible text spans three rows
+	// (two embedded newlines, as Glamour would emit after word-wrap).
+	// Each row's link contribution must be wrapped independently in
+	// reverse-video SGR so Glamour's per-row \e[0m tail doesn't kill
+	// the highlight on continuation rows.
+	in := "a\x1cone\ntwo\nthree\x1e b"
+	marker := HighlightMarker(0)
+	cleaned, _ := stripSentinels(in, marker)
+	want := "a\x1b[7mone\x1b[27m\n\x1b[7mtwo\x1b[27m\n\x1b[7mthree\x1b[27m b"
+	if cleaned != want {
+		t.Errorf("multi-segment highlight: got %q want %q", cleaned, want)
+	}
+}
+
