@@ -83,6 +83,32 @@ func TestRender_NoTrailingNewline_StillCountsCorrectly(t *testing.T) {
 	}
 }
 
+func TestRender_LongLine_WrapsWithBlankContinuationGutter(t *testing.T) {
+	r := NewRenderer(40) // narrow terminal
+	longLine := strings.Repeat("a", 100)
+	src := []byte(longLine + "\n")
+	out, err := r.Render("note.txt", src)
+	if err != nil {
+		t.Fatalf("Render returned error: %v", err)
+	}
+	lines := strings.Split(strings.TrimRight(out, "\n"), "\n")
+	if len(lines) < 2 {
+		t.Fatalf("expected wrap to produce >= 2 output rows, got %d:\n%q", len(lines), out)
+	}
+
+	// Continuation row(s) must NOT start with an SGR escape — that
+	// would mean a color is leaking into the gutter column.
+	for i := 1; i < len(lines); i++ {
+		if strings.HasPrefix(lines[i], "\x1b[") {
+			t.Errorf("continuation row %d starts with SGR escape (color leak into gutter): %q", i, lines[i])
+		}
+		stripped := stripANSI(lines[i])
+		if len(stripped) > 0 && stripped[0] != ' ' {
+			t.Errorf("continuation row %d has non-blank gutter: %q", i, stripped)
+		}
+	}
+}
+
 // stripANSI is a test-only helper that removes ANSI escape sequences so
 // assertions can check the user-visible text without coupling to color
 // codes.

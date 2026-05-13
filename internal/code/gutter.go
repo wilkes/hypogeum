@@ -3,18 +3,22 @@ package code
 import (
 	"strconv"
 	"strings"
+
+	"github.com/charmbracelet/x/ansi"
 )
 
 // addGutter prepends a faint right-aligned line-number gutter to each
-// source line of formatted. The gutter width is fixed for the whole
-// file — derived from the total line count so all numbers align —
-// followed by a single-space separator column.
+// source line of formatted, soft-wrapping rows longer than contentWidth.
+// Continuation rows get a blank (uncolored) gutter so per-source-line
+// numbering stays one-per-source-line.
 //
-// formatted is the Chroma terminal256 output. Chroma emits a final
-// SGR reset *after* the last newline, so a raw HasSuffix("\n") check
-// would always be false and produce a phantom trailing row. We instead
-// measure trailing-newline-ness against the SGR-stripped tail.
-func addGutter(formatted string) string {
+// formatted is the Chroma terminal256 output; each source line ends
+// with "\n". contentWidth is the total renderer width (gutter + body).
+//
+// Chroma emits a final SGR reset *after* the last newline, so we
+// measure trailing-newline-ness against the SGR-stripped tail to
+// avoid an off-by-one line count.
+func addGutter(formatted string, contentWidth int) string {
 	if formatted == "" {
 		return ""
 	}
@@ -27,37 +31,52 @@ func addGutter(formatted string) string {
 	}
 
 	gutterWidth := len(strconv.Itoa(total))
+	bodyWidth := contentWidth - gutterWidth - 1 // -1 for the separator space
+	if bodyWidth < 1 {
+		bodyWidth = 1
+	}
+
 	var b strings.Builder
 	b.Grow(len(formatted) + total*(gutterWidth+9))
 
 	lineNum := 1
 	start := 0
 	emitted := 0
+	emit := func(row string) {
+		// Skip the trailing SGR-only tail Chroma emits after the
+		// final newline — it has no source content.
+		if emitted == total && stripSGR(row) == "" {
+			return
+		}
+		wrapped := ansi.Wrap(row, bodyWidth, "")
+		rows := strings.Split(wrapped, "\n")
+		for i, sub := range rows {
+			if i == 0 {
+				b.WriteString(formatLineNumber(lineNum, gutterWidth))
+			} else {
+				b.WriteString(blankGutter(gutterWidth))
+			}
+			b.WriteString(sub)
+			b.WriteByte('\n')
+		}
+		lineNum++
+		emitted++
+	}
+
 	for i := 0; i <= len(formatted); i++ {
 		if i == len(formatted) || formatted[i] == '\n' {
-			row := formatted[start:i]
-			// Skip the trailing SGR-only tail that Chroma emits after
-			// the final newline — it has no source content and would
-			// otherwise show as a phantom blank-guttered row.
-			if emitted == total && stripSGR(row) == "" {
-				if i < len(formatted) {
-					b.WriteByte('\n')
-				}
-				start = i + 1
-				continue
-			}
-			b.WriteString(formatLineNumber(lineNum, gutterWidth))
-			b.WriteByte(' ')
-			b.WriteString(row)
-			if i < len(formatted) {
-				b.WriteByte('\n')
-			}
-			lineNum++
-			emitted++
+			emit(formatted[start:i])
 			start = i + 1
 		}
 	}
-	return b.String()
+
+	// Drop the trailing newline we always emit so callers can append
+	// their own framing without worrying about a duplicate.
+	out := b.String()
+	if strings.HasSuffix(out, "\n") {
+		out = out[:len(out)-1]
+	}
+	return out
 }
 
 // endsWithNewline reports whether formatted's last non-SGR byte is '\n'.
@@ -107,20 +126,21 @@ func stripSGR(s string) string {
 }
 
 // formatLineNumber right-aligns n in a field of width w, wrapped in a
-// dim SGR sequence and reset. The reset is critical — without it the
-// dim attribute would bleed into the source-line tokens that follow.
+// dim SGR sequence and reset, with a trailing separator space. The
+// reset is critical — without it the dim attribute would bleed into
+// the source-line tokens that follow.
 func formatLineNumber(n, w int) string {
 	s := strconv.Itoa(n)
 	pad := w - len(s)
 	if pad < 0 {
 		pad = 0
 	}
-	return "\x1b[2m" + strings.Repeat(" ", pad) + s + "\x1b[0m"
+	return "\x1b[2m" + strings.Repeat(" ", pad) + s + "\x1b[0m "
 }
 
-// blankGutter is formatLineNumber for continuation rows. Same width and
-// trailing space as a numbered gutter so columns align; no SGR attribute
-// applied so no color can leak into the column.
+// blankGutter is formatLineNumber for continuation rows. Same width
+// (w padding + 1 separator) as a numbered gutter so columns align;
+// no SGR attribute applied so no color can leak into the column.
 func blankGutter(w int) string {
-	return strings.Repeat(" ", w) + " "
+	return strings.Repeat(" ", w+1)
 }

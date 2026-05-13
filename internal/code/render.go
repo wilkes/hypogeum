@@ -82,7 +82,7 @@ func (r *Renderer) Render(path string, src []byte) (string, error) {
 	if err := formatter.Format(&buf, r.style, iterator); err != nil {
 		return "", fmt.Errorf("format: %w", err)
 	}
-	return addGutter(buf.String()), nil
+	return addGutter(buf.String(), r.width), nil
 }
 
 // looksBinary reports whether src appears to be binary content using the
