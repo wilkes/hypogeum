@@ -23,6 +23,10 @@ The TUI requires a real terminal — `go run` from inside a non-TTY harness will
 
 Tag-driven via GoReleaser. To cut a release: `git tag v0.x.0 -m "..." && git push origin v0.x.0`. The `.github/workflows/release.yml` action triggers on any `v*` tag push, runs `goreleaser release --clean` against `.goreleaser.yaml`, and publishes archives for darwin/linux × amd64/arm64 plus a changelog auto-grouped by conventional-commit prefix.
 
+After GoReleaser publishes, an `update-changelog` job in the same workflow fetches the release body, extracts the `## Changelog` section, and prepends it to `CHANGELOG.md` on `main` as a `docs(changelog): vX.Y.Z` commit by `github-actions[bot]`. The insertion target is the `<!-- next-release-here -->` marker — don't remove that line or the workflow will fail loudly (intentional). The job is idempotent on re-runs and skips if the tag is already in the file.
+
+CI runs on every PR and on pushes to `main` via `.github/workflows/ci.yml`: `go build ./...`, `go vet ./...`, `go test -race ./...`. Keep the test suite race-clean — adding new test code that races will fail CI even if `go test ./...` passes locally.
+
 The binary reports its identity via `hypogeum --version` / `-v`. Local `go build` stamps `devel/none/unknown`; release builds inject the real values via `-X main.version/commit/date` ldflags. The variables live in `cmd/hypogeum/main.go`; do not rename without also updating `.goreleaser.yaml`.
 
 ## Layout
