@@ -140,3 +140,15 @@ func (w *Watcher) run() {
 		}
 	}
 }
+
+// AddPath adds dir to the underlying fsnotify watcher so writes inside
+// dir surface as Events. Idempotent and nil-safe — callers can invoke
+// it freely from per-render code paths. Used by the TUI to extend the
+// watch set to source files referenced by ![[...]] embeds living
+// outside the markdown root.
+func (w *Watcher) AddPath(dir string) error {
+	if w == nil || w.fsw == nil {
+		return nil
+	}
+	return w.fsw.Add(dir)
+}

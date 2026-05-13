@@ -3,6 +3,7 @@ package tui
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 
 	"github.com/charmbracelet/bubbles/viewport"
 	zone "github.com/lrstanley/bubblezone"
@@ -24,6 +25,11 @@ type contentUIState struct {
 	codeRenderer *code.Renderer
 	links        []markdown.Link
 	linkCursor   int
+	// embedDeps holds the absolute paths of every source file embedded
+	// in the currently displayed markdown. The TUI's handleFSEvent
+	// FileModified branch re-renders the open file when a watcher event
+	// arrives for any of these paths.
+	embedDeps map[string]struct{}
 }
 
 // linkZoneID returns the BubbleZone id used to track the i-th link in
@@ -104,23 +110,33 @@ func (m *Model) refreshContent(path string) {
 		}
 		m.content.links = nil
 		m.content.linkCursor = -1
+		m.content.embedDeps = nil
 		_ = target // preselect doesn't apply to code files
 		return
 	}
 
 	m.content.renderer.SetFromFile(path)
-	out, links, _, err := m.content.renderer.RenderWithLinks(string(src), path, linkZoneMarker)
+	out, links, deps, err := m.content.renderer.RenderWithLinks(string(src), path, linkZoneMarker)
 	if err != nil {
 		m.status = err.Error()
 		m.content.viewport.SetContent(fmt.Sprintf("Error: %v", err))
 		m.content.links = nil
 		m.content.linkCursor = -1
+		m.content.embedDeps = nil
 		return
 	}
 	m.status = path
 	m.content.viewport.SetContent(out)
 	m.content.viewport.GotoTop()
 	m.content.links = links
+
+	m.content.embedDeps = make(map[string]struct{}, len(deps))
+	for _, p := range deps {
+		m.content.embedDeps[p] = struct{}{}
+		if m.watcher != nil {
+			_ = m.watcher.AddPath(filepath.Dir(p))
+		}
+	}
 
 	m.content.linkCursor = -1
 	if target != "" {
@@ -189,7 +205,13 @@ func (m *Model) handleFSEvent(ev watch.Event) {
 			return
 		}
 		for _, p := range ev.Paths {
-			if p == cur {
+			matched := p == cur
+			if !matched {
+				if _, ok := m.content.embedDeps[p]; ok {
+					matched = true
+				}
+			}
+			if matched {
 				offset := m.content.viewport.YOffset
 				m.refreshContent(cur)
 				// refreshContent calls GotoTop; restore scroll so a save

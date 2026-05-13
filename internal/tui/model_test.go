@@ -7,6 +7,8 @@ import (
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
+
+	"github.com/wilkes/hypogeum/internal/watch"
 )
 
 func TestModel_BootsAndRendersFirstFile(t *testing.T) {
@@ -169,5 +171,48 @@ func TestAllVaultMarkdownPaths(t *testing.T) {
 		if filepath.Ext(p) != ".md" {
 			t.Errorf("non-md path: %q", p)
 		}
+	}
+}
+
+func TestModel_EmbedDepsPopulatedOnOpen(t *testing.T) {
+	dir := t.TempDir()
+	src := filepath.Join(dir, "main.go")
+	if err := os.WriteFile(src, []byte("a\nb\nc\n"), 0o644); err != nil {
+		t.Fatalf("write src: %v", err)
+	}
+	mdPath := filepath.Join(dir, "notes.md")
+	if err := os.WriteFile(mdPath, []byte("# notes\n\n![[main.go#L1-L2]]\n"), 0o644); err != nil {
+		t.Fatalf("write md: %v", err)
+	}
+
+	m, err := New(dir, mdPath)
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	if _, ok := m.content.embedDeps[src]; !ok {
+		t.Fatalf("embedDeps missing %q; got %v", src, m.content.embedDeps)
+	}
+}
+
+func TestModel_FileModifiedOnEmbedDepRefreshesOpenMarkdown(t *testing.T) {
+	dir := t.TempDir()
+	src := filepath.Join(dir, "main.go")
+	if err := os.WriteFile(src, []byte("a\nb\nc\n"), 0o644); err != nil {
+		t.Fatalf("write src: %v", err)
+	}
+	mdPath := filepath.Join(dir, "notes.md")
+	if err := os.WriteFile(mdPath, []byte("![[main.go#L1-L2]]\n"), 0o644); err != nil {
+		t.Fatalf("write md: %v", err)
+	}
+	m := sized(t, dir, mdPath)
+
+	if err := os.WriteFile(src, []byte("X\nY\nZ\n"), 0o644); err != nil {
+		t.Fatalf("rewrite src: %v", err)
+	}
+	m.handleFSEvent(watch.Event{Kind: watch.FileModified, Paths: []string{src}})
+
+	if !strings.Contains(m.content.viewport.View(), "X") {
+		t.Fatalf("expected re-rendered content to contain new source line; viewport:\n%s",
+			m.content.viewport.View())
 	}
 }
