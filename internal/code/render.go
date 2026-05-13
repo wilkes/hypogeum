@@ -37,11 +37,13 @@ func NewRenderer(width int) *Renderer {
 }
 
 // Render tokenizes src with a lexer chosen from path's basename (or from
-// content analysis as a fallback), formats it as 256-color ANSI, and
-// prefixes a line-number gutter. Returns the rendered string and a nil
-// error for all user-facing problems (binary input, oversized files,
-// unrecognized syntax). A non-nil error indicates a programming-level
-// invariant violation (e.g. missing formatter).
+// content analysis as a fallback) and formats it as 256-color ANSI.
+// Returns the rendered string and a nil error for all user-facing
+// problems (unrecognized syntax, tokenization failure). A non-nil error
+// indicates a programming-level invariant violation (e.g. the
+// terminal256 formatter not being registered).
+//
+// A line-number gutter and soft-wrap will be added in later tasks.
 func (r *Renderer) Render(path string, src []byte) (string, error) {
 	lexer := lexers.Match(filepath.Base(path))
 	if lexer == nil {
@@ -53,7 +55,10 @@ func (r *Renderer) Render(path string, src []byte) (string, error) {
 
 	iterator, err := lexer.Tokenise(nil, string(src))
 	if err != nil {
-		// Token failure is rare but recoverable: render as plain text.
+		// Primary lexer failed; fall back to plain text. The Fallback
+		// lexer is a no-op tokenizer and has never been observed to
+		// fail in practice — if it ever does, that's an invariant
+		// violation worth surfacing rather than swallowing.
 		iterator, err = lexers.Fallback.Tokenise(nil, string(src))
 		if err != nil {
 			return "", fmt.Errorf("tokenise fallback: %w", err)
