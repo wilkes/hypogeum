@@ -9,6 +9,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
+	"github.com/wilkes/hypogeum/internal/markdown"
 	"github.com/wilkes/hypogeum/internal/vault"
 )
 
@@ -272,5 +273,55 @@ func TestReturnCursor_ClampsToShrunkList(t *testing.T) {
 	}
 	if len(m.backlinks.items) != 1 {
 		t.Fatalf("expected 1 backlink after refresh, got %d", len(m.backlinks.items))
+	}
+}
+
+func TestFollowBacklink_CapturesPendingPreselectRange(t *testing.T) {
+	// Verify followBacklink mirrors Back/Forward's capture of
+	// m.content.rangeHighlight into m.pendingPreselectRange so the
+	// destination's refreshContent can disambiguate between multiple
+	// links to the same target (one with a #L range, one without).
+	//
+	// The user-facing scenario (a code file with rangeHighlight that
+	// also has backlinks) is unreachable through vault.Build today —
+	// vault only indexes markdown files. We construct an all-markdown
+	// fixture that exercises the same disambiguation path: source.md
+	// has two links to dest.md, one with #L10-L20 and one plain;
+	// pre-setting rangeHighlight on dest.md before followBacklink must
+	// route the disambiguation to the ranged link.
+	dir := t.TempDir()
+	writeTUITestFile(t, dir, "source.md", "ranged [a](dest.md#L10-L20) and plain [b](dest.md).")
+	writeTUITestFile(t, dir, "dest.md", "i am dest.")
+
+	m := sized(t, dir, "")
+	destAbs := filepath.Join(dir, "dest.md")
+	srcAbs := filepath.Join(dir, "source.md")
+	m.openFile(destAbs)
+
+	// Simulate the unreachable-via-UI state: an active range highlight
+	// on the current file while a backlink modal is open. The capture
+	// in followBacklink should mirror this into pendingPreselectRange.
+	m.content.rangeHighlight = &markdown.LineRange{Start: 10, End: 20}
+	m = pressRune(t, m, 'b')
+	if len(m.backlinks.items) < 1 {
+		t.Fatalf("expected at least 1 backlink (source.md → dest.md), got %d", len(m.backlinks.items))
+	}
+	// Re-apply rangeHighlight: refreshBacklinksModal doesn't touch it,
+	// but defensive in case anything in between did.
+	m.content.rangeHighlight = &markdown.LineRange{Start: 10, End: 20}
+
+	m = pressKey(t, m, tea.KeyMsg{Type: tea.KeyEnter})
+
+	if m.history.Current() != srcAbs {
+		t.Fatalf("expected on source.md after follow, got %q", m.history.Current())
+	}
+	if m.content.linkCursor < 0 {
+		t.Fatalf("expected linkCursor preselected after follow, got %d", m.content.linkCursor)
+	}
+	// The pre-selected link must be the *ranged* one, proving that
+	// pendingPreselectRange was captured and used to disambiguate.
+	got := m.content.links[m.content.linkCursor].Resolved.Range
+	if got == nil || got.Start != 10 || got.End != 20 {
+		t.Fatalf("expected ranged link pre-selected (Range=10-20); got Range=%+v", got)
 	}
 }
