@@ -142,6 +142,33 @@ func TestRender_LongLine_WrapsWithBlankContinuationGutter(t *testing.T) {
 	}
 }
 
+func TestRender_Dockerfile_HighlightedByFilename(t *testing.T) {
+	r := NewRenderer(80)
+	src := []byte("FROM alpine:3.18\nRUN apk add --no-cache git\n")
+	out, err := r.Render("Dockerfile", src)
+	if err != nil {
+		t.Fatalf("Render returned error: %v", err)
+	}
+	if !strings.Contains(out, "\x1b[") {
+		t.Errorf("Dockerfile should be highlighted by filename glob; got plain text:\n%q", out)
+	}
+}
+
+func TestRender_UnknownExtension_FallsBackToPlainTextWithGutter(t *testing.T) {
+	r := NewRenderer(80)
+	src := []byte("hello\nworld\n")
+	out, err := r.Render("note.xyz", src)
+	if err != nil {
+		t.Fatalf("Render returned error: %v", err)
+	}
+	if out == "" {
+		t.Fatal("Render returned empty output")
+	}
+	if !strings.Contains(stripANSI(out), "1") || !strings.Contains(stripANSI(out), "2") {
+		t.Errorf("expected line numbers 1 and 2 in gutter, got:\n%q", stripANSI(out))
+	}
+}
+
 // stripANSI is a test-only helper that removes ANSI escape sequences so
 // assertions can check the user-visible text without coupling to color
 // codes.
