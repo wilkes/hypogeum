@@ -12,9 +12,9 @@ import (
 
 // treeUIState bundles the tree's render state. flat is the pre-flattened
 // row list; cursor indexes into it; vp scrolls the tree modal when flat
-// exceeds modal height; expanded stores deviations from the
-// default-expanded folder state. The tree itself only renders inside
-// the modal opened with ^b — there is no side pane.
+// exceeds modal height; expanded records which directories are currently
+// open (path → true means open; missing means closed). The tree renders
+// only inside the modal opened with `^b`.
 type treeUIState struct {
 	flat     []treeRow
 	cursor   int

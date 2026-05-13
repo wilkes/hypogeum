@@ -1,6 +1,6 @@
 # `internal/tree`
 
-Filesystem walker that builds the `*Node` tree the TUI displays in its left pane. Knows about files; knows nothing about Bubble Tea.
+Filesystem walker that builds the `*Node` tree the TUI displays in its tree modal (`^b`). Knows about files; knows nothing about Bubble Tea.
 
 See also: [architecture overview](../architecture.md), [`internal/tui`](tui.md) (consumer), [`internal/markdown`](markdown.md) (renders the file the cursor lands on).
 

@@ -1,6 +1,7 @@
 // Package tree walks a directory and produces a tree of markdown files
-// suitable for display in the left pane of the TUI. It is filesystem-aware
-// but UI-unaware; the TUI converts these nodes into Bubble widgets.
+// for the TUI to display (currently inside the tree modal). It is
+// filesystem-aware but UI-unaware; the TUI converts these nodes into
+// Bubble widgets.
 package tree
 
 import (

@@ -111,8 +111,7 @@ func (m *Model) clickTree(row int) (tea.Model, tea.Cmd) {
 		m.toggleFolder(node.Path)
 		return *m, nil
 	}
-	m.modals.kind = modalNone
-	m.focus = m.modals.prevFocus
+	m.closeModal()
 	m.openFile(node.Path)
 	return *m, nil
 }
@@ -180,13 +179,11 @@ func (m *Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 					m.modals.picker.refilter()
 					return *m, nil
 				}
-				m.modals.kind = modalNone
-				m.focus = m.modals.prevFocus
+				m.closeModal()
 				return *m, nil
 			case key.Matches(msg, m.keys.Open):
 				if path, ok := m.modals.picker.selectedPath(); ok {
-					m.modals.kind = modalNone
-					m.focus = m.modals.prevFocus
+					m.closeModal()
 					m.navigateTo(path)
 				}
 				return *m, nil
@@ -219,8 +216,7 @@ func (m *Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return *m, cmd
 		}
 		if key.Matches(msg, m.keys.ClearLink) { // Esc
-			m.modals.kind = modalNone
-			m.focus = m.modals.prevFocus
+			m.closeModal()
 			return *m, nil
 		}
 		if m.modals.kind == modalTree {
@@ -391,8 +387,7 @@ func (m *Model) handleTreeModalKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.toggleFolder(row.node.Path)
 			return *m, nil
 		}
-		m.modals.kind = modalNone
-		m.focus = m.modals.prevFocus
+		m.closeModal()
 		m.openFile(row.node.Path)
 	}
 	return *m, nil
