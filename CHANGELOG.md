@@ -9,6 +9,11 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 <!-- next-release-here -->
 
+## [v0.1.2] - 2026-05-13
+
+### Other
+* 6569d7b04ad229e1b4a37ca3b525102311dcef76: test(watch): drop stale non-markdown-write expectation (@wilkes)
+
 ## [v0.1.1] - 2026-05-13
 
 ### Fixes
