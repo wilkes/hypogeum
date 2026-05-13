@@ -1,6 +1,6 @@
 # hypogeum
 
-A terminal browser for markdown directories. Point it at a folder of `.md` files and wander through them — the rendered file fills the screen, `^p` opens a fuzzy file finder, and links between files navigate with `Enter`. `h` and `l` go back and forward through your history, like a browser. A directory tree is available on the side (`^b` to toggle) when you'd rather browse than search.
+A terminal browser for markdown directories. Point it at a folder of `.md` files and wander through them — the rendered file fills the screen, `^p` opens a fuzzy file finder, `^b` opens the directory tree in a modal, and links between files navigate with `Enter`. `h` and `l` go back and forward through your history, like a browser.
 
 The name is the Greek word for an underground chamber or network of chambers (*hupó* "under" + *gê* "earth"). It shares a root with *hyperlink* (*hupér* "above") — the references float above the text, the chambers wait below.
 
@@ -30,13 +30,13 @@ hypogeum ~/notes/index.md # open a specific file; tree roots at its directory
 | `Enter` | Open the selected file |
 | `h` / `←` | Back |
 | `l` / `→` | Forward |
-| `Tab` | Switch between tree and content |
+| `Tab` | Switch between content and backlinks (when backlinks pane is open) |
 | `n` / `p` | Cycle to next / previous link |
 | `Enter` | Follow selected link |
 | `Esc` | Clear link selection |
 | `b` | Toggle backlinks pane |
 | `B` | Backlinks modal |
-| `^b` | Toggle tree pane |
+| `^b` | Open directory tree (modal) |
 | `^p`          | Open file finder (type to fuzzy-filter; ^j/^k cursor)                |
 | `^l` | Log viewer |
 | `?` | Help (cheat sheet) |

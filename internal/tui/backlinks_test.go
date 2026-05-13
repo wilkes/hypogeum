@@ -423,64 +423,31 @@ func TestEsc_RestoresFocusFromBacklinksWithoutClosingPane(t *testing.T) {
 	}
 }
 
-func TestTab_ThreeWayCycleWhenPaneVisible(t *testing.T) {
+// TestTab_TwoWayWhenBacklinksOpen confirms Tab cycles content ↔ backlinks
+// when the persistent backlinks pane is open. The tree is no longer a Tab
+// destination — it lives in a modal opened with ^b.
+func TestTab_TwoWayWhenBacklinksOpen(t *testing.T) {
 	dir := t.TempDir()
 	writeTUITestFile(t, dir, "a.md", "see [[c]].")
 	writeTUITestFile(t, dir, "c.md", "i am c.")
 
 	m := sized(t, dir, "")
 	m.openFile(filepath.Join(dir, "c.md"))
-	// Reveal the tree so the three-way cycle has all three panes to visit.
-	m = pressKey(t, m, tea.KeyMsg{Type: tea.KeyCtrlB})
-	if !m.tree.visible {
-		t.Fatalf("setup: ^b should reveal tree")
-	}
-	m = pressRune(t, m, 'b')          // pane open, focus on backlinks
+	m = pressRune(t, m, 'b') // pane open, focus on backlinks
 	if m.focus != focusBacklinks {
 		t.Fatalf("setup: expected focusBacklinks, got %v", m.focus)
 	}
 
-	// Tab: backlinks → tree.
-	m = pressKey(t, m, tea.KeyMsg{Type: tea.KeyTab})
-	if m.focus != focusTree {
-		t.Fatalf("Tab from backlinks: expected focusTree, got %v", m.focus)
-	}
-
-	// Tab: tree → content.
+	// Tab: backlinks → content.
 	m = pressKey(t, m, tea.KeyMsg{Type: tea.KeyTab})
 	if m.focus != focusContent {
-		t.Fatalf("Tab from tree: expected focusContent, got %v", m.focus)
+		t.Fatalf("Tab from backlinks: expected focusContent, got %v", m.focus)
 	}
 
-	// Tab: content → backlinks (pane is visible).
+	// Tab: content → backlinks.
 	m = pressKey(t, m, tea.KeyMsg{Type: tea.KeyTab})
 	if m.focus != focusBacklinks {
 		t.Fatalf("Tab from content: expected focusBacklinks, got %v", m.focus)
-	}
-}
-
-func TestTab_TwoWayWhenPaneClosed(t *testing.T) {
-	dir := t.TempDir()
-	writeTUITestFile(t, dir, "a.md", "hi.")
-	m := sized(t, dir, "")
-	m.openFile(filepath.Join(dir, "a.md"))
-	// Reveal the tree to exercise the two-way tree ↔ content cycle.
-	m = pressKey(t, m, tea.KeyMsg{Type: tea.KeyCtrlB})
-	if !m.tree.visible {
-		t.Fatalf("setup: ^b should reveal tree")
-	}
-
-	// Backlinks pane closed. Cycle: tree ↔ content (backlinks skipped).
-	if m.focus != focusContent {
-		t.Fatalf("after ^b reveals tree, focus stays on content, got %v", m.focus)
-	}
-	m = pressKey(t, m, tea.KeyMsg{Type: tea.KeyTab})
-	if m.focus != focusTree {
-		t.Fatalf("expected focusTree, got %v", m.focus)
-	}
-	m = pressKey(t, m, tea.KeyMsg{Type: tea.KeyTab})
-	if m.focus != focusContent {
-		t.Fatalf("expected focusContent (skipping invisible backlinks), got %v", m.focus)
 	}
 }
 

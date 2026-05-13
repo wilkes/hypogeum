@@ -7,23 +7,17 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 )
 
-// openViaTree walks the cursor to path and presses Enter to open it. Used
-// to drive history without going through the link-following path.
-//
-// Reveals the tree and focuses it first — the tree is hidden by default
-// and KeyDown/KeyUp only move the tree cursor when the tree pane has focus.
+// openViaTree opens the tree modal, walks the cursor to path, and
+// presses Enter to open it. Used to drive history without going
+// through the link-following path.
 func openViaTree(t *testing.T, m Model, path string) Model {
 	t.Helper()
-	if !m.tree.visible {
+	if m.modals.kind != modalTree {
 		updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyCtrlB})
 		m = updated.(Model)
 	}
-	if m.focus != focusTree {
-		updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyTab})
-		m = updated.(Model)
-	}
-	if m.focus != focusTree {
-		t.Fatalf("openViaTree: could not focus tree (visible=%v, focus=%v)", m.tree.visible, m.focus)
+	if m.modals.kind != modalTree {
+		t.Fatalf("openViaTree: ^b should open tree modal, got kind=%v", m.modals.kind)
 	}
 	target := -1
 	for i, row := range m.tree.flat {
@@ -119,36 +113,19 @@ func TestModel_ForwardAtEndIsNoop(t *testing.T) {
 	}
 }
 
-func TestModel_TabTogglesFocus(t *testing.T) {
+// TestModel_TabIsNoopWithoutBacklinks confirms that with no backlinks
+// pane open, Tab has nowhere to go and is a clean no-op. The tree is
+// not a Tab destination — it lives in a modal opened with ^b — so the
+// cycle is only content ↔ backlinks when that pane is visible.
+func TestModel_TabIsNoopWithoutBacklinks(t *testing.T) {
 	root := writeFixture(t)
 	m := sized(t, root, "")
 	if m.focus != focusContent {
 		t.Fatalf("default focus = %v, want focusContent", m.focus)
 	}
-
-	// With the tree hidden by default, Tab has nowhere else to go.
 	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyTab})
 	m = updated.(Model)
 	if m.focus != focusContent {
-		t.Errorf("Tab with tree hidden: focus = %v, want focusContent (no-op)", m.focus)
-	}
-
-	// Reveal the tree and confirm Tab cycles tree ↔ content.
-	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyCtrlB})
-	m = updated.(Model)
-	if !m.tree.visible {
-		t.Fatalf("^b should reveal tree; tree.visible = false")
-	}
-
-	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyTab})
-	m = updated.(Model)
-	if m.focus != focusTree {
-		t.Errorf("after first Tab (tree visible), focus = %v, want focusTree", m.focus)
-	}
-
-	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyTab})
-	m = updated.(Model)
-	if m.focus != focusContent {
-		t.Errorf("after second Tab, focus = %v, want focusContent", m.focus)
+		t.Errorf("Tab without backlinks open: focus = %v, want focusContent (no-op)", m.focus)
 	}
 }

@@ -10,29 +10,16 @@ import (
 	zone "github.com/lrstanley/bubblezone"
 )
 
-// twoPaneMinWidth is the minimum terminal width at which the tree
-// pane is shown alongside content. Mirrors backlinksMinTotalHeight on
-// the height axis.
-const twoPaneMinWidth = 80
-
-// treeUIState bundles the left tree pane's render state. flat is the
-// pre-flattened row list; cursor indexes into it; vp scrolls the pane
-// when flat exceeds pane height; visible is the user-facing intent
-// (gated by width via shouldShowTree); expanded stores deviations
-// from the default-expanded folder state.
+// treeUIState bundles the tree's render state. flat is the pre-flattened
+// row list; cursor indexes into it; vp scrolls the tree modal when flat
+// exceeds modal height; expanded stores deviations from the
+// default-expanded folder state. The tree itself only renders inside
+// the modal opened with ^b — there is no side pane.
 type treeUIState struct {
 	flat     []treeRow
 	cursor   int
 	vp       viewport.Model
-	visible  bool
 	expanded map[string]bool
-}
-
-// shouldShowTree gates m.tree.visible (user intent) on terminal width.
-// Below twoPaneMinWidth the tree is force-hidden so content gets the
-// full window. Parallels shouldShowBacklinks on the height axis.
-func (m Model) shouldShowTree() bool {
-	return m.tree.visible && m.width >= twoPaneMinWidth
 }
 
 func (m Model) View() string {
@@ -51,33 +38,28 @@ func (m Model) View() string {
 		Height(contentHeight).
 		Render(content))
 
-	contentColumn := contentStyled
+	body := contentStyled
 	if bl := m.renderBacklinks(); bl != "" {
-		contentColumn = lipgloss.JoinVertical(lipgloss.Left, contentStyled, bl)
-	}
-
-	var body string
-	if m.shouldShowTree() {
-		treeStyled := zone.Mark(zoneTreePane, paneStyle(m.focus == focusTree).
-			Width(m.treeWidth()).
-			Height(m.height-4).
-			Render(m.tree.vp.View()))
-		body = lipgloss.JoinHorizontal(lipgloss.Top, treeStyled, contentColumn)
-	} else {
-		body = contentColumn
+		body = lipgloss.JoinVertical(lipgloss.Left, contentStyled, bl)
 	}
 	footer := m.renderFooter()
-	// Scan must run on the final composed output so BubbleZone records
-	// each zone's absolute screen position.
-	base := zone.Scan(lipgloss.JoinVertical(lipgloss.Left, body, footer))
+	composed := lipgloss.JoinVertical(lipgloss.Left, body, footer)
 	if m.modals.kind != modalNone {
-		body := m.modals.vp.View()
-		if m.modals.kind == modalPicker {
-			body = m.modals.picker.View()
+		var modalBody string
+		switch m.modals.kind {
+		case modalPicker:
+			modalBody = m.modals.picker.View()
+		case modalTree:
+			modalBody = m.tree.vp.View()
+		default:
+			modalBody = m.modals.vp.View()
 		}
-		return overlayModal(base, m.renderModal(body), m.width, m.height)
+		// Splice modal first, scan last — BubbleZone must see the final
+		// screen coordinates so tree-row zones rendered inside the modal
+		// resolve correctly for mouse hit-testing.
+		return zone.Scan(overlayModal(composed, m.renderModal(modalBody), m.width, m.height))
 	}
-	return base
+	return zone.Scan(composed)
 }
 
 // refreshTreeVP populates the tree viewport with the current rendered
@@ -149,11 +131,19 @@ func (m Model) renderFooter() string {
 	return fmt.Sprintf("%s\n%s", locStyle.Render(loc), helpStyle.Render(help))
 }
 
-func (m Model) treeWidth() int {
-	if !m.shouldShowTree() {
-		return 0
+// resizeTreeModalVP sizes the tree viewport to the modal interior.
+// Called on each WindowSizeMsg so the tree adapts to terminal changes
+// even when the modal isn't currently open.
+func (m *Model) resizeTreeModalVP() {
+	_, _, w, h := modalGeometry(m.width, m.height)
+	m.tree.vp.Width = w - 2
+	if m.tree.vp.Width < 1 {
+		m.tree.vp.Width = 1
 	}
-	return clamp(m.width/4, 16, 40)
+	m.tree.vp.Height = h - 2
+	if m.tree.vp.Height < 1 {
+		m.tree.vp.Height = 1
+	}
 }
 
 func paneStyle(focused bool) lipgloss.Style {

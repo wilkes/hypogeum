@@ -32,13 +32,14 @@ The lower layers know nothing about Bubble Tea or terminals; they're testable as
 
 1. Bubble Tea delivers a `tea.KeyMsg` to `Model.Update`.
 2. Global bindings (quit, focus toggle, back/forward) match first.
-3. If still unhandled, dispatch by focus:
-   - `focusTree` → `handleTreeKey` updates `m.tree.cursor` or calls `openFile`.
+3. Modal-toggle keys (`^b`, `^p`, `B`, `^l`, `?`) route to `openModalWith(kind, prepare)`.
+4. If a modal is open, the keystroke is dispatched to that modal's handler — e.g. `modalTree` updates `m.tree.cursor` or calls `openFile` (closing itself on a file Enter).
+5. Otherwise, dispatch by focus:
    - `focusContent` → `handleContentKey` cycles `m.content.linkCursor`, follows a link, clears selection, or falls through to the viewport's own scrolling bindings.
    - `focusBacklinks` → `handleBacklinksKey` moves `m.backlinks.cursor` and follows backlinks via `Enter`.
-4. `openFile(path)` records the visit in `nav.History` and calls `refreshContent`.
-5. `refreshContent(path)` reads the file, calls `markdown.RenderWithLinks`, sets the viewport content, and stores the new link list. The link cursor resets to `-1`.
-6. `View()` joins the styled tree pane and viewport pane horizontally with Lip Gloss, then appends the footer.
+6. `openFile(path)` records the visit in `nav.History` and calls `refreshContent`.
+7. `refreshContent(path)` reads the file, calls `markdown.RenderWithLinks`, sets the viewport content, and stores the new link list. The link cursor resets to `-1`.
+8. `View()` renders the content viewport and optional backlinks pane, then overlays any open modal — `zone.Scan` runs last so BubbleZone records the modal's row zones for mouse hit-testing.
 
 The keystroke path is synchronous — no goroutines, no commands waited on — because every action is local I/O fast enough to inline. The one exception is the watcher: `Init()` returns a `tea.Cmd` that blocks on `internal/watch`'s event channel, surfacing each debounced event as `fsEventMsg`. `Update` rebuilds the tree (on `StructureChanged`) or refreshes the open file (on `FileModified`) while preserving cursor and scroll position, then re-issues the wait command to keep listening.
 
