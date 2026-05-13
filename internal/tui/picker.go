@@ -3,6 +3,7 @@ package tui
 import (
 	"fmt"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
@@ -48,6 +49,41 @@ func (p *pickerState) reset(ranked []recent.Ranked, root string) {
 	p.root = root
 	p.input.SetValue("")
 	p.input.Focus()
+	p.refreshVP()
+}
+
+// refilter recomputes p.ranked and p.matches from p.all and the current
+// query. Empty query → ranked == all, matches == nil. Otherwise: run
+// sahilm/fuzzy over a lowercased copy of the paths, then stable-sort by
+// score descending with the source-order index (i.e. recency rank) as
+// the tiebreaker. Cursor resets to 0 on every call.
+func (p *pickerState) refilter() {
+	q := strings.ToLower(p.input.Value())
+	if q == "" {
+		p.ranked = p.all
+		p.matches = nil
+		p.cursor = 0
+		p.refreshVP()
+		return
+	}
+	src := make([]string, len(p.all))
+	for i, r := range p.all {
+		src[i] = strings.ToLower(relativeTo(p.root, r.Path))
+	}
+	raw := fuzzy.Find(q, src)
+	sort.SliceStable(raw, func(i, j int) bool {
+		if raw[i].Score != raw[j].Score {
+			return raw[i].Score > raw[j].Score
+		}
+		return raw[i].Index < raw[j].Index
+	})
+	p.ranked = make([]recent.Ranked, len(raw))
+	p.matches = make([]fuzzy.Match, len(raw))
+	for i, m := range raw {
+		p.ranked[i] = p.all[m.Index]
+		p.matches[i] = m
+	}
+	p.cursor = 0
 	p.refreshVP()
 }
 
