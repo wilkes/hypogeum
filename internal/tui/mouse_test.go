@@ -18,6 +18,10 @@ func TestModel_MouseClick_OnTreeRow_OpensFileAndClosesModal(t *testing.T) {
 	if m.modals.kind != modalTree {
 		t.Fatalf("^b should open tree modal, got kind=%v", m.modals.kind)
 	}
+	// Expand notes/ so its children are visible (default-collapsed).
+	m.tree.expanded[filepath.Join(root, "notes")] = true
+	m.tree.flat = m.flattenVisible()
+	m.refreshTreeVP()
 	renderAndScan(t, m, zoneContentPane)
 
 	wantPath := filepath.Join(root, "notes", "first.md")

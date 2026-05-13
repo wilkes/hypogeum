@@ -232,6 +232,10 @@ func (m *Model) followBacklink() {
 	m.pendingPreselectTarget = m.history.Current()
 
 	m.openFile(bl.SourceFile)
+	// Re-derive tree expansion from the new file's ancestor chain so the
+	// tree modal opens on a focused view next time. selectInTree also
+	// re-flattens and moves the cursor.
+	m.selectInTree(bl.SourceFile)
 
 	// If the pre-select succeeded, scrollToLink already placed the link
 	// in view; skip the source-line scroll which would scroll away.
