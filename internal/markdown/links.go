@@ -3,11 +3,15 @@ package markdown
 import (
 	"net/url"
 	"path/filepath"
+	"regexp"
+	"strconv"
 	"strings"
 
 	"github.com/yuin/goldmark"
 	"github.com/yuin/goldmark/ast"
 	"github.com/yuin/goldmark/text"
+
+	"github.com/wilkes/hypogeum/internal/embed"
 )
 
 // LinkKind classifies a markdown link target so the navigation layer can
@@ -25,11 +29,18 @@ const (
 	LinkInvalid
 )
 
+// LineRange is aliased from internal/embed so the two packages refer to
+// one type. internal/embed is the canonical owner because internal/markdown
+// already depends on it (preprocessEmbeds), making embed the upstream side
+// of the alias.
+type LineRange = embed.LineRange
+
 // ResolvedLink describes a link target after resolution against a base file.
 type ResolvedLink struct {
 	Kind   LinkKind
-	Target string // absolute path for LinkLocalFile, raw URL otherwise
-	Anchor string // fragment, if any (without leading '#')
+	Target string     // absolute path for LinkLocalFile, raw URL otherwise
+	Anchor string     // fragment, if any (without leading '#')
+	Range  *LineRange // non-nil when href fragment was a #L<n>-L<n> form
 }
 
 // ResolveLink interprets the href of a link found inside the file at base.
@@ -69,7 +80,12 @@ func ResolveLink(base, href string) ResolvedLink {
 	if err != nil {
 		return ResolvedLink{Kind: LinkInvalid}
 	}
-	return ResolvedLink{Kind: LinkLocalFile, Target: abs, Anchor: anchor}
+	out := ResolvedLink{Kind: LinkLocalFile, Target: abs, Anchor: anchor}
+	if r := parseLineFragment(anchor); r != nil {
+		out.Range = r
+		out.Anchor = "" // line-range claims the fragment; not an anchor
+	}
+	return out
 }
 
 // ASTLink is a single hyperlink as it appears in the markdown source.
@@ -127,4 +143,34 @@ func nodeText(n ast.Node, source []byte) string {
 		out = append(out, []byte(nodeText(c, source))...)
 	}
 	return string(out)
+}
+
+// lineFragmentRegex matches "L<n>" or "L<n>-L<n>" with no surrounding
+// characters. Kept separate from internal/embed.lineSpec because the
+// two grammars differ — embed.lineSpec also accepts a +<context>
+// suffix, which is not part of the markdown link fragment grammar.
+var lineFragmentRegex = regexp.MustCompile(`^L(\d+)(?:-L(\d+))?$`)
+
+// parseLineFragment returns a *LineRange when fragment is exactly a
+// GitHub-style L<n> or L<n>-L<n> spec, or nil otherwise.
+func parseLineFragment(fragment string) *LineRange {
+	if fragment == "" {
+		return nil
+	}
+	m := lineFragmentRegex.FindStringSubmatch(fragment)
+	if m == nil {
+		return nil
+	}
+	start, _ := strconv.Atoi(m[1])
+	if start < 1 {
+		return nil
+	}
+	end := start
+	if m[2] != "" {
+		end, _ = strconv.Atoi(m[2])
+		if end < start {
+			return nil
+		}
+	}
+	return &LineRange{Start: start, End: end}
 }

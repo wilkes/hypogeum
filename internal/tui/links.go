@@ -42,7 +42,7 @@ func (m *Model) applyLinkHighlight() {
 		return
 	}
 	m.content.renderer.SetFromFile(path)
-	out, _, err := m.content.renderer.RenderWithLinks(string(src), path, markdown.HighlightMarker(m.content.linkCursor))
+	out, _, _, err := m.content.renderer.RenderWithLinks(string(src), path, markdown.HighlightMarker(m.content.linkCursor))
 	if err != nil {
 		m.status = err.Error()
 		return
@@ -56,9 +56,19 @@ func (m *Model) applyLinkHighlight() {
 // Local files navigate (recording history); external URLs arm the
 // one-keystroke confirm flow (a second Enter exec's the opener);
 // anchors are no-ops with a status message.
+//
+// For LinkLocalFile, link.Resolved.Range is consulted: if non-nil,
+// rangeHighlight is set before navigation so refreshContent picks it
+// up and reverse-videos the gutter. A plain local link clears any
+// stale highlight so a subsequent code-file open doesn't inherit one.
 func (m *Model) followLink(l markdown.Link) {
 	switch l.Resolved.Kind {
 	case markdown.LinkLocalFile:
+		if l.Resolved.Range != nil {
+			m.content.rangeHighlight = l.Resolved.Range
+		} else {
+			m.content.rangeHighlight = nil
+		}
 		m.navigateTo(l.Resolved.Target)
 	case markdown.LinkExternal:
 		m.pendingExternal = l.Href
@@ -67,6 +77,15 @@ func (m *Model) followLink(l markdown.Link) {
 		m.status = "anchor navigation not implemented: #" + l.Resolved.Anchor
 	default:
 		m.status = "unrecognized link: " + l.Href
+	}
+}
+
+// followCurrentLink follows whatever link is at m.content.linkCursor.
+// Thin wrapper over selectedLink + followLink, used by handleContentKey
+// on Enter and by tests that exercise the Enter path directly.
+func (m *Model) followCurrentLink() {
+	if sel := m.selectedLink(); sel != nil {
+		m.followLink(*sel)
 	}
 }
 

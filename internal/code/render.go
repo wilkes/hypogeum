@@ -12,6 +12,8 @@ import (
 	"github.com/alecthomas/chroma/v2"
 	"github.com/alecthomas/chroma/v2/formatters"
 	"github.com/alecthomas/chroma/v2/lexers"
+
+	"github.com/wilkes/hypogeum/internal/markdown"
 )
 
 // Renderer is the non-markdown render path. One per content viewport width.
@@ -31,15 +33,30 @@ func NewRenderer(width int) *Renderer {
 	return &Renderer{width: width, style: defaultStyle()}
 }
 
+// RenderOptions tunes Render's output. The zero value matches Render's
+// pre-options behavior.
+type RenderOptions struct {
+	// Highlight, when non-nil, marks the line-number gutter for source
+	// lines in [Start, End] in reverse-video so the eye can find the
+	// referenced range. Outside the range, gutter rendering is unchanged.
+	Highlight *markdown.LineRange
+}
+
+// Render renders src with no options. Equivalent to RenderOpts(path, src,
+// RenderOptions{}).
+//
 // Render tokenizes src with a lexer chosen from path's basename (or from
 // content analysis as a fallback), formats it as 256-color ANSI, and
 // prefixes a line-number gutter. Returns the rendered string and a nil
 // error for all user-facing problems (unrecognized syntax, tokenization
 // failure). A non-nil error indicates a programming-level invariant
 // violation (e.g. the terminal256 formatter not being registered).
-//
-// Soft-wrap for long lines will be added in a later task.
 func (r *Renderer) Render(path string, src []byte) (string, error) {
+	return r.RenderOpts(path, src, RenderOptions{})
+}
+
+// RenderOpts is Render with explicit options.
+func (r *Renderer) RenderOpts(path string, src []byte, opts RenderOptions) (string, error) {
 	const maxSize = 5 * 1024 * 1024
 	if len(src) > maxSize {
 		return "file too large to display", nil
@@ -77,7 +94,7 @@ func (r *Renderer) Render(path string, src []byte) (string, error) {
 	if err := formatter.Format(&buf, r.style, iterator); err != nil {
 		return "", fmt.Errorf("format: %w", err)
 	}
-	return addGutter(buf.String(), r.width), nil
+	return addGutter(buf.String(), r.width, opts.Highlight), nil
 }
 
 // looksBinary reports whether src appears to be binary content using the

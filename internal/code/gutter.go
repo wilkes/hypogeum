@@ -5,6 +5,8 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/x/ansi"
+
+	"github.com/wilkes/hypogeum/internal/markdown"
 )
 
 // addGutter prepends a faint right-aligned line-number gutter to each
@@ -18,7 +20,7 @@ import (
 // Chroma emits a final SGR reset *after* the last newline, so we
 // measure trailing-newline-ness against the SGR-stripped tail to
 // avoid an off-by-one line count.
-func addGutter(formatted string, contentWidth int) string {
+func addGutter(formatted string, contentWidth int, highlight *markdown.LineRange) string {
 	if formatted == "" {
 		return ""
 	}
@@ -57,9 +59,9 @@ func addGutter(formatted string, contentWidth int) string {
 		carry := ""
 		for i, sub := range rows {
 			if i == 0 {
-				b.WriteString(formatLineNumber(lineNum, gutterWidth))
+				b.WriteString(formatLineNumberFor(lineNum, gutterWidth, highlight))
 			} else {
-				b.WriteString(blankGutter(gutterWidth))
+				b.WriteString(blankGutterFor(gutterWidth, lineNum, highlight))
 			}
 			if i > 0 && carry != "" {
 				b.WriteString(carry)
@@ -169,22 +171,47 @@ func stripSGR(s string) string {
 	return b.String()
 }
 
-// formatLineNumber right-aligns n in a field of width w, wrapped in a
-// dim SGR sequence and reset, with a trailing separator space. The
+// formatLineNumberFor right-aligns n in a field of width w, wrapped in
+// a dim SGR sequence and reset, with a trailing separator space. The
 // reset is critical — without it the dim attribute would bleed into
 // the source-line tokens that follow.
-func formatLineNumber(n, w int) string {
+//
+// When hi is non-nil and n falls inside hi, the gutter cell renders in
+// reverse-video instead of dim so the eye can find the referenced
+// span. The reverse attribute is closed with \x1b[27m (not the full
+// 0m reset) so any SGR state in the source body that follows is
+// preserved.
+func formatLineNumberFor(n, w int, hi *markdown.LineRange) string {
 	s := strconv.Itoa(n)
 	pad := w - len(s)
 	if pad < 0 {
 		pad = 0
 	}
+	if inRange(n, hi) {
+		// Reverse-video the whole gutter cell (padding + number + separator
+		// space) so the band reads as a continuous bar. Reset at the end
+		// so the source body that follows is not reverse-video.
+		return "\x1b[7m" + strings.Repeat(" ", pad) + s + " \x1b[27m"
+	}
 	return "\x1b[2m" + strings.Repeat(" ", pad) + s + "\x1b[0m "
 }
 
-// blankGutter is formatLineNumber for continuation rows. Same width
-// (w padding + 1 separator) as a numbered gutter so columns align;
-// no SGR attribute applied so no color can leak into the column.
-func blankGutter(w int) string {
+// blankGutterFor is blankGutter with an optional highlight range. When
+// sourceLine falls inside hi, the blank gutter cell on a continuation
+// row also renders in reverse-video so a wrapped highlighted line
+// keeps its band across its continuation rows.
+func blankGutterFor(w, sourceLine int, hi *markdown.LineRange) string {
+	if inRange(sourceLine, hi) {
+		return "\x1b[7m" + strings.Repeat(" ", w+1) + "\x1b[27m"
+	}
 	return strings.Repeat(" ", w+1)
+}
+
+// inRange reports whether n is within hi's inclusive [Start, End].
+// A nil hi means no range is set, so nothing is in range.
+func inRange(n int, hi *markdown.LineRange) bool {
+	if hi == nil {
+		return false
+	}
+	return n >= hi.Start && n <= hi.End
 }

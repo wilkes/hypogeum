@@ -3,6 +3,7 @@ package tui
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 
 	"github.com/charmbracelet/bubbles/viewport"
 	zone "github.com/lrstanley/bubblezone"
@@ -24,6 +25,16 @@ type contentUIState struct {
 	codeRenderer *code.Renderer
 	links        []markdown.Link
 	linkCursor   int
+	// embedDeps holds the absolute paths of every source file embedded
+	// in the currently displayed markdown. The TUI's handleFSEvent
+	// FileModified branch re-renders the open file when a watcher event
+	// arrives for any of these paths.
+	embedDeps map[string]struct{}
+	// rangeHighlight is non-nil when the open file is a non-markdown
+	// source viewed via a range-link or embed navigation. It is cleared
+	// by Esc, by opening any other file, and by following a different
+	// range link.
+	rangeHighlight *markdown.LineRange
 }
 
 // linkZoneID returns the BubbleZone id used to track the i-th link in
@@ -77,11 +88,13 @@ func (m *Model) navigateTo(path string) {
 // touching history. Used by back/forward and on resize. Also refreshes
 // the link list and clears any active link selection.
 func (m *Model) refreshContent(path string) {
-	// Single-shot pre-select: clear the field unconditionally before any
+	// Single-shot pre-select: clear the fields unconditionally before any
 	// early return, so a read or render failure here can't leak a stale
 	// target into the next refreshContent.
 	target := m.pendingPreselectTarget
+	preselectRange := m.pendingPreselectRange
 	m.pendingPreselectTarget = ""
+	m.pendingPreselectRange = nil
 
 	src, err := os.ReadFile(path)
 	if err != nil {
@@ -93,7 +106,9 @@ func (m *Model) refreshContent(path string) {
 	}
 
 	if !tree.IsMarkdown(path) {
-		out, rerr := m.content.codeRenderer.Render(path, src)
+		out, rerr := m.content.codeRenderer.RenderOpts(path, src, code.RenderOptions{
+			Highlight: m.content.rangeHighlight,
+		})
 		if rerr != nil {
 			m.status = rerr.Error()
 			m.content.viewport.SetContent(fmt.Sprintf("Error: %v", rerr))
@@ -101,20 +116,28 @@ func (m *Model) refreshContent(path string) {
 			m.status = path
 			m.content.viewport.SetContent(out)
 			m.content.viewport.GotoTop()
+			if m.content.rangeHighlight != nil {
+				m.scrollToLine(m.content.rangeHighlight.Start)
+			}
 		}
 		m.content.links = nil
 		m.content.linkCursor = -1
+		m.content.embedDeps = nil
 		_ = target // preselect doesn't apply to code files
 		return
 	}
 
+	// Opening a markdown file always clears any prior source-range
+	// highlight; the renderer doesn't carry it across non-source files.
+	m.content.rangeHighlight = nil
 	m.content.renderer.SetFromFile(path)
-	out, links, err := m.content.renderer.RenderWithLinks(string(src), path, linkZoneMarker)
+	out, links, deps, err := m.content.renderer.RenderWithLinks(string(src), path, linkZoneMarker)
 	if err != nil {
 		m.status = err.Error()
 		m.content.viewport.SetContent(fmt.Sprintf("Error: %v", err))
 		m.content.links = nil
 		m.content.linkCursor = -1
+		m.content.embedDeps = nil
 		return
 	}
 	m.status = path
@@ -122,13 +145,34 @@ func (m *Model) refreshContent(path string) {
 	m.content.viewport.GotoTop()
 	m.content.links = links
 
+	m.content.embedDeps = make(map[string]struct{}, len(deps))
+	for _, p := range deps {
+		m.content.embedDeps[p] = struct{}{}
+		if m.watcher != nil {
+			_ = m.watcher.AddPath(filepath.Dir(p))
+		}
+	}
+
 	m.content.linkCursor = -1
 	if target != "" {
+		// Find the best match: same target, and if multiple, prefer the
+		// one whose Range matches preselectRange (set by the originating
+		// navigation). Falls back to first target match.
+		best := -1
 		for i, l := range links {
-			if l.Resolved.Kind == markdown.LinkLocalFile && l.Resolved.Target == target {
-				m.content.linkCursor = i
+			if l.Resolved.Kind != markdown.LinkLocalFile || l.Resolved.Target != target {
+				continue
+			}
+			if best < 0 {
+				best = i
+			}
+			if rangesEqual(l.Resolved.Range, preselectRange) {
+				best = i
 				break
 			}
+		}
+		if best >= 0 {
+			m.content.linkCursor = best
 		}
 	}
 	if m.content.linkCursor >= 0 {
@@ -189,7 +233,13 @@ func (m *Model) handleFSEvent(ev watch.Event) {
 			return
 		}
 		for _, p := range ev.Paths {
-			if p == cur {
+			matched := p == cur
+			if !matched {
+				if _, ok := m.content.embedDeps[p]; ok {
+					matched = true
+				}
+			}
+			if matched {
 				offset := m.content.viewport.YOffset
 				m.refreshContent(cur)
 				// refreshContent calls GotoTop; restore scroll so a save
@@ -233,6 +283,15 @@ func (m *Model) scrollToLine(n int) {
 		target = maxOffset
 	}
 	m.content.viewport.SetYOffset(target)
+}
+
+// rangesEqual reports whether two *LineRange values describe the same
+// range. Two nil pointers are equal; one nil and one not are unequal.
+func rangesEqual(a, b *markdown.LineRange) bool {
+	if a == nil || b == nil {
+		return a == nil && b == nil
+	}
+	return a.Start == b.Start && a.End == b.End
 }
 
 // allVaultMarkdownPaths walks m.rootNode and returns every markdown file

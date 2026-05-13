@@ -7,6 +7,9 @@ import (
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
+
+	"github.com/wilkes/hypogeum/internal/markdown"
+	"github.com/wilkes/hypogeum/internal/watch"
 )
 
 func TestModel_BootsAndRendersFirstFile(t *testing.T) {
@@ -169,5 +172,104 @@ func TestAllVaultMarkdownPaths(t *testing.T) {
 		if filepath.Ext(p) != ".md" {
 			t.Errorf("non-md path: %q", p)
 		}
+	}
+}
+
+func TestModel_EmbedDepsPopulatedOnOpen(t *testing.T) {
+	dir := t.TempDir()
+	src := filepath.Join(dir, "main.go")
+	if err := os.WriteFile(src, []byte("a\nb\nc\n"), 0o644); err != nil {
+		t.Fatalf("write src: %v", err)
+	}
+	mdPath := filepath.Join(dir, "notes.md")
+	if err := os.WriteFile(mdPath, []byte("# notes\n\n![[main.go#L1-L2]]\n"), 0o644); err != nil {
+		t.Fatalf("write md: %v", err)
+	}
+
+	m, err := New(dir, mdPath)
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	if _, ok := m.content.embedDeps[src]; !ok {
+		t.Fatalf("embedDeps missing %q; got %v", src, m.content.embedDeps)
+	}
+}
+
+func TestModel_FileModifiedOnEmbedDepRefreshesOpenMarkdown(t *testing.T) {
+	dir := t.TempDir()
+	src := filepath.Join(dir, "main.go")
+	if err := os.WriteFile(src, []byte("a\nb\nc\n"), 0o644); err != nil {
+		t.Fatalf("write src: %v", err)
+	}
+	mdPath := filepath.Join(dir, "notes.md")
+	if err := os.WriteFile(mdPath, []byte("![[main.go#L1-L2]]\n"), 0o644); err != nil {
+		t.Fatalf("write md: %v", err)
+	}
+	m := sized(t, dir, mdPath)
+
+	if err := os.WriteFile(src, []byte("X\nY\nZ\n"), 0o644); err != nil {
+		t.Fatalf("rewrite src: %v", err)
+	}
+	m.handleFSEvent(watch.Event{Kind: watch.FileModified, Paths: []string{src}})
+
+	if !strings.Contains(m.content.viewport.View(), "X") {
+		t.Fatalf("expected re-rendered content to contain new source line; viewport:\n%s",
+			m.content.viewport.View())
+	}
+}
+
+func TestModel_EnterOnRangeLinkOpensSourceWithHighlight(t *testing.T) {
+	dir := t.TempDir()
+	src := filepath.Join(dir, "main.go")
+	if err := os.WriteFile(src, []byte("a\nb\nc\nd\ne\nf\n"), 0o644); err != nil {
+		t.Fatalf("write src: %v", err)
+	}
+	mdPath := filepath.Join(dir, "notes.md")
+	mdBody := "[the parser](main.go#L2-L3)\n"
+	if err := os.WriteFile(mdPath, []byte(mdBody), 0o644); err != nil {
+		t.Fatalf("write md: %v", err)
+	}
+
+	m := sized(t, dir, mdPath)
+	if len(m.content.links) == 0 {
+		t.Fatalf("expected a link in the document, got none")
+	}
+	// Move link cursor onto the range link (the only link in the document).
+	m.content.linkCursor = 0
+	m.followCurrentLink()
+
+	if m.history.Current() != src {
+		t.Fatalf("expected current file = %q, got %q", src, m.history.Current())
+	}
+	if m.content.rangeHighlight == nil ||
+		m.content.rangeHighlight.Start != 2 || m.content.rangeHighlight.End != 3 {
+		t.Fatalf("rangeHighlight = %+v", m.content.rangeHighlight)
+	}
+	if !strings.Contains(m.content.viewport.View(), "\x1b[7m") {
+		t.Fatalf("expected reverse-video SGR in viewport:\n%s",
+			m.content.viewport.View())
+	}
+}
+
+func TestModel_EscClearsRangeHighlight(t *testing.T) {
+	dir := t.TempDir()
+	src := filepath.Join(dir, "main.go")
+	if err := os.WriteFile(src, []byte("a\nb\nc\n"), 0o644); err != nil {
+		t.Fatalf("write src: %v", err)
+	}
+	m := sized(t, dir, src)
+	m.content.rangeHighlight = &markdown.LineRange{Start: 1, End: 2}
+	m.refreshContent(src)
+	if !strings.Contains(m.content.viewport.View(), "\x1b[7m") {
+		t.Fatalf("setup: expected reverse-video in viewport")
+	}
+
+	m.handleKey(tea.KeyMsg{Type: tea.KeyEsc})
+	if m.content.rangeHighlight != nil {
+		t.Fatalf("Esc should clear rangeHighlight; got %+v", m.content.rangeHighlight)
+	}
+	if strings.Contains(m.content.viewport.View(), "\x1b[7m") {
+		t.Fatalf("Esc should have re-rendered without highlight; viewport still has SGR:\n%s",
+			m.content.viewport.View())
 	}
 }

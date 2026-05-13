@@ -1,10 +1,14 @@
 package markdown
 
 import (
+	"errors"
 	"fmt"
+	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 
+	"github.com/wilkes/hypogeum/internal/embed"
 	"github.com/wilkes/hypogeum/internal/wikilink"
 )
 
@@ -66,16 +70,17 @@ func HighlightMarker(selected int) LinkMarker {
 // are spliced around that link's visible text in the rendered output.
 // They flow through downstream styling without changing visible width
 // (caller's responsibility — typically zero-width sentinel sequences).
-func (r *Renderer) RenderWithLinks(src, base string, marker LinkMarker) (string, []Link, error) {
+func (r *Renderer) RenderWithLinks(src, base string, marker LinkMarker) (string, []Link, []string, error) {
+	src, embedDeps, embedLinks := r.preprocessEmbeds(src, base)
 	src = r.preprocessWikilinks(src)
 	raw, err := r.instrumented.Render(src)
 	if err != nil {
-		return "", nil, fmt.Errorf("render markdown: %w", err)
+		return "", nil, nil, fmt.Errorf("render markdown: %w", err)
 	}
 
 	asts := ExtractLinks(src)
 	cleaned, spans := stripSentinels(raw, marker)
-	links := make([]Link, 0, len(spans))
+	links := make([]Link, 0, len(spans)+len(embedLinks))
 	for i, s := range spans {
 		l := Link{Row: s.row}
 		if i < len(asts) {
@@ -87,7 +92,8 @@ func (r *Renderer) RenderWithLinks(src, base string, marker LinkMarker) (string,
 		}
 		links = append(links, l)
 	}
-	return cleaned, links, nil
+	links = append(links, embedLinks...)
+	return cleaned, links, embedDeps, nil
 }
 
 // wikilinkRegex matches the wikilink syntax for the source-rewrite pass.
@@ -323,6 +329,116 @@ func lastEscapeStart(s string, end int) int {
 		return -1
 	}
 	return -1
+}
+
+// embedTokenRegex matches ![[...]] outside of inline code spans.
+// We deliberately scan the raw source pre-render; goldmark would have
+// reparsed embed bodies as wikilinks. Order with preprocessWikilinks
+// matters: this pass runs first so the ![[...]] form is consumed before
+// the [[...]] regex sees it.
+var embedTokenRegex = regexp.MustCompile(`!\[\[([^\]\n]+)\]\]`)
+
+// preprocessEmbeds replaces every ![[...]] in src with a markdown fenced
+// code block sliced from the referenced source file. Returns the rewritten
+// src, the absolute paths of every successfully embedded source file
+// (one entry per *distinct* path, deduped), and the synthetic Link entries
+// that represent the embeds in the navigable link list.
+//
+// Failures (missing/binary/oversize/invalid range) render as a one-line
+// blockquote warning in place of the embed.
+func (r *Renderer) preprocessEmbeds(src, base string) (string, []string, []Link) {
+	if !strings.Contains(src, "![[") {
+		return src, nil, nil
+	}
+
+	var (
+		deps  []string
+		seen  = map[string]struct{}{}
+		links []Link
+	)
+	out := embedTokenRegex.ReplaceAllStringFunc(src, func(match string) string {
+		body := match[3 : len(match)-2] // strip ![[ and ]]
+		em, perr := embed.ParseEmbedToken(body)
+		if perr != nil {
+			return warningBlock(body, perr.Error())
+		}
+
+		absPath := em.Path
+		if !filepath.IsAbs(absPath) {
+			absPath = filepath.Join(filepath.Dir(base), absPath)
+		}
+		absPath, _ = filepath.Abs(absPath)
+
+		lines, startLine, serr := embed.SliceFile(absPath, em.Range, em.ContextLines)
+		soft := ""
+		switch {
+		case errors.Is(serr, embed.ErrNotFound):
+			return warningBlock(em.Path, "file not found")
+		case errors.Is(serr, embed.ErrBinary):
+			return warningBlock(em.Path, "binary file, not embedded")
+		case errors.Is(serr, embed.ErrTooLarge):
+			return warningBlock(em.Path, "file too large to embed")
+		case errors.Is(serr, embed.ErrInvalidRange):
+			return warningBlock(em.Path, "invalid range")
+		case errors.Is(serr, embed.ErrRangePastEOF):
+			soft = "file ends at line " + strconv.Itoa(startLine+len(lines)-1)
+			// keep going; lines and startLine are populated and valid
+		case serr != nil:
+			return warningBlock(em.Path, serr.Error())
+		}
+
+		displayRange := embedDisplayRange(em)
+		leadCtx, tailCtx := 0, 0
+		if em.Range != nil && em.ContextLines > 0 {
+			leadCtx = em.Range.Start - startLine
+			if leadCtx < 0 {
+				leadCtx = 0
+			}
+			tailCtx = (startLine + len(lines) - 1) - em.Range.End
+			if tailCtx < 0 {
+				tailCtx = 0
+			}
+		}
+
+		if _, ok := seen[absPath]; !ok {
+			seen[absPath] = struct{}{}
+			deps = append(deps, absPath)
+		}
+		l := Link{
+			Text: em.Path,
+			Href: body,
+			Row:  -1,
+			Resolved: ResolvedLink{
+				Kind:   LinkLocalFile,
+				Target: absPath,
+			},
+		}
+		if em.Range != nil {
+			l.Resolved.Range = em.Range
+		}
+		links = append(links, l)
+
+		return embed.RenderToFence(absPath, lines, startLine, displayRange, leadCtx, tailCtx, soft)
+	})
+	return out, deps, links
+}
+
+// warningBlock formats an embed failure as a one-line blockquote that
+// Glamour will style faintly, preserving the surrounding document flow.
+func warningBlock(path, reason string) string {
+	return "> ⚠ `" + path + "`: " + reason + "\n"
+}
+
+// embedDisplayRange formats em.Range for the provenance header in the
+// fence; matches what the user typed inside the brackets.
+func embedDisplayRange(em *embed.Embed) string {
+	if em.Range == nil {
+		return "whole file"
+	}
+	if em.Range.Start == em.Range.End {
+		return strconv.Itoa(em.Range.Start)
+	}
+	return strconv.Itoa(em.Range.Start) + "–" + strconv.Itoa(em.Range.End)
 }
 
 // stripURLSentinels removes urlSuppressStart..urlSuppressEnd ranges

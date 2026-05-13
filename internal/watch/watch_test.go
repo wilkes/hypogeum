@@ -141,3 +141,26 @@ func TestWatcher_RemovedFileEmitsStructure(t *testing.T) {
 		t.Errorf("kind = %v, want StructureChanged", ev.Kind)
 	}
 }
+
+func TestWatcher_AddPathIdempotent(t *testing.T) {
+	dir := t.TempDir()
+	w, err := New(dir)
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	t.Cleanup(func() { _ = w.Close() })
+	extra := t.TempDir()
+	if err := w.AddPath(extra); err != nil {
+		t.Fatalf("AddPath: %v", err)
+	}
+	if err := w.AddPath(extra); err != nil { // second call is a no-op
+		t.Fatalf("AddPath (second call): %v", err)
+	}
+}
+
+func TestWatcher_AddPathNilSafe(t *testing.T) {
+	var w *Watcher
+	if err := w.AddPath("/tmp"); err != nil {
+		t.Fatalf("nil receiver AddPath: %v", err)
+	}
+}

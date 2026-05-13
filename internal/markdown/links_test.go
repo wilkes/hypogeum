@@ -79,3 +79,36 @@ func TestExtractLinks_IgnoresImages(t *testing.T) {
 		t.Errorf("ExtractLinks mismatch\n got: %+v\nwant: %+v", got, want)
 	}
 }
+
+func TestResolveLink_LineRange(t *testing.T) {
+	got := ResolveLink("/base/notes.md", "code/main.go#L10-L20")
+	if got.Kind != LinkLocalFile {
+		t.Fatalf("kind = %v, want LinkLocalFile", got.Kind)
+	}
+	if got.Range == nil {
+		t.Fatalf("range is nil")
+	}
+	if got.Range.Start != 10 || got.Range.End != 20 {
+		t.Fatalf("range = %+v", got.Range)
+	}
+	if got.Anchor != "" {
+		t.Fatalf("anchor = %q, want empty (line range claims the fragment)", got.Anchor)
+	}
+}
+
+func TestResolveLink_SingleLine(t *testing.T) {
+	got := ResolveLink("/base/notes.md", "main.go#L5")
+	if got.Range == nil || got.Range.Start != 5 || got.Range.End != 5 {
+		t.Fatalf("range = %+v", got.Range)
+	}
+}
+
+func TestResolveLink_NonLineFragmentIsStillAnchor(t *testing.T) {
+	got := ResolveLink("/base/notes.md", "page.md#some-heading")
+	if got.Range != nil {
+		t.Fatalf("range = %+v, want nil", got.Range)
+	}
+	if got.Anchor != "some-heading" {
+		t.Fatalf("anchor = %q", got.Anchor)
+	}
+}

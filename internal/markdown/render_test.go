@@ -19,7 +19,7 @@ func rendererForTest(t *testing.T) *Renderer {
 
 func TestRenderWithLinks_NoLinks(t *testing.T) {
 	r := rendererForTest(t)
-	out, links, err := r.RenderWithLinks("# Heading\n\nJust text.\n", "/base/dir/file.md", nil)
+	out, links, _, err := r.RenderWithLinks("# Heading\n\nJust text.\n", "/base/dir/file.md", nil)
 	if err != nil {
 		t.Fatalf("RenderWithLinks: %v", err)
 	}
@@ -36,7 +36,7 @@ func TestRenderWithLinks_LocalFileResolved(t *testing.T) {
 	r := rendererForTest(t)
 	base := "/notes/index.md"
 	src := "See [first link](one.md) for more.\n"
-	_, links, err := r.RenderWithLinks(src, base, nil)
+	_, links, _, err := r.RenderWithLinks(src, base, nil)
 	if err != nil {
 		t.Fatalf("RenderWithLinks: %v", err)
 	}
@@ -59,7 +59,7 @@ func TestRenderWithLinks_LocalFileResolved(t *testing.T) {
 func TestRenderWithLinks_OrderPreservedAcrossKinds(t *testing.T) {
 	r := rendererForTest(t)
 	src := "[a](a.md), [b](https://x.test), [c](#anchor), [d](sub/d.md)\n"
-	_, links, err := r.RenderWithLinks(src, "/base/file.md", nil)
+	_, links, _, err := r.RenderWithLinks(src, "/base/file.md", nil)
 	if err != nil {
 		t.Fatalf("RenderWithLinks: %v", err)
 	}
@@ -91,7 +91,7 @@ func TestRenderWithLinks_RowReflectsRenderedPosition(t *testing.T) {
 		"Second paragraph.\n\n" +
 		"Third paragraph.\n\n" +
 		"Final paragraph with [second](two.md).\n"
-	_, links, err := r.RenderWithLinks(src, "/base/file.md", nil)
+	_, links, _, err := r.RenderWithLinks(src, "/base/file.md", nil)
 	if err != nil {
 		t.Fatalf("RenderWithLinks: %v", err)
 	}
@@ -117,7 +117,7 @@ func TestRenderWithLinks_OutputIsCleanRender(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Render: %v", err)
 	}
-	instrumented, _, err := r.RenderWithLinks(src, "/base/file.md", nil)
+	instrumented, _, _, err := r.RenderWithLinks(src, "/base/file.md", nil)
 	if err != nil {
 		t.Fatalf("RenderWithLinks: %v", err)
 	}
@@ -140,7 +140,7 @@ func TestRenderWithLinks_WikilinkResolvesToHref(t *testing.T) {
 		t.Fatalf("NewRenderer: %v", err)
 	}
 	r.SetFromFile("/abs/source.md")
-	_, links, err := r.RenderWithLinks("see [[Notes#Section Two]] above.", "/abs/source.md", nil)
+	_, links, _, err := r.RenderWithLinks("see [[Notes#Section Two]] above.", "/abs/source.md", nil)
 	if err != nil {
 		t.Fatalf("RenderWithLinks: %v", err)
 	}
