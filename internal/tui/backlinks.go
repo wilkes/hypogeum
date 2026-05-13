@@ -154,8 +154,12 @@ func (m *Model) followBacklink() {
 	m.focus = focusContent
 
 	// Pre-select the inline link in the source file that points back to
-	// the file we're leaving. Consumed by refreshContent during openFile.
+	// the file we're leaving, plus any active range highlight, so the
+	// destination's refreshContent can reapply it. Mirrors the capture
+	// in Back/Forward (input.go) — every navigation-out path must
+	// capture both fields so the invariant holds uniformly.
 	m.pendingPreselectTarget = m.history.Current()
+	m.pendingPreselectRange = m.content.rangeHighlight
 
 	m.openFile(bl.SourceFile)
 	// Re-derive tree expansion from the new file's ancestor chain so the

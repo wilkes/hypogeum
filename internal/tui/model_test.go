@@ -273,3 +273,66 @@ func TestModel_EscClearsRangeHighlight(t *testing.T) {
 			m.content.viewport.View())
 	}
 }
+
+func TestModel_EscClearingRangeHighlightPreservesScroll(t *testing.T) {
+	dir := t.TempDir()
+	src := filepath.Join(dir, "big.go")
+	var b strings.Builder
+	for i := 0; i < 200; i++ {
+		b.WriteString("line content\n")
+	}
+	if err := os.WriteFile(src, []byte(b.String()), 0o644); err != nil {
+		t.Fatalf("write src: %v", err)
+	}
+	m := sized(t, dir, src)
+	m.content.rangeHighlight = &markdown.LineRange{Start: 1, End: 2}
+	m.refreshContent(src)
+	m.content.viewport.SetYOffset(60)
+	want := m.content.viewport.YOffset
+
+	m.handleKey(tea.KeyMsg{Type: tea.KeyEsc})
+
+	if m.content.rangeHighlight != nil {
+		t.Fatalf("Esc should clear rangeHighlight; got %+v", m.content.rangeHighlight)
+	}
+	if m.content.viewport.YOffset != want {
+		t.Fatalf("Esc should preserve scroll: YOffset %d -> %d",
+			want, m.content.viewport.YOffset)
+	}
+}
+
+func TestModel_CyclingOntoEmbedDoesNotScroll(t *testing.T) {
+	dir := t.TempDir()
+	target := filepath.Join(dir, "target.go")
+	if err := os.WriteFile(target, []byte("alpha\nbeta\ngamma\n"), 0o644); err != nil {
+		t.Fatalf("write target: %v", err)
+	}
+	// A markdown file long enough that we can scroll, with an embed at
+	// the end. The pad lines before the embed force the viewport to
+	// have a non-zero YOffset when we land on the embed link.
+	var pad strings.Builder
+	for i := 0; i < 50; i++ {
+		pad.WriteString("filler line\n\n")
+	}
+	doc := pad.String() + "![[target.go]]\n"
+	md := filepath.Join(dir, "doc.md")
+	if err := os.WriteFile(md, []byte(doc), 0o644); err != nil {
+		t.Fatalf("write doc: %v", err)
+	}
+
+	m := sized(t, dir, md)
+	// Scroll well past the top.
+	m.content.viewport.SetYOffset(40)
+	want := m.content.viewport.YOffset
+
+	// One cycleLink(+1) call: empty cursor -> first link (the embed).
+	m.cycleLink(+1)
+
+	if m.content.viewport.YOffset != want {
+		t.Fatalf("cycling onto embed link must not scroll: YOffset %d -> %d",
+			want, m.content.viewport.YOffset)
+	}
+	if m.content.linkCursor != 0 {
+		t.Fatalf("expected linkCursor=0, got %d", m.content.linkCursor)
+	}
+}

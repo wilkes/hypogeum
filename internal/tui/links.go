@@ -92,6 +92,12 @@ func (m *Model) followCurrentLink() {
 // scrollToLink ensures the link's row is visible in the viewport. Pads
 // by one line above so the link isn't flush with the top edge.
 func (m *Model) scrollToLink(l markdown.Link) {
+	// Row < 0 is the embed-link sentinel: such links have no single
+	// representative row in the rendered output (they're whole fenced
+	// blocks). Move the cursor without disturbing scroll.
+	if l.Row < 0 {
+		return
+	}
 	top := m.content.viewport.YOffset
 	bottom := top + m.content.viewport.Height - 1
 	switch {

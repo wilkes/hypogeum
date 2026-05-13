@@ -343,8 +343,10 @@ func (m *Model) handleContentKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		//    next Esc still resets the link cursor for markdown.
 		cur := m.history.Current()
 		if m.content.rangeHighlight != nil && !tree.IsMarkdown(cur) {
+			offset := m.content.viewport.YOffset
 			m.content.rangeHighlight = nil
 			m.refreshContent(cur)
+			m.content.viewport.SetYOffset(offset)
 			return *m, nil
 		}
 		offset := m.content.viewport.YOffset
