@@ -83,6 +83,39 @@ func TestRender_NoTrailingNewline_StillCountsCorrectly(t *testing.T) {
 	}
 }
 
+// TestRender_LongComment_KeepsColorOnContinuationRows guards against an
+// ansi.Wrap quirk: it won't split mid-escape but doesn't synthesize a
+// state restore at the seam. Without explicit carry, a long colored
+// token like a comment renders its continuation rows in terminal
+// default. We re-inject the active SGR at the start of each
+// continuation row so the body color stays consistent.
+func TestRender_LongComment_KeepsColorOnContinuationRows(t *testing.T) {
+	r := NewRenderer(40)
+	src := []byte("// " + strings.Repeat("aaaaaaaaaa ", 10) + "\n")
+	out, err := r.Render("a.go", src)
+	if err != nil {
+		t.Fatalf("Render returned error: %v", err)
+	}
+	lines := strings.Split(strings.TrimRight(out, "\n"), "\n")
+	if len(lines) < 2 {
+		t.Fatalf("expected wrap to produce multiple rows, got %d:\n%q", len(lines), out)
+	}
+	// First row should contain Chroma's comment color (38;5;242 in monokai).
+	if !strings.Contains(lines[0], "\x1b[38;5;242m") {
+		t.Fatalf("first row missing expected comment color SGR: %q", lines[0])
+	}
+	// Each continuation row should re-establish a color SGR before the
+	// body text. Without the fix, lines[1+] would have no SGR at all
+	// after the blank gutter.
+	for i := 1; i < len(lines); i++ {
+		// Strip the blank-gutter leading spaces; what follows must be an SGR.
+		body := strings.TrimLeft(lines[i], " ")
+		if !strings.HasPrefix(body, "\x1b[") {
+			t.Errorf("continuation row %d missing SGR after gutter: %q", i, lines[i])
+		}
+	}
+}
+
 func TestRender_LongLine_WrapsWithBlankContinuationGutter(t *testing.T) {
 	r := NewRenderer(40) // narrow terminal
 	longLine := strings.Repeat("a", 100)

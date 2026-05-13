@@ -50,14 +50,28 @@ func addGutter(formatted string, contentWidth int) string {
 		}
 		wrapped := ansi.Wrap(row, bodyWidth, "")
 		rows := strings.Split(wrapped, "\n")
+		// Carry SGR state across wrap boundaries. ansi.Wrap won't split
+		// inside an escape sequence but it also doesn't synthesize a
+		// reset/restore at the seam, so a long colored token would
+		// otherwise render its continuation rows in terminal default.
+		carry := ""
 		for i, sub := range rows {
 			if i == 0 {
 				b.WriteString(formatLineNumber(lineNum, gutterWidth))
 			} else {
 				b.WriteString(blankGutter(gutterWidth))
 			}
+			if i > 0 && carry != "" {
+				b.WriteString(carry)
+			}
 			b.WriteString(sub)
+			// Reset at row end so the gutter on the next row never
+			// inherits whatever color was active.
+			if i < len(rows)-1 {
+				b.WriteString("\x1b[0m")
+			}
 			b.WriteByte('\n')
+			carry = lastUnclosedSGR(sub, carry)
 		}
 		lineNum++
 		emitted++
@@ -101,6 +115,36 @@ func endsWithNewline(formatted string) bool {
 		i = j
 	}
 	return i > 0 && formatted[i-1] == '\n'
+}
+
+// lastUnclosedSGR returns the SGR sequence that's still in effect at
+// the end of sub, given that prev was the carry at the start. An
+// "\x1b[0m" reset clears the carry; any other SGR replaces it. Used to
+// restore color state at the start of wrapped continuation rows so
+// long colored tokens don't lose their color mid-line.
+func lastUnclosedSGR(sub, prev string) string {
+	carry := prev
+	for i := 0; i < len(sub); {
+		if sub[i] != '\x1b' || i+1 >= len(sub) || sub[i+1] != '[' {
+			i++
+			continue
+		}
+		j := i + 2
+		for j < len(sub) && sub[j] != 'm' {
+			j++
+		}
+		if j >= len(sub) {
+			break
+		}
+		seq := sub[i : j+1]
+		if seq == "\x1b[0m" {
+			carry = ""
+		} else {
+			carry = seq
+		}
+		i = j + 1
+	}
+	return carry
 }
 
 // stripSGR removes ANSI SGR sequences from s. Used to detect rows whose
