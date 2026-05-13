@@ -28,8 +28,8 @@ hypogeum ~/notes/index.md # open a specific file; tree roots at its directory
 |-----|--------|
 | `↑` / `k`, `↓` / `j` | Move within the focused pane |
 | `Enter` | Open the selected file |
-| `h` / `←` | Back |
-| `l` / `→` | Forward |
+| `h` / `←` | Back (collapse folder when tree modal is open) |
+| `l` / `→` | Forward (expand folder when tree modal is open) |
 | `Tab` | Switch between content and backlinks (when backlinks pane is open) |
 | `n` / `p` | Cycle to next / previous link |
 | `Enter` | Follow selected link |
