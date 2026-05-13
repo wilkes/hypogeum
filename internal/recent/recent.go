@@ -66,6 +66,10 @@ type Ranked struct {
 // Store holds the persisted visit history and exposes scoring + ranking.
 // The mutex is defensive — in normal TUI use Store is touched from a
 // single goroutine.
+//
+// Concurrent hypogeum instances share one state file: last writer wins
+// on the visits map. Each write uses a per-process temp file
+// (via os.CreateTemp) so the atomic rename never sees a torn temp.
 type Store struct {
 	stateFile string
 	visits    map[string]time.Time
@@ -182,11 +186,22 @@ func (s *Store) saveLocked() error {
 	if err != nil {
 		return fmt.Errorf("marshal visits: %w", err)
 	}
-	tmp := s.stateFile + ".tmp"
-	if err := os.WriteFile(tmp, data, 0o644); err != nil {
+	f, err := os.CreateTemp(filepath.Dir(s.stateFile), "visits-*.json.tmp")
+	if err != nil {
+		return fmt.Errorf("create temp: %w", err)
+	}
+	tmp := f.Name()
+	if _, err := f.Write(data); err != nil {
+		f.Close()
+		os.Remove(tmp)
 		return fmt.Errorf("write %s: %w", tmp, err)
 	}
+	if err := f.Close(); err != nil {
+		os.Remove(tmp)
+		return fmt.Errorf("close %s: %w", tmp, err)
+	}
 	if err := os.Rename(tmp, s.stateFile); err != nil {
+		os.Remove(tmp)
 		return fmt.Errorf("rename %s -> %s: %w", tmp, s.stateFile, err)
 	}
 	return nil

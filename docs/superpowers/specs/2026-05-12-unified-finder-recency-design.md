@@ -1,6 +1,6 @@
 # Unified finder with recency — design
 
-**Status:** spec — not yet implemented.
+**Status:** shipped on 2026-05-12.
 **Scope:** replace the tree-rooted `^p` picker with a flat, recency-ranked finder over every markdown file in the vault. Introduce a new `internal/recent` package that owns the hybrid mtime + visit-history score and the persisted visits state file. First cut is foundation + recency only; name-filter and other sort modes are explicitly deferred.
 **Out of scope:** full-text content search, fuzzy name-filter typing inside the picker, sort-mode cycling, updated-together view, configurable decay constants, per-vault state files, Windows support.
 
@@ -198,8 +198,6 @@ docs/index.md                       6d ago
 ```
 j / ↓      cursor down
 k / ↑      cursor up
-g          jump to top
-G          jump to bottom
 Enter      open the selected file (closes picker, calls m.openFile)
 Esc        close picker, no action
 ^p         close picker (toggle)
