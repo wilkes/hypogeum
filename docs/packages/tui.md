@@ -93,21 +93,13 @@ The cursor-move-and-refresh pattern and the viewport-clamp pattern are extracted
 
 ### Flat file finder (`^p`)
 
-`^p` opens `modalPicker` — a flat list of every markdown file in the
-vault, ranked by `recent.Store.Rank`. The picker holds a `[]recent.Ranked`
-and an integer cursor; there is no expansion state and no tree walk
-on render. Each row shows the path relative to the vault root and a
-human-friendly recency label ("2h ago", "yesterday", "3d ago · edited"
-when the recency comes from a file edit rather than a visit). Keys: `j`/`k`
-or `↑`/`↓` move the cursor, `Enter` opens, `Esc` or `^p` closes.
+The `^p` finder is a modal (`modalKind == modalPicker`) over every markdown file in the vault. On open, the model calls `recent.Rank(allVaultMarkdownPaths())` to get a `[]recent.Ranked` ordered by the hybrid recency score; that slice is stored on `pickerState.all` and not refreshed mid-modal.
 
-Visits are recorded on every `openFile` call (tree, link, backlink, history,
-finder) via `m.recent.Record(path)`. The Store persists to
-`os.UserConfigDir()/hypogeum/visits.json` atomically. Both Record errors
-and load errors surface as `diag.Warn` and never block navigation.
+The textinput is focused immediately. Each keystroke flows through `textinput.Update`; on value change, `refilter` runs `sahilm/fuzzy.Find` over a lowercased copy of the paths and re-sorts by match score (descending) with the source-order index as a stable tiebreaker — the latter preserves the recency order within a score tier. Rendered rows highlight matched bytes in bold cyan; selected row is reverse-video.
 
-See [unified-finder-recency](../superpowers/specs/2026-05-12-unified-finder-recency-design.md)
-for the full design.
+`^j`/`^k` (and `↑`/`↓`) move the cursor; `j`/`k` are typed characters now. `Esc` clears a non-empty query first, closes on the second press. `Enter` opens the selected row through `m.openFile`, which records a visit through `recent.Record`.
+
+Specs: [unified-finder-recency](../superpowers/specs/2026-05-12-unified-finder-recency-design.md), [finder-fuzzy-filter](../superpowers/specs/2026-05-12-finder-fuzzy-filter-design.md).
 
 ## Backlinks and modal surfaces
 

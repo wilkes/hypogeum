@@ -57,7 +57,9 @@ func TestPickerEscClosesWithoutOpening(t *testing.T) {
 	}
 }
 
-func TestPickerJKMovesCursor(t *testing.T) {
+// `j` / `k` are now typed into the query — they no longer move the cursor.
+// The new bindings are `^j` / `^k`.
+func TestPickerCtrlJKMovesCursor(t *testing.T) {
 	dir := t.TempDir()
 	writePickerFile(t, filepath.Join(dir, "a.md"), "# A")
 	writePickerFile(t, filepath.Join(dir, "b.md"), "# B")
@@ -68,18 +70,17 @@ func TestPickerJKMovesCursor(t *testing.T) {
 	if got := m.modals.picker.cursor; got != 0 {
 		t.Fatalf("initial cursor: %d, want 0", got)
 	}
-	m = pressRune(t, m, 'j')
+	m = pressKey(t, m, tea.KeyMsg{Type: tea.KeyCtrlJ})
 	if got := m.modals.picker.cursor; got != 1 {
-		t.Errorf("after j: cursor=%d, want 1", got)
+		t.Errorf("after ^j: cursor=%d, want 1", got)
 	}
-	m = pressRune(t, m, 'k')
+	m = pressKey(t, m, tea.KeyMsg{Type: tea.KeyCtrlK})
 	if got := m.modals.picker.cursor; got != 0 {
-		t.Errorf("after k: cursor=%d, want 0", got)
+		t.Errorf("after ^k: cursor=%d, want 0", got)
 	}
-	// k at top is clamped.
-	m = pressRune(t, m, 'k')
+	m = pressKey(t, m, tea.KeyMsg{Type: tea.KeyCtrlK})
 	if got := m.modals.picker.cursor; got != 0 {
-		t.Errorf("k at top: cursor=%d, want 0", got)
+		t.Errorf("^k at top: cursor=%d, want 0", got)
 	}
 }
 

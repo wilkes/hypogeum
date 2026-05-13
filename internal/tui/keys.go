@@ -25,7 +25,9 @@ type keyMap struct {
 	ToggleTree   key.Binding
 	ToggleFolder key.Binding
 
-	OpenPicker key.Binding
+	OpenPicker       key.Binding
+	PickerCursorDown key.Binding
+	PickerCursorUp   key.Binding
 }
 
 func defaultKeys() keyMap {
@@ -50,6 +52,8 @@ func defaultKeys() keyMap {
 		ToggleTree:   key.NewBinding(key.WithKeys("ctrl+b"), key.WithHelp("^b", "toggle tree")),
 		ToggleFolder: key.NewBinding(key.WithKeys(" "), key.WithHelp("space", "expand/collapse")),
 
-		OpenPicker: key.NewBinding(key.WithKeys("ctrl+p"), key.WithHelp("^p", "open file…")),
+		OpenPicker:       key.NewBinding(key.WithKeys("ctrl+p"), key.WithHelp("^p", "open file…")),
+		PickerCursorDown: key.NewBinding(key.WithKeys("ctrl+j"), key.WithHelp("^j", "picker: next")),
+		PickerCursorUp:   key.NewBinding(key.WithKeys("ctrl+k"), key.WithHelp("^k", "picker: prev")),
 	}
 }

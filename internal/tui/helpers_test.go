@@ -8,8 +8,18 @@ import (
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 	zone "github.com/lrstanley/bubblezone"
+	"github.com/muesli/termenv"
 )
+
+// TestMain initialises package-level state needed by tests:
+//   - Forces lipgloss to emit ANSI colour codes even outside a TTY so that
+//     tests which assert on ANSI output (e.g. picker highlight) work correctly.
+func TestMain(m *testing.M) {
+	lipgloss.SetColorProfile(termenv.ANSI256)
+	os.Exit(m.Run())
+}
 
 // writeFixture lays down a small markdown directory and returns its root.
 func writeFixture(t *testing.T) string {

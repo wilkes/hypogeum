@@ -3,35 +3,93 @@ package tui
 import (
 	"fmt"
 	"path/filepath"
+	"sort"
+	"strconv"
 	"strings"
 	"time"
 
+	"github.com/charmbracelet/bubbles/textinput"
 	"github.com/charmbracelet/bubbles/viewport"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
+	"github.com/sahilm/fuzzy"
 
 	"github.com/wilkes/hypogeum/internal/recent"
 )
 
+// pickerMaxVisible caps how many rows render at once. The cursor is
+// clamped to this range; refining the query is the way to reach hidden
+// rows.
+const pickerMaxVisible = 200
+
 // pickerState is the flat, recency-ranked file finder rendered as a modal.
 // Replaces the previous tree-rooted picker; cursor indexes into ranked.
 type pickerState struct {
-	ranked []recent.Ranked
-	cursor int
-	vp     viewport.Model
-	root   string // vault root, used to render relative paths
+	all     []recent.Ranked  // full ranked list captured at open time
+	ranked  []recent.Ranked  // currently visible (filtered or all)
+	matches []fuzzy.Match    // parallel to ranked when query non-empty
+	cursor  int
+	vp      viewport.Model
+	root    string // vault root, used to render relative paths
+	input   textinput.Model
 }
 
 func newPicker() pickerState {
-	return pickerState{vp: viewport.New(0, 0)}
+	ti := textinput.New()
+	ti.Prompt = ""      // we render our own "> " prefix
+	ti.Placeholder = ""
+	ti.CharLimit = 256
+	return pickerState{
+		vp:    viewport.New(0, 0),
+		input: ti,
+	}
 }
 
-// reset populates the picker with a fresh ranked list and resets the
-// cursor to the top of the list.
+// reset populates the picker with a fresh ranked list, resets the cursor
+// and query, and focuses the textinput. Called on every picker open.
 func (p *pickerState) reset(ranked []recent.Ranked, root string) {
+	p.all = ranked
 	p.ranked = ranked
+	p.matches = nil
 	p.cursor = 0
 	p.root = root
+	p.input.SetValue("")
+	p.input.Focus()
+	p.refreshVP()
+}
+
+// refilter recomputes p.ranked and p.matches from p.all and the current
+// query. Empty query → ranked == all, matches == nil. Otherwise: run
+// sahilm/fuzzy over a lowercased copy of the paths, then stable-sort by
+// score descending with the source-order index (i.e. recency rank) as
+// the tiebreaker. Cursor resets to 0 on every call.
+func (p *pickerState) refilter() {
+	q := strings.ToLower(p.input.Value())
+	if q == "" {
+		p.ranked = p.all
+		p.matches = nil
+		p.cursor = 0
+		p.refreshVP()
+		return
+	}
+	src := make([]string, len(p.all))
+	for i, r := range p.all {
+		src[i] = strings.ToLower(relativeTo(p.root, r.Path))
+	}
+	raw := fuzzy.Find(q, src)
+	sort.SliceStable(raw, func(i, j int) bool {
+		if raw[i].Score != raw[j].Score {
+			return raw[i].Score > raw[j].Score
+		}
+		return raw[i].Index < raw[j].Index
+	})
+	p.ranked = make([]recent.Ranked, len(raw))
+	p.matches = make([]fuzzy.Match, len(raw))
+	for i, m := range raw {
+		p.ranked[i] = p.all[m.Index]
+		p.matches[i] = m
+	}
+	p.cursor = 0
 	p.refreshVP()
 }
 
@@ -42,23 +100,35 @@ func (p *pickerState) refreshVP() {
 	viewportClamp(&p.vp, p.cursor, 1)
 }
 
-// renderRows builds the picker's display string. No score is shown — the
-// score is a sorting signal, not a UX signal.
 func (p *pickerState) renderRows() string {
-	now := time.Now()
-	var b strings.Builder
 	width := p.vp.Width
 	if width < 20 {
 		width = 20
 	}
-	for i, r := range p.ranked {
+	if p.input.Value() != "" && len(p.ranked) == 0 {
+		return lipgloss.NewStyle().Faint(true).
+			Render(`(no match for "` + p.input.Value() + `")`)
+	}
+
+	now := time.Now()
+	var b strings.Builder
+	visible := len(p.ranked)
+	if visible > pickerMaxVisible {
+		visible = pickerMaxVisible
+	}
+	for i := 0; i < visible; i++ {
+		r := p.ranked[i]
 		rel := relativeTo(p.root, r.Path)
 		recencyLabel, edited := pickRecencyLabel(now, r.MTime, r.Visit)
 		suffix := recencyLabel
 		if edited {
 			suffix += " · edited"
 		}
-		line := formatPickerRow(rel, suffix, width)
+		pathDisplay := preTruncatePath(rel, suffix, width)
+		if p.input.Value() != "" {
+			pathDisplay = highlightMatch(pathDisplay, p.input.Value())
+		}
+		line := formatPickerRow(pathDisplay, suffix, width)
 		if i == p.cursor {
 			line = lipgloss.NewStyle().Reverse(true).Render(line)
 		}
@@ -66,6 +136,16 @@ func (p *pickerState) renderRows() string {
 		b.WriteByte('\n')
 	}
 	return b.String()
+}
+
+// renderOverflowFooter returns the "… N more" faint footer when ranked
+// exceeds pickerMaxVisible, or an empty string otherwise.
+func (p *pickerState) renderOverflowFooter() string {
+	if overflow := len(p.ranked) - pickerMaxVisible; overflow > 0 {
+		return lipgloss.NewStyle().Faint(true).
+			Render("… " + strconv.Itoa(overflow) + " more")
+	}
+	return ""
 }
 
 // relativeTo returns p relative to root, or the absolute path on failure.
@@ -136,6 +216,70 @@ func formatPickerRow(left, right string, width int) string {
 	return leftTrunc + strings.Repeat(" ", pad) + right
 }
 
+// highlightStyle is the lipgloss style for matched characters in a row.
+var highlightStyle = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("14"))
+
+// highlightMatch wraps the bytes of display that match query (via a
+// fresh fuzzy.Find pass) in highlightStyle. Returns display unchanged
+// if query is empty or doesn't match. Called per visible row after
+// truncation, so indices map to the truncated string.
+func highlightMatch(display, query string) string {
+	if query == "" {
+		return display
+	}
+	src := strings.ToLower(display)
+	matches := fuzzy.Find(strings.ToLower(query), []string{src})
+	if len(matches) == 0 {
+		return display
+	}
+	idx := matches[0].MatchedIndexes
+	if len(idx) == 0 {
+		return display
+	}
+	// sahilm/fuzzy MatchedIndexes are byte offsets (the inner loop variable j
+	// in fuzzy.go advances by candidateSize bytes via utf8.DecodeRuneInString).
+	// Iterate by byte offset so multibyte runes are addressed correctly.
+	var b strings.Builder
+	bytePos := 0
+	for _, r := range display {
+		runeLen := len(string(r))
+		if containsInt(idx, bytePos) {
+			b.WriteString(highlightStyle.Render(string(r)))
+		} else {
+			b.WriteRune(r)
+		}
+		bytePos += runeLen
+	}
+	return b.String()
+}
+
+// containsInt reports whether n is in the (small) sorted slice s.
+func containsInt(s []int, n int) bool {
+	for _, v := range s {
+		if v == n {
+			return true
+		}
+		if v > n {
+			return false
+		}
+	}
+	return false
+}
+
+// preTruncatePath returns the path trimmed to whatever column budget
+// formatPickerRow would have available for the left side. Centralizes
+// the width math so highlightMatch operates on the actually-visible
+// characters.
+func preTruncatePath(path, suffix string, width int) string {
+	const gap = 2
+	rightW := ansi.StringWidth(suffix)
+	leftBudget := width - rightW - gap
+	if leftBudget < 5 {
+		return path
+	}
+	return truncateLeadingEllipsis(path, leftBudget)
+}
+
 // truncateLeadingEllipsis truncates s to fit max, preferring to drop
 // characters from the start (so the basename stays visible).
 func truncateLeadingEllipsis(s string, max int) string {
@@ -150,19 +294,38 @@ func truncateLeadingEllipsis(s string, max int) string {
 	return ell + ansi.TruncateLeft(s, ansi.StringWidth(s)-keep, "")
 }
 
-// View returns the picker's renderable string.
-func (p *pickerState) View() string {
-	if len(p.ranked) == 0 {
-		return lipgloss.NewStyle().Faint(true).Render("(no markdown files in vault)")
-	}
-	return p.vp.View()
+func (p *pickerState) renderQueryPrompt() string {
+	return "> " + p.input.View()
 }
 
-// resizePicker fits the picker viewport into the modal interior.
+func (p *pickerState) renderSeparator() string {
+	w := p.vp.Width
+	if w < 1 {
+		w = 1
+	}
+	return strings.Repeat("─", w)
+}
+
+// View returns the picker's renderable string: prompt, separator, list,
+// and an optional overflow footer outside the viewport.
+func (p *pickerState) View() string {
+	if len(p.all) == 0 {
+		return p.renderQueryPrompt() + "\n" + p.renderSeparator() + "\n" +
+			lipgloss.NewStyle().Faint(true).Render("(no markdown files in vault)")
+	}
+	out := p.renderQueryPrompt() + "\n" + p.renderSeparator() + "\n" + p.vp.View()
+	if footer := p.renderOverflowFooter(); footer != "" {
+		out += "\n" + footer
+	}
+	return out
+}
+
+// resizePicker fits the picker viewport into the modal interior, leaving
+// two rows at the top for the query prompt and separator.
 func (m *Model) resizePicker() {
 	_, _, w, h := modalGeometry(m.width, m.height)
 	pw := w - 2
-	ph := h - 2
+	ph := h - 2 - 2 // border (2) + prompt+separator (2)
 	if pw < 1 {
 		pw = 1
 	}
@@ -171,6 +334,7 @@ func (m *Model) resizePicker() {
 	}
 	m.modals.picker.vp.Width = pw
 	m.modals.picker.vp.Height = ph
+	m.modals.picker.input.Width = pw - 2 // leave room for "> " prefix
 	m.modals.picker.refreshVP()
 }
 
