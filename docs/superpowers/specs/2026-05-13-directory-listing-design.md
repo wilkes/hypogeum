@@ -1,6 +1,6 @@
 # Directory listing in the content pane — design
 
-**Status:** spec — not yet implemented.
+**Status:** shipped.
 **Scope:** when a link or a CLI argument points at a directory, render a synthesized listing of its non-hidden entries in the content pane. Today `refreshContent` calls `os.ReadFile` blindly and surfaces `Error: read /path: is a directory` in the viewport.
 
 See also: [link-following](../../link-following.md), [docs index](../../index.md), [`internal/tree`](../../packages/tree.md), [`internal/tui`](../../packages/tui.md).

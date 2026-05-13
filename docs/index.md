@@ -37,6 +37,7 @@ Cross-cutting ideas that show up in multiple specs and packages. Each is its own
 - [Code-file syntax highlighting](superpowers/specs/2026-05-12-code-file-rendering-design.md) — design approved 2026-05-12 — Chroma-driven highlighting + line-number gutter for non-md files opened by CLI arg or inline link. Tree, picker, and vault stay markdown-only.
 - [Source embeds and line-range links](superpowers/specs/2026-05-13-source-embeds-design.md) — `![[file.go#L10-L20]]` transclusion + `[t](file.go#L10-L20)` navigation. [Plan](superpowers/plans/2026-05-13-source-embeds.md).
 - [Source embeds — follow-up fixes](superpowers/specs/2026-05-13-source-embeds-followups-design.md) — four narrow fixes surfaced by post-merge review of #30: fence-aware embed regex, embed-link no-scroll on `Row=-1`, Esc preserves scroll on range-highlight clear, `followBacklink` captures pre-select range. [Plan](superpowers/plans/2026-05-13-source-embeds-followups.md).
+- [Directory listing](superpowers/specs/2026-05-13-directory-listing-design.md) — shipped — directory link targets now render an in-pane listing (header + absolute path + bullet list of every non-hidden entry, dirs first with trailing `/`). Previously surfaced `Error: read /path: is a directory`. [Plan](superpowers/plans/2026-05-13-directory-listing.md).
 
 ## Conventions for adding to this folder
 

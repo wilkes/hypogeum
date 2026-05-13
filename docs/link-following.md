@@ -31,6 +31,7 @@ What's in:
 - Footer shows `[k/n] <target>` for the selected link.
 - Auto-scroll the viewport so the selected link's row is in view.
 - Local file targets call `openFile` (history records the visit, like clicking a tree entry).
+- Directory targets render a synthesized listing in the content pane (header + absolute path + bullet list of non-hidden entries). The listing flows through the standard markdown renderer so `n`/`p`/`Enter`/Back all work on it. See [directory-listing-design](superpowers/specs/2026-05-13-directory-listing-design.md).
 - Anchors are recorded but only scroll within the document; if the anchor doesn't resolve to a known heading, it's a no-op.
 - External URLs are recognized but not opened — footer shows the URL with a hint that opening external links is unimplemented.
 

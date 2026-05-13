@@ -1,7 +1,7 @@
 # Directory listing — implementation plan
 
 Design: [2026-05-13-directory-listing-design.md](../specs/2026-05-13-directory-listing-design.md).
-Status: in progress.
+Status: shipped.
 
 ## Commit 1: synthesizer + tests
 
