@@ -43,6 +43,9 @@ func TestModel_FSEventPreservesCursorOnStructureChange(t *testing.T) {
 	m := sized(t, root, "")
 
 	firstPath := filepath.Join(root, "notes", "first.md")
+	// Expand notes/ so first.md is reachable in the default-collapsed tree.
+	m.tree.expanded[filepath.Join(root, "notes")] = true
+	m.tree.flat = m.flattenVisible()
 	for i, row := range m.tree.flat {
 		if row.node.Path == firstPath {
 			m.tree.cursor = i

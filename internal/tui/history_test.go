@@ -10,6 +10,10 @@ import (
 // openViaTree opens the tree modal, walks the cursor to path, and
 // presses Enter to open it. Used to drive history without going
 // through the link-following path.
+//
+// Expands every ancestor directory of `path` before driving the cursor,
+// since the default-collapsed tree won't show rows that live under
+// closed folders.
 func openViaTree(t *testing.T, m Model, path string) Model {
 	t.Helper()
 	if m.modals.kind != modalTree {
@@ -19,6 +23,12 @@ func openViaTree(t *testing.T, m Model, path string) Model {
 	if m.modals.kind != modalTree {
 		t.Fatalf("openViaTree: ^b should open tree modal, got kind=%v", m.modals.kind)
 	}
+	// Expand the ancestor chain so the target row is visible.
+	for dir := filepath.Dir(path); dir != m.root && dir != filepath.Dir(dir); dir = filepath.Dir(dir) {
+		m.tree.expanded[dir] = true
+	}
+	m.tree.flat = m.flattenVisible()
+
 	target := -1
 	for i, row := range m.tree.flat {
 		if row.node.Path == path {
