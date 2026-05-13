@@ -42,8 +42,7 @@ type modalUIState struct {
 // whatever onOpen produced, threaded back to Bubble Tea.
 func (m *Model) toggleModal(kind modalKind, onOpen func() tea.Cmd) tea.Cmd {
 	if m.modals.kind == kind {
-		m.modals.kind = modalNone
-		m.focus = m.modals.prevFocus
+		m.closeModal()
 		return nil
 	}
 	if m.modals.kind == modalNone && m.focus != focusBacklinks {
@@ -51,6 +50,16 @@ func (m *Model) toggleModal(kind modalKind, onOpen func() tea.Cmd) tea.Cmd {
 	}
 	m.modals.kind = kind
 	return onOpen()
+}
+
+// closeModal closes the active modal and restores focus to whatever
+// pane held it before the modal opened. Symmetric to toggleModal's open
+// path. Safe to call when no modal is open: kind goes from modalNone
+// back to modalNone and focus is set to prevFocus (which is either the
+// last-used value or focusContent zero-value).
+func (m *Model) closeModal() {
+	m.modals.kind = modalNone
+	m.focus = m.modals.prevFocus
 }
 
 // modalGeometry returns the (x, y, w, h) of the modal frame given the
