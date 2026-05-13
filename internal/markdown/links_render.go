@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/charmbracelet/x/ansi"
 	"github.com/wilkes/hypogeum/internal/embed"
 	"github.com/wilkes/hypogeum/internal/wikilink"
 )
@@ -301,7 +302,7 @@ func urlSuppressStrip(out *strings.Builder, raw string, startIdx int) int {
 	if isPaddingContextAfter(raw, end) {
 		// Don't trim the leading space; replace the URL range with spaces
 		// of equivalent visible width so column borders stay aligned.
-		width := urlVisibleWidth(raw[startIdx+1 : end-1])
+		width := ansi.StringWidth(raw[startIdx+1 : end-1])
 		for k := 0; k < width; k++ {
 			out.WriteByte(' ')
 		}
@@ -337,60 +338,6 @@ func isPaddingContextAfter(raw string, idx int) bool {
 		}
 	}
 	return true
-}
-
-// urlVisibleWidth returns the number of visible characters between
-// urlSuppressStart and urlSuppressEnd: it strips ANSI escapes and counts
-// runes (so a multi-byte UTF-8 URL still gets the right column width).
-// The leading space Glamour writes before urlSuppressStart is NOT in this
-// slice — preserve-width mode leaves that space in `out` untouched, so
-// we only need to fill in the body's width here.
-func urlVisibleWidth(body string) int {
-	width := 0
-	i := 0
-	for i < len(body) {
-		c := body[i]
-		if c == 0x1b {
-			j := skipEscape(body, i)
-			if j == i {
-				i++
-				continue
-			}
-			i = j
-			continue
-		}
-		_, size := decodeRune(body, i)
-		width++
-		i += size
-	}
-	return width
-}
-
-// decodeRune returns the rune at s[i] and its UTF-8 byte length.
-// Inlined here to avoid pulling in unicode/utf8 for a single call site.
-func decodeRune(s string, i int) (rune, int) {
-	c := s[i]
-	switch {
-	case c < 0x80:
-		return rune(c), 1
-	case c < 0xC0:
-		return rune(c), 1 // continuation byte alone — treat as single
-	case c < 0xE0:
-		if i+1 < len(s) {
-			return rune(c), 2
-		}
-		return rune(c), 1
-	case c < 0xF0:
-		if i+2 < len(s) {
-			return rune(c), 3
-		}
-		return rune(c), 1
-	default:
-		if i+3 < len(s) {
-			return rune(c), 4
-		}
-		return rune(c), 1
-	}
 }
 
 // skipEscape returns the index past the ANSI escape sequence at s[i], or

@@ -14,20 +14,6 @@ import (
 // These tests pin that invariant: every row of a rendered table has the
 // same visible width regardless of what kind of content sits in the cells.
 
-// tableRowWidths returns the visible width (rune count after ANSI strip)
-// of every non-blank line in s. Trailing whitespace is preserved — that's
-// the column padding we care about.
-func tableRowWidths(s string) []int {
-	var widths []int
-	for _, line := range strings.Split(stripANSI(s), "\n") {
-		if strings.TrimSpace(line) == "" {
-			continue
-		}
-		widths = append(widths, len([]rune(line)))
-	}
-	return widths
-}
-
 // assertEqualWidths fails the test if the widths slice isn't uniform.
 // Skips horizontal rule rows (they're decorated with box-drawing chars
 // and aren't expected to match cell-row widths). The "rule row" heuristic
@@ -238,29 +224,6 @@ func TestRender_TableWithWikilinkAligns(t *testing.T) {
 		t.Fatalf("RenderWithLinks: %v", err)
 	}
 	assertEqualWidths(t, out)
-}
-
-// TestUrlVisibleWidth verifies the helper that drives the
-// preserve-width replacement: ANSI escapes are skipped, raw runes are
-// counted including multi-byte UTF-8.
-func TestUrlVisibleWidth(t *testing.T) {
-	cases := []struct {
-		name string
-		body string
-		want int
-	}{
-		{"plain ascii", "/foo.md", 7},
-		{"with ansi", "\x1b[38;5;252m/foo.md\x1b[0m", 7},
-		{"empty", "", 0},
-		{"unicode", "/résumé.md", 10},
-	}
-	for _, c := range cases {
-		t.Run(c.name, func(t *testing.T) {
-			if got := urlVisibleWidth(c.body); got != c.want {
-				t.Errorf("urlVisibleWidth(%q) = %d, want %d", c.body, got, c.want)
-			}
-		})
-	}
 }
 
 // TestIsPaddingContextAfter checks the discriminator that decides
