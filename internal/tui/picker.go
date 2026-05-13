@@ -6,9 +6,11 @@ import (
 	"strings"
 	"time"
 
+	"github.com/charmbracelet/bubbles/textinput"
 	"github.com/charmbracelet/bubbles/viewport"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
+	"github.com/sahilm/fuzzy"
 
 	"github.com/wilkes/hypogeum/internal/recent"
 )
@@ -16,22 +18,36 @@ import (
 // pickerState is the flat, recency-ranked file finder rendered as a modal.
 // Replaces the previous tree-rooted picker; cursor indexes into ranked.
 type pickerState struct {
-	ranked []recent.Ranked
-	cursor int
-	vp     viewport.Model
-	root   string // vault root, used to render relative paths
+	all     []recent.Ranked  // full ranked list captured at open time
+	ranked  []recent.Ranked  // currently visible (filtered or all)
+	matches []fuzzy.Match    // parallel to ranked when query non-empty
+	cursor  int
+	vp      viewport.Model
+	root    string // vault root, used to render relative paths
+	input   textinput.Model
 }
 
 func newPicker() pickerState {
-	return pickerState{vp: viewport.New(0, 0)}
+	ti := textinput.New()
+	ti.Prompt = ""      // we render our own "> " prefix
+	ti.Placeholder = ""
+	ti.CharLimit = 256
+	return pickerState{
+		vp:    viewport.New(0, 0),
+		input: ti,
+	}
 }
 
-// reset populates the picker with a fresh ranked list and resets the
-// cursor to the top of the list.
+// reset populates the picker with a fresh ranked list, resets the cursor
+// and query, and focuses the textinput. Called on every picker open.
 func (p *pickerState) reset(ranked []recent.Ranked, root string) {
+	p.all = ranked
 	p.ranked = ranked
+	p.matches = nil
 	p.cursor = 0
 	p.root = root
+	p.input.SetValue("")
+	p.input.Focus()
 	p.refreshVP()
 }
 
