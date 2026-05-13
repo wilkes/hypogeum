@@ -1,0 +1,73 @@
+// Package code renders source files to ANSI-styled terminal output with a
+// line-number gutter. It is the non-markdown sibling of internal/markdown:
+// dispatched to by the TUI when refreshContent sees a file extension that
+// tree.IsMarkdown doesn't recognize.
+package code
+
+import (
+	"bytes"
+	"fmt"
+	"path/filepath"
+
+	"github.com/alecthomas/chroma/v2"
+	"github.com/alecthomas/chroma/v2/formatters"
+	"github.com/alecthomas/chroma/v2/lexers"
+	"github.com/alecthomas/chroma/v2/styles"
+)
+
+// Renderer is the non-markdown render path. One per content viewport width.
+// Rebuilt on WindowSizeMsg, same lifecycle as markdown.Renderer.
+type Renderer struct {
+	width int
+	style *chroma.Style
+}
+
+// NewRenderer constructs a code renderer for the given output width.
+// width <= 0 is clamped to a sensible default so a renderer constructed
+// before the first WindowSizeMsg still produces usable output.
+func NewRenderer(width int) *Renderer {
+	if width < 20 {
+		width = 80
+	}
+	s := styles.Get("monokai")
+	if s == nil {
+		s = styles.Fallback
+	}
+	return &Renderer{width: width, style: s}
+}
+
+// Render tokenizes src with a lexer chosen from path's basename (or from
+// content analysis as a fallback), formats it as 256-color ANSI, and
+// prefixes a line-number gutter. Returns the rendered string and a nil
+// error for all user-facing problems (binary input, oversized files,
+// unrecognized syntax). A non-nil error indicates a programming-level
+// invariant violation (e.g. missing formatter).
+func (r *Renderer) Render(path string, src []byte) (string, error) {
+	lexer := lexers.Match(filepath.Base(path))
+	if lexer == nil {
+		lexer = lexers.Analyse(string(src))
+	}
+	if lexer == nil {
+		lexer = lexers.Fallback
+	}
+
+	iterator, err := lexer.Tokenise(nil, string(src))
+	if err != nil {
+		// Token failure is rare but recoverable: render as plain text.
+		iterator, err = lexers.Fallback.Tokenise(nil, string(src))
+		if err != nil {
+			return "", fmt.Errorf("tokenise fallback: %w", err)
+		}
+	}
+
+	formatter := formatters.Get("terminal256")
+	if formatter == nil {
+		return "", fmt.Errorf("terminal256 formatter not registered")
+	}
+
+	var buf bytes.Buffer
+	if err := formatter.Format(&buf, r.style, iterator); err != nil {
+		return "", fmt.Errorf("format: %w", err)
+	}
+	return buf.String(), nil
+}
