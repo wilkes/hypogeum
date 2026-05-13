@@ -91,6 +91,23 @@ func (m *Model) refreshContent(path string) {
 		m.content.linkCursor = -1
 		return
 	}
+
+	if !tree.IsMarkdown(path) {
+		out, rerr := m.content.codeRenderer.Render(path, src)
+		if rerr != nil {
+			m.status = rerr.Error()
+			m.content.viewport.SetContent(fmt.Sprintf("Error: %v", rerr))
+		} else {
+			m.status = path
+			m.content.viewport.SetContent(out)
+			m.content.viewport.GotoTop()
+		}
+		m.content.links = nil
+		m.content.linkCursor = -1
+		_ = target // preselect doesn't apply to code files
+		return
+	}
+
 	m.content.renderer.SetFromFile(path)
 	out, links, err := m.content.renderer.RenderWithLinks(string(src), path, linkZoneMarker)
 	if err != nil {
