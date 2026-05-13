@@ -414,7 +414,7 @@ func (r *Renderer) preprocessEmbeds(src, base string) (string, []string, []Link)
 			},
 		}
 		if em.Range != nil {
-			l.Resolved.Range = &LineRange{Start: em.Range.Start, End: em.Range.End}
+			l.Resolved.Range = em.Range
 		}
 		links = append(links, l)
 

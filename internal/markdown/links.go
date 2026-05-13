@@ -10,6 +10,8 @@ import (
 	"github.com/yuin/goldmark"
 	"github.com/yuin/goldmark/ast"
 	"github.com/yuin/goldmark/text"
+
+	"github.com/wilkes/hypogeum/internal/embed"
 )
 
 // LinkKind classifies a markdown link target so the navigation layer can
@@ -27,14 +29,11 @@ const (
 	LinkInvalid
 )
 
-// LineRange is an inclusive [Start, End] pair of 1-indexed source-file line
-// numbers. Carried by ResolvedLink when the link's fragment is a #L<n>-L<n>
-// or #L<n> form, and produced by internal/embed.ParseEmbedToken. The type
-// lives in markdown so cross-package consumers can pass it through without
-// importing embed (which would create a cycle the other direction).
-type LineRange struct {
-	Start, End int
-}
+// LineRange is aliased from internal/embed so the two packages refer to
+// one type. internal/embed is the canonical owner because internal/markdown
+// already depends on it (preprocessEmbeds), making embed the upstream side
+// of the alias.
+type LineRange = embed.LineRange
 
 // ResolvedLink describes a link target after resolution against a base file.
 type ResolvedLink struct {
