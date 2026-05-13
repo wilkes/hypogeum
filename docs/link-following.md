@@ -1,6 +1,6 @@
 # Link following
 
-**Status:** Phase 1 and Phase 2 shipped. Phase 3 not started. Phase 2 added the inline reverse-video highlight around the selected link's bytes via `markdown.HighlightMarker`; design and rationale at [link-following-phase-2-design](superpowers/specs/2026-05-09-link-following-phase-2-design.md).
+**Status:** Phases 1, 2, and 3 shipped. Phase 2 added the inline reverse-video highlight around the selected link's bytes via `markdown.HighlightMarker` (design: [link-following-phase-2-design](superpowers/specs/2026-05-09-link-following-phase-2-design.md)). Phase 3 added external URL handoff: a first `Enter` on an external link arms a one-keystroke confirm; a second `Enter` exec's `open` / `xdg-open` / `cmd start` via `internal/tui/external.go`. Schemes other than `http`/`https` are rejected to avoid shell handoffs of executable URLs.
 
 Plan and design notes for following links inside rendered markdown documents.
 
@@ -34,10 +34,10 @@ What's in:
 - Anchors are recorded but only scroll within the document; if the anchor doesn't resolve to a known heading, it's a no-op.
 - External URLs are recognized but not opened — footer shows the URL with a hint that opening external links is unimplemented.
 
-What's out (Phase 2/3):
-- Inline highlight of the active link in the rendered text.
-- Multi-segment cursor visualization for word-wrapped links.
-- Actually launching external URLs with `open`/`xdg-open`.
+What's out:
+- ✅ Inline highlight of the active link in the rendered text. (Shipped in Phase 2.)
+- Multi-segment cursor visualization for word-wrapped links. (Still open.)
+- ✅ Actually launching external URLs with `open`/`xdg-open`. (Shipped in Phase 3.)
 
 ## Implementation steps (commits)
 

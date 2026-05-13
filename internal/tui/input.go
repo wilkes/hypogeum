@@ -303,6 +303,26 @@ func (m *Model) handlePickerKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 // selected) are intercepted; everything else falls through to the
 // viewport so its scrolling bindings keep working.
 func (m *Model) handleContentKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	// One-keystroke confirm for external URL handoff: if a previous
+	// Enter on an external link armed pendingExternal, a second Enter
+	// exec's the opener. Any other keystroke cancels the prompt and
+	// then falls through to normal dispatch so the user doesn't lose
+	// the keystroke they pressed.
+	if m.pendingExternal != "" {
+		armed := m.pendingExternal
+		m.pendingExternal = ""
+		if key.Matches(msg, m.keys.Open) {
+			if err := m.openExternal(armed); err != nil {
+				m.status = "open failed: " + err.Error()
+			} else {
+				m.status = "opened: " + armed
+			}
+			return *m, nil
+		}
+		m.status = ""
+		// Fall through: process this keystroke as if nothing was armed.
+	}
+
 	switch {
 	case key.Matches(msg, m.keys.NextLink):
 		m.cycleLink(+1)
