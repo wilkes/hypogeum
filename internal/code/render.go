@@ -12,7 +12,6 @@ import (
 	"github.com/alecthomas/chroma/v2"
 	"github.com/alecthomas/chroma/v2/formatters"
 	"github.com/alecthomas/chroma/v2/lexers"
-	"github.com/alecthomas/chroma/v2/styles"
 )
 
 // Renderer is the non-markdown render path. One per content viewport width.
@@ -29,11 +28,7 @@ func NewRenderer(width int) *Renderer {
 	if width < 20 {
 		width = 80
 	}
-	s := styles.Get("monokai")
-	if s == nil {
-		s = styles.Fallback
-	}
-	return &Renderer{width: width, style: s}
+	return &Renderer{width: width, style: defaultStyle()}
 }
 
 // Render tokenizes src with a lexer chosen from path's basename (or from
