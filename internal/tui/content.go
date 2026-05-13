@@ -96,16 +96,34 @@ func (m *Model) refreshContent(path string) {
 	m.pendingPreselectTarget = ""
 	m.pendingPreselectRange = nil
 
-	src, err := os.ReadFile(path)
-	if err != nil {
-		m.status = err.Error()
-		m.content.viewport.SetContent(fmt.Sprintf("Error: %v", err))
-		m.content.links = nil
-		m.content.linkCursor = -1
-		return
+	var (
+		src   []byte
+		isDir bool
+	)
+	if info, statErr := os.Stat(path); statErr == nil && info.IsDir() {
+		listing, dirErr := renderDirListing(path)
+		if dirErr != nil {
+			m.status = dirErr.Error()
+			m.content.viewport.SetContent(fmt.Sprintf("Error: %v", dirErr))
+			m.content.links = nil
+			m.content.linkCursor = -1
+			return
+		}
+		src = []byte(listing)
+		isDir = true
+	} else {
+		var err error
+		src, err = os.ReadFile(path)
+		if err != nil {
+			m.status = err.Error()
+			m.content.viewport.SetContent(fmt.Sprintf("Error: %v", err))
+			m.content.links = nil
+			m.content.linkCursor = -1
+			return
+		}
 	}
 
-	if !tree.IsMarkdown(path) {
+	if !isDir && !tree.IsMarkdown(path) {
 		out, rerr := m.content.codeRenderer.RenderOpts(path, src, code.RenderOptions{
 			Highlight: m.content.rangeHighlight,
 		})
