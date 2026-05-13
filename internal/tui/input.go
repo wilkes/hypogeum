@@ -9,6 +9,7 @@ import (
 	zone "github.com/lrstanley/bubblezone"
 
 	"github.com/wilkes/hypogeum/internal/recent"
+	"github.com/wilkes/hypogeum/internal/tree"
 )
 
 // debugMouse logs every left-click to /tmp/hypogeum-mouse.log for
@@ -331,14 +332,25 @@ func (m *Model) handleContentKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.cycleLink(-1)
 		return *m, nil
 	case key.Matches(msg, m.keys.ClearLink):
+		// Esc cascade (most-specific to least-specific):
+		// 1. If the open file is a non-markdown source viewed with a
+		//    range highlight, clearing the highlight is the user's
+		//    likely intent. Fires before link-cursor clear so the
+		//    next Esc still resets the link cursor for markdown.
+		cur := m.history.Current()
+		if m.content.rangeHighlight != nil && !tree.IsMarkdown(cur) {
+			m.content.rangeHighlight = nil
+			m.refreshContent(cur)
+			return *m, nil
+		}
 		offset := m.content.viewport.YOffset
 		m.content.linkCursor = -1
-		m.refreshContent(m.history.Current())
+		m.refreshContent(cur)
 		m.content.viewport.SetYOffset(offset)
 		return *m, nil
 	case key.Matches(msg, m.keys.Open):
-		if sel := m.selectedLink(); sel != nil {
-			m.followLink(*sel)
+		if m.selectedLink() != nil {
+			m.followCurrentLink()
 			return *m, nil
 		}
 	}

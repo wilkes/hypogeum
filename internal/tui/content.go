@@ -30,6 +30,11 @@ type contentUIState struct {
 	// FileModified branch re-renders the open file when a watcher event
 	// arrives for any of these paths.
 	embedDeps map[string]struct{}
+	// rangeHighlight is non-nil when the open file is a non-markdown
+	// source viewed via a range-link or embed navigation. It is cleared
+	// by Esc, by opening any other file, and by following a different
+	// range link.
+	rangeHighlight *markdown.LineRange
 }
 
 // linkZoneID returns the BubbleZone id used to track the i-th link in
@@ -99,7 +104,9 @@ func (m *Model) refreshContent(path string) {
 	}
 
 	if !tree.IsMarkdown(path) {
-		out, rerr := m.content.codeRenderer.Render(path, src)
+		out, rerr := m.content.codeRenderer.RenderOpts(path, src, code.RenderOptions{
+			Highlight: m.content.rangeHighlight,
+		})
 		if rerr != nil {
 			m.status = rerr.Error()
 			m.content.viewport.SetContent(fmt.Sprintf("Error: %v", rerr))
@@ -107,6 +114,9 @@ func (m *Model) refreshContent(path string) {
 			m.status = path
 			m.content.viewport.SetContent(out)
 			m.content.viewport.GotoTop()
+			if m.content.rangeHighlight != nil {
+				m.scrollToLine(m.content.rangeHighlight.Start)
+			}
 		}
 		m.content.links = nil
 		m.content.linkCursor = -1
@@ -115,6 +125,9 @@ func (m *Model) refreshContent(path string) {
 		return
 	}
 
+	// Opening a markdown file always clears any prior source-range
+	// highlight; the renderer doesn't carry it across non-source files.
+	m.content.rangeHighlight = nil
 	m.content.renderer.SetFromFile(path)
 	out, links, deps, err := m.content.renderer.RenderWithLinks(string(src), path, linkZoneMarker)
 	if err != nil {
