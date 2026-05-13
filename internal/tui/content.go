@@ -56,6 +56,11 @@ func linkZoneMarker(i int) (string, string) {
 // openFile records a visit in history and renders the file.
 func (m *Model) openFile(path string) {
 	m.history.Visit(path)
+	if m.recent != nil {
+		if err := m.recent.Record(path); err != nil && m.diag != nil {
+			m.diag.Warn("recent: " + err.Error())
+		}
+	}
 	m.refreshContent(path)
 }
 
@@ -329,4 +334,25 @@ func (m *Model) scrollToLine(n int) {
 		target = maxOffset
 	}
 	m.content.viewport.SetYOffset(target)
+}
+
+// allVaultMarkdownPaths walks m.rootNode and returns every markdown file
+// as an absolute path. Tree was already pruned to markdown-only by tree.Walk.
+func (m *Model) allVaultMarkdownPaths() []string {
+	if m.rootNode == nil {
+		return nil
+	}
+	var out []string
+	var walk func(n *tree.Node)
+	walk = func(n *tree.Node) {
+		if !n.IsDir {
+			out = append(out, n.Path)
+			return
+		}
+		for _, c := range n.Children {
+			walk(c)
+		}
+	}
+	walk(m.rootNode)
+	return out
 }

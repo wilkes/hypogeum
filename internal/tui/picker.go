@@ -2,143 +2,163 @@ package tui
 
 import (
 	"fmt"
+	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/charmbracelet/bubbles/viewport"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/x/ansi"
 
-	"github.com/wilkes/hypogeum/internal/tree"
+	"github.com/wilkes/hypogeum/internal/recent"
 )
 
-// pickerState is a vault-rooted file picker rendered as a modal. It
-// reuses m.rootNode (the same pruned *tree.Node the left pane displays),
-// so directories without markdown descendants don't appear and files
-// outside MarkdownExts don't appear — that filtering happens at
-// tree.Walk time, not here.
-//
-// The picker holds its own cursor and expansion state independent from
-// the left pane, so collapsing a folder in the picker doesn't affect
-// the left pane (or vice versa). Expansion state is reset on each open.
+// pickerState is the flat, recency-ranked file finder rendered as a modal.
+// Replaces the previous tree-rooted picker; cursor indexes into ranked.
 type pickerState struct {
-	cursor   int
-	expanded map[string]bool // path → true if expanded; missing = collapsed (opposite of m.tree.expanded)
-	flat     []treeRow
-	vp       viewport.Model
+	ranked []recent.Ranked
+	cursor int
+	vp     viewport.Model
+	root   string // vault root, used to render relative paths
 }
 
 func newPicker() pickerState {
-	return pickerState{
-		expanded: map[string]bool{},
-		vp:       viewport.New(0, 0),
-	}
+	return pickerState{vp: viewport.New(0, 0)}
 }
 
-// reset prepares the picker for a fresh open: cursor at top, all
-// directories collapsed, flat list rebuilt from root. The default-
-// collapsed policy is opposite to the left pane (which defaults
-// expanded) — picker users want to descend selectively, not stare at a
-// fully expanded vault.
-func (p *pickerState) reset(root *tree.Node) {
+// reset populates the picker with a fresh ranked list and resets the
+// cursor to the top of the list.
+func (p *pickerState) reset(ranked []recent.Ranked, root string) {
+	p.ranked = ranked
 	p.cursor = 0
-	p.expanded = map[string]bool{}
-	p.flat = pickerFlatten(root, p.expanded)
+	p.root = root
 	p.refreshVP()
 }
 
-// pickerFlatten produces the picker's visible row list. Directories
-// expand only if their path is in expanded[]. The root itself is always
-// included as the first row (depth 0); the user can collapse the root
-// to a single-row picker, but that's harmless.
-func pickerFlatten(root *tree.Node, expanded map[string]bool) []treeRow {
-	if root == nil {
-		return nil
-	}
-	var rows []treeRow
-	var walk func(n *tree.Node, depth int)
-	walk = func(n *tree.Node, depth int) {
-		rows = append(rows, treeRow{node: n, depth: depth})
-		if n.IsDir && expanded[n.Path] {
-			for _, c := range n.Children {
-				walk(c, depth+1)
-			}
-		}
-	}
-	walk(root, 0)
-	return rows
-}
-
-// toggleAt flips the expansion of the directory at the cursor and
-// rebuilds the flat list. The cursor stays on that directory's row by
-// path lookup. No-op if the cursor is on a file.
-func (p *pickerState) toggleAt(root *tree.Node) {
-	if p.cursor < 0 || p.cursor >= len(p.flat) {
-		return
-	}
-	row := p.flat[p.cursor]
-	if !row.node.IsDir {
-		return
-	}
-	if p.expanded[row.node.Path] {
-		delete(p.expanded, row.node.Path)
-	} else {
-		p.expanded[row.node.Path] = true
-	}
-	p.flat = pickerFlatten(root, p.expanded)
-	for i, r := range p.flat {
-		if r.node.Path == row.node.Path {
-			p.cursor = i
-			break
-		}
-	}
-	p.refreshVP()
-}
-
-// refreshVP regenerates the viewport content and scrolls so the cursor
-// row is in view. Mirrors Model.refreshTreeVP for the left pane.
+// refreshVP regenerates the viewport content and scrolls so the cursor row
+// is in view.
 func (p *pickerState) refreshVP() {
 	p.vp.SetContent(p.renderRows())
 	viewportClamp(&p.vp, p.cursor, 1)
 }
 
-// renderRows builds the picker's display string: chevron-prefixed
-// directory rows and indented file rows, with a `>` cursor marker on
-// the active row.
+// renderRows builds the picker's display string. No score is shown — the
+// score is a sorting signal, not a UX signal.
 func (p *pickerState) renderRows() string {
+	now := time.Now()
 	var b strings.Builder
-	for i, row := range p.flat {
-		indent := strings.Repeat("  ", row.depth)
-		marker := " "
+	width := p.vp.Width
+	if width < 20 {
+		width = 20
+	}
+	for i, r := range p.ranked {
+		rel := relativeTo(p.root, r.Path)
+		recencyLabel, edited := pickRecencyLabel(now, r.MTime, r.Visit)
+		suffix := recencyLabel
+		if edited {
+			suffix += " · edited"
+		}
+		line := formatPickerRow(rel, suffix, width)
 		if i == p.cursor {
-			marker = ">"
+			line = lipgloss.NewStyle().Reverse(true).Render(line)
 		}
-		name := row.node.Name
-		if row.node.IsDir {
-			chevron := "▸ "
-			if p.expanded[row.node.Path] {
-				chevron = "▾ "
-			}
-			name = chevron + name + "/"
-		} else {
-			name = "  " + name
-		}
-		fmt.Fprintf(&b, "%s%s %s\n", marker, indent, name)
+		b.WriteString(line)
+		b.WriteByte('\n')
 	}
 	return b.String()
 }
 
-// View returns the picker's renderable string for placement inside the
-// modal frame. The caller has already sized the viewport via
-// resizePicker on the most recent WindowSizeMsg.
+// relativeTo returns p relative to root, or the absolute path on failure.
+func relativeTo(root, p string) string {
+	if root == "" {
+		return p
+	}
+	rel, err := filepath.Rel(root, p)
+	if err != nil {
+		return p
+	}
+	return rel
+}
+
+// pickRecencyLabel returns the human-friendly recency label and a flag
+// indicating whether the time used was mtime (true) or visit (false).
+func pickRecencyLabel(now, mtime, visit time.Time) (label string, isMTime bool) {
+	t := mtime
+	isMTime = true
+	if !visit.IsZero() && visit.After(mtime) {
+		t = visit
+		isMTime = false
+	}
+	return humanRecency(now, t), isMTime
+}
+
+// humanRecency formats a duration since t in one-glance form.
+// Beyond ~6 weeks it falls back to YYYY-MM-DD.
+func humanRecency(now, t time.Time) string {
+	if t.IsZero() {
+		return "never"
+	}
+	d := now.Sub(t)
+	switch {
+	case d < time.Minute:
+		return "just now"
+	case d < time.Hour:
+		return fmt.Sprintf("%dm ago", int(d/time.Minute))
+	case d < 24*time.Hour:
+		return fmt.Sprintf("%dh ago", int(d/time.Hour))
+	case d < 48*time.Hour:
+		return "yesterday"
+	case d < 7*24*time.Hour:
+		return fmt.Sprintf("%dd ago", int(d/(24*time.Hour)))
+	case d < 6*7*24*time.Hour:
+		return fmt.Sprintf("%dw ago", int(d/(7*24*time.Hour)))
+	default:
+		return t.Format("2006-01-02")
+	}
+}
+
+// formatPickerRow lays out one row to fit width. Left column is path
+// (truncated with leading ellipsis if too long), right column is suffix
+// (right-aligned). One-space gap minimum between them.
+func formatPickerRow(left, right string, width int) string {
+	const gap = 2
+	rightW := ansi.StringWidth(right)
+	leftBudget := width - rightW - gap
+	if leftBudget < 5 {
+		return strings.Repeat(" ", width-rightW) + right
+	}
+	leftTrunc := truncateLeadingEllipsis(left, leftBudget)
+	leftW := ansi.StringWidth(leftTrunc)
+	pad := width - leftW - rightW
+	if pad < gap {
+		pad = gap
+	}
+	return leftTrunc + strings.Repeat(" ", pad) + right
+}
+
+// truncateLeadingEllipsis truncates s to fit max, preferring to drop
+// characters from the start (so the basename stays visible).
+func truncateLeadingEllipsis(s string, max int) string {
+	if ansi.StringWidth(s) <= max {
+		return s
+	}
+	const ell = "…"
+	keep := max - ansi.StringWidth(ell)
+	if keep < 1 {
+		return ell
+	}
+	return ell + ansi.TruncateLeft(s, ansi.StringWidth(s)-keep, "")
+}
+
+// View returns the picker's renderable string.
 func (p *pickerState) View() string {
-	if len(p.flat) == 0 {
+	if len(p.ranked) == 0 {
 		return lipgloss.NewStyle().Faint(true).Render("(no markdown files in vault)")
 	}
 	return p.vp.View()
 }
 
 // resizePicker fits the picker viewport into the modal interior.
-// modalGeometry returns the modal's outer dimensions; subtract its
-// border (2) to get the inside.
 func (m *Model) resizePicker() {
 	_, _, w, h := modalGeometry(m.width, m.height)
 	pw := w - 2
@@ -154,16 +174,11 @@ func (m *Model) resizePicker() {
 	m.modals.picker.refreshVP()
 }
 
-// pickerSelectedFile returns the file path under the picker cursor, or
-// ("", false) if the cursor is on a directory or out of range.
-func (p *pickerState) selectedFile() (string, bool) {
-	if p.cursor < 0 || p.cursor >= len(p.flat) {
+// selectedPath returns the path under the picker cursor, or ("", false)
+// if the cursor is out of range or the list is empty.
+func (p *pickerState) selectedPath() (string, bool) {
+	if p.cursor < 0 || p.cursor >= len(p.ranked) {
 		return "", false
 	}
-	row := p.flat[p.cursor]
-	if row.node.IsDir {
-		return "", false
-	}
-	return row.node.Path, true
+	return p.ranked[p.cursor].Path, true
 }
-

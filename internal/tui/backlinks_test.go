@@ -24,6 +24,7 @@ func writeTUITestFile(t *testing.T, dir, rel, content string) {
 }
 
 func TestBacklinksPaneShowsLinkers(t *testing.T) {
+	isolatedHome(t)
 	dir := t.TempDir()
 	writeTUITestFile(t, dir, "a.md", "see [[b]] for more.")
 	writeTUITestFile(t, dir, "b.md", "i am b.")
@@ -46,6 +47,7 @@ func TestBacklinksPaneShowsLinkers(t *testing.T) {
 }
 
 func TestBacklinksPaneAutoCollapsesBelowThreshold(t *testing.T) {
+	isolatedHome(t)
 	dir := t.TempDir()
 	m, _ := New(dir, "")
 	m.backlinks.open = true
@@ -60,6 +62,7 @@ func TestBacklinksPaneAutoCollapsesBelowThreshold(t *testing.T) {
 }
 
 func TestBacklinksModalToggleAndEsc(t *testing.T) {
+	isolatedHome(t)
 	dir := t.TempDir()
 	writeTUITestFile(t, dir, "a.md", "see [[b]].")
 	writeTUITestFile(t, dir, "b.md", "i am b.")

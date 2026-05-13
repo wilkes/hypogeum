@@ -12,6 +12,7 @@ import (
 
 	"github.com/wilkes/hypogeum/internal/markdown"
 	"github.com/wilkes/hypogeum/internal/nav"
+	"github.com/wilkes/hypogeum/internal/recent"
 	"github.com/wilkes/hypogeum/internal/tree"
 	"github.com/wilkes/hypogeum/internal/vault"
 	"github.com/wilkes/hypogeum/internal/watch"
@@ -61,8 +62,9 @@ type Model struct {
 	// failed (we degrade gracefully — the browser still works without it).
 	watcher *watch.Watcher
 
-	vault *vault.Vault
-	diag  *diagnostics
+	vault  *vault.Vault
+	recent *recent.Store
+	diag   *diagnostics
 
 	// pendingPreselectTarget is the absolute path of a file whose inline
 	// link should be pre-selected on the next refreshContent. Set by any
@@ -125,6 +127,15 @@ func New(root, initialFile string) (Model, error) {
 		diag.Warn("vault build failed: " + err.Error())
 	}
 
+	stateFile, sferr := recent.DefaultStateFile()
+	if sferr != nil {
+		diag.Warn("recent: cannot determine state file path: " + sferr.Error())
+	}
+	rstore, rerr := recent.New(stateFile)
+	if rerr != nil {
+		diag.Warn("recent: " + rerr.Error())
+	}
+
 	var rOpts []markdown.Option
 	if v != nil {
 		rOpts = append(rOpts, markdown.WithResolver(v))
@@ -141,6 +152,7 @@ func New(root, initialFile string) (Model, error) {
 		focus:    focusTree,
 		keys:     defaultKeys(),
 		vault:    v,
+		recent:   rstore,
 		diag:     diag,
 		tree: treeUIState{
 			vp:       viewport.New(0, 0),

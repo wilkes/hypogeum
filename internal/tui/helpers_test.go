@@ -47,12 +47,24 @@ func writeTallFixture(t *testing.T, n int) string {
 	return root
 }
 
+// isolatedHome redirects $HOME and $XDG_CONFIG_HOME to a tempdir so that
+// recent.DefaultStateFile() resolves to a scratch location and tests don't
+// pollute the developer's real ~/Library/Application Support/hypogeum/visits.json
+// (or ~/.config/hypogeum/visits.json on Linux). t.Setenv rolls back at test end.
+func isolatedHome(t *testing.T) {
+	t.Helper()
+	d := t.TempDir()
+	t.Setenv("HOME", d)
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(d, ".config"))
+}
+
 // sized returns a model that has received an initial size message, so that
 // View() produces real output rather than the empty pre-resize string.
 // It also calls renderAndScan to populate BubbleZone bounds so tests that
 // synthesize mouse clicks find their zones.
 func sized(t *testing.T, root, initialFile string) Model {
 	t.Helper()
+	isolatedHome(t)
 	m, err := New(root, initialFile)
 	if err != nil {
 		t.Fatalf("New: %v", err)

@@ -32,6 +32,7 @@ Cross-cutting ideas that show up in multiple specs and packages. Each is its own
 - [Pre-select inline link](superpowers/specs/2026-05-09-pre-select-inline-link-design.md) — shipped — when arriving via backlink-follow / Back / Forward, pre-select the inline link that points back to where you came from, so `n`/`p` resumes from a meaningful position.
 - [Narrow-terminal layout](superpowers/specs/2026-05-07-narrow-terminal-layout-design.md) — shipped — auto-hide the tree pane below an 80-col terminal width so the two-pane layout degrades gracefully on narrow terminals.
 - [Vault-rooted picker](superpowers/specs/2026-05-07-vault-rooted-picker-design.md) — shipped — `^p` modal over the pruned `*tree.Node`, so only directories containing markdown appear.
+- [Unified finder with recency](superpowers/specs/2026-05-12-unified-finder-recency-design.md) — shipped — `^p` opens a flat list of every vault markdown file, ranked by a hybrid mtime + persisted-visit score.
 
 ## Conventions for adding to this folder
 

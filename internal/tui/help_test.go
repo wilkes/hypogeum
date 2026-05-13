@@ -16,6 +16,7 @@ func pressQuestion() tea.KeyMsg {
 // the body lists representative bindings, including the moved `^l logs`
 // label so a regression that drops it is caught.
 func TestHelpModalOpensOnQuestionMark(t *testing.T) {
+	isolatedHome(t)
 	dir := t.TempDir()
 	m, _ := New(dir, "")
 	mm, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 40})
@@ -50,6 +51,7 @@ func TestHelpModalOpensOnQuestionMark(t *testing.T) {
 // TestHelpModalEscCloses verifies Esc dismisses the help modal, just
 // like every other modal.
 func TestHelpModalEscCloses(t *testing.T) {
+	isolatedHome(t)
 	dir := t.TempDir()
 	m, _ := New(dir, "")
 	mm, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 40})
@@ -154,6 +156,7 @@ func TestFooterAdvertisesHelp(t *testing.T) {
 // is already open closes it — same toggle behavior as every other
 // modal-toggle key.
 func TestHelpModalTogglesClosed(t *testing.T) {
+	isolatedHome(t)
 	dir := t.TempDir()
 	m, _ := New(dir, "")
 	mm, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 40})
