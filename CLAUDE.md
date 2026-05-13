@@ -63,9 +63,9 @@ The packages are layered: `tui` depends on `tree`, `markdown`, `nav`, `watch`; t
 
 ## What's not built yet
 
-**Link following — Phases 1 and 2 shipped:** `n`/`p` cycle through every link in the current document, `Enter` follows the selected one (local files only — externals surface in the status bar), `Esc` clears the selection. The selected link is highlighted in reverse-video on the rendered page via `markdown.HighlightMarker` (Phase 2). Implementation lives in `internal/markdown` (`ExtractLinks`, `RenderWithLinks`, `HighlightMarker`) and the content-key handler in `internal/tui/`.
+**Link following — Phases 1, 2, and 3 shipped:** `n`/`p` cycle through every link in the current document, `Enter` follows the selected one. Local files navigate (history-aware); external `http`/`https` URLs arm a one-keystroke confirm — a second `Enter` exec's `open` / `xdg-open` / `cmd start` depending on platform, any other key cancels. The selected link is highlighted in reverse-video on the rendered page via `markdown.HighlightMarker`. Implementation lives in `internal/markdown` (`ExtractLinks`, `RenderWithLinks`, `HighlightMarker`), `internal/tui/external.go` (the platform exec wrapper), and the content-key handler in `internal/tui/input.go`.
 
-**Link following — Phase 3 (not started):** actually launching external URLs via `xdg-open`/`open`, gated behind a one-keystroke confirm. Multi-segment cursor for word-wrapped links is also still open.
+**External URL handoff details:** the opener (`m.openExternal`) is injected for tests; the default is `openExternalURL` which validates the scheme (http/https only — `javascript:`, `data:`, `file:`, `mailto:`, `ftp:` are rejected to avoid shell handoffs of executable URLs) and runs `exec.Cmd.Start()` so the browser detaches and hypogeum keeps responding immediately. Phase 3 leftovers: multi-segment cursor for word-wrapped links is still open.
 
 Full plan and design rationale (including why we picked the sentinel-instrumented render approach over OSC 8 or coordinate mapping) lives in [docs/link-following.md](docs/link-following.md). Phase 2 design notes: [docs/superpowers/specs/2026-05-09-link-following-phase-2-design.md](docs/superpowers/specs/2026-05-09-link-following-phase-2-design.md).
 

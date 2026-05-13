@@ -74,6 +74,16 @@ type Model struct {
 	// notion: backlink-follow, Back, Forward. Cleared by refreshContent
 	// after consumption (whether or not a match was found).
 	pendingPreselectTarget string
+
+	// pendingExternal is set when the user presses Enter on an external
+	// link. The footer shows a "press Enter again to open <url>" prompt;
+	// a second Enter exec's the opener and clears the field, any other
+	// keystroke clears the field without exec'ing.
+	pendingExternal string
+
+	// openExternal hands a URL off to the OS browser. Injected so tests
+	// can substitute a fake that records calls instead of exec-ing.
+	openExternal externalOpener
 }
 
 // linkFooterMarker is rendered into the footer when a link is selected.
@@ -147,14 +157,15 @@ func New(root, initialFile string) (Model, error) {
 	}
 
 	m := Model{
-		root:     root,
-		rootNode: rootNode,
-		history:  nav.New(),
-		focus:    focusContent,
-		keys:     defaultKeys(),
-		vault:    v,
-		recent:   rstore,
-		diag:     diag,
+		root:         root,
+		rootNode:     rootNode,
+		history:      nav.New(),
+		focus:        focusContent,
+		keys:         defaultKeys(),
+		vault:        v,
+		recent:       rstore,
+		diag:         diag,
+		openExternal: openExternalURL,
 		tree: treeUIState{
 			vp:       viewport.New(0, 0),
 			expanded: map[string]bool{},

@@ -53,15 +53,16 @@ func (m *Model) applyLinkHighlight() {
 }
 
 // followLink performs whatever navigation a link's kind warrants.
-// Phase 1: local files navigate (recording history); external URLs
-// surface the URL in the status bar; anchors are no-ops with a status
-// message.
+// Local files navigate (recording history); external URLs arm the
+// one-keystroke confirm flow (a second Enter exec's the opener);
+// anchors are no-ops with a status message.
 func (m *Model) followLink(l markdown.Link) {
 	switch l.Resolved.Kind {
 	case markdown.LinkLocalFile:
 		m.navigateTo(l.Resolved.Target)
 	case markdown.LinkExternal:
-		m.status = "external link not opened: " + l.Href
+		m.pendingExternal = l.Href
+		m.status = "press Enter again to open: " + l.Href
 	case markdown.LinkAnchor:
 		m.status = "anchor navigation not implemented: #" + l.Resolved.Anchor
 	default:
