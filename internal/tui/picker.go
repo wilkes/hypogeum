@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -15,6 +16,11 @@ import (
 
 	"github.com/wilkes/hypogeum/internal/recent"
 )
+
+// pickerMaxVisible caps how many rows render at once. The cursor is
+// clamped to this range; refining the query is the way to reach hidden
+// rows.
+const pickerMaxVisible = 200
 
 // pickerState is the flat, recency-ranked file finder rendered as a modal.
 // Replaces the previous tree-rooted picker; cursor indexes into ranked.
@@ -94,16 +100,24 @@ func (p *pickerState) refreshVP() {
 	viewportClamp(&p.vp, p.cursor, 1)
 }
 
-// renderRows builds the picker's display string. No score is shown — the
-// score is a sorting signal, not a UX signal.
 func (p *pickerState) renderRows() string {
-	now := time.Now()
-	var b strings.Builder
 	width := p.vp.Width
 	if width < 20 {
 		width = 20
 	}
-	for i, r := range p.ranked {
+	if p.input.Value() != "" && len(p.ranked) == 0 {
+		return lipgloss.NewStyle().Faint(true).
+			Render(`(no match for "` + p.input.Value() + `")`)
+	}
+
+	now := time.Now()
+	var b strings.Builder
+	visible := len(p.ranked)
+	if visible > pickerMaxVisible {
+		visible = pickerMaxVisible
+	}
+	for i := 0; i < visible; i++ {
+		r := p.ranked[i]
 		rel := relativeTo(p.root, r.Path)
 		recencyLabel, edited := pickRecencyLabel(now, r.MTime, r.Visit)
 		suffix := recencyLabel
@@ -118,6 +132,16 @@ func (p *pickerState) renderRows() string {
 		b.WriteByte('\n')
 	}
 	return b.String()
+}
+
+// renderOverflowFooter returns the "… N more" faint footer when ranked
+// exceeds pickerMaxVisible, or an empty string otherwise.
+func (p *pickerState) renderOverflowFooter() string {
+	if overflow := len(p.ranked) - pickerMaxVisible; overflow > 0 {
+		return lipgloss.NewStyle().Faint(true).
+			Render("… " + strconv.Itoa(overflow) + " more")
+	}
+	return ""
 }
 
 // relativeTo returns p relative to root, or the absolute path on failure.
@@ -214,13 +238,18 @@ func (p *pickerState) renderSeparator() string {
 	return strings.Repeat("─", w)
 }
 
-// View returns the picker's renderable string: prompt, separator, list.
+// View returns the picker's renderable string: prompt, separator, list,
+// and an optional overflow footer outside the viewport.
 func (p *pickerState) View() string {
 	if len(p.all) == 0 {
 		return p.renderQueryPrompt() + "\n" + p.renderSeparator() + "\n" +
 			lipgloss.NewStyle().Faint(true).Render("(no markdown files in vault)")
 	}
-	return p.renderQueryPrompt() + "\n" + p.renderSeparator() + "\n" + p.vp.View()
+	out := p.renderQueryPrompt() + "\n" + p.renderSeparator() + "\n" + p.vp.View()
+	if footer := p.renderOverflowFooter(); footer != "" {
+		out += "\n" + footer
+	}
+	return out
 }
 
 // resizePicker fits the picker viewport into the modal interior, leaving

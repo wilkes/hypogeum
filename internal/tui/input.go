@@ -191,7 +191,11 @@ func (m *Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				return *m, nil
 			case key.Matches(msg, m.keys.Down),
 				key.Matches(msg, m.keys.PickerCursorDown):
-				if m.modals.picker.cursor < len(m.modals.picker.ranked)-1 {
+				lim := len(m.modals.picker.ranked)
+				if lim > pickerMaxVisible {
+					lim = pickerMaxVisible
+				}
+				if m.modals.picker.cursor < lim-1 {
 					m.modals.picker.cursor++
 					m.modals.picker.refreshVP()
 				}

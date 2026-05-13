@@ -2,6 +2,8 @@ package tui
 
 import (
 	"path/filepath"
+	"strconv"
+	"strings"
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -179,5 +181,51 @@ func TestPickerEnterOpensFilteredSelection(t *testing.T) {
 	m = pressKey(t, m, tea.KeyMsg{Type: tea.KeyEnter})
 	if got := m.history.Current(); got != p2 {
 		t.Errorf("Enter after filter: opened %q want %q", got, p2)
+	}
+}
+
+func TestPickerNoMatchState(t *testing.T) {
+	dir := t.TempDir()
+	writePickerFile(t, filepath.Join(dir, "alpha.md"), "# A")
+
+	m := sized(t, dir, "")
+	m = pressKey(t, m, tea.KeyMsg{Type: tea.KeyCtrlP})
+
+	for _, r := range "xyzqq" {
+		m = pressRune(t, m, r)
+	}
+	if got := len(m.modals.picker.ranked); got != 0 {
+		t.Fatalf("ranked: got %d, want 0", got)
+	}
+	view := m.modals.picker.View()
+	if !strings.Contains(view, `no match for "xyzqq"`) {
+		t.Errorf("View should report no match; got:\n%s", view)
+	}
+
+	m = pressKey(t, m, tea.KeyMsg{Type: tea.KeyEnter})
+	if m.modals.kind != modalPicker {
+		t.Errorf("Enter on no-match should not close picker; kind=%d", m.modals.kind)
+	}
+}
+
+func TestPickerOverflowCap(t *testing.T) {
+	dir := t.TempDir()
+	for i := 0; i < 250; i++ {
+		name := "x" + strconv.Itoa(i) + ".md"
+		writePickerFile(t, filepath.Join(dir, name), "# x")
+	}
+
+	m := sized(t, dir, "")
+	m = pressKey(t, m, tea.KeyMsg{Type: tea.KeyCtrlP})
+	m = pressRune(t, m, 'x')
+
+	if got := len(m.modals.picker.ranked); got < 200 {
+		t.Fatalf("setup: %d matches; need >=200", got)
+	}
+	overflow := len(m.modals.picker.ranked) - 200
+	view := m.modals.picker.View()
+	want := "… " + strconv.Itoa(overflow) + " more"
+	if !strings.Contains(view, want) {
+		t.Errorf("expected footer %q in View; got:\n%s", want, view)
 	}
 }
