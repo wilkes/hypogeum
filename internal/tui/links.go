@@ -36,10 +36,21 @@ func (m *Model) applyLinkHighlight() {
 	if path == "" {
 		return
 	}
-	src, err := os.ReadFile(path)
-	if err != nil {
-		m.status = err.Error()
-		return
+	var src []byte
+	if info, statErr := os.Stat(path); statErr == nil && info.IsDir() {
+		listing, dirErr := renderDirListing(path)
+		if dirErr != nil {
+			m.status = dirErr.Error()
+			return
+		}
+		src = []byte(listing)
+	} else {
+		var err error
+		src, err = os.ReadFile(path)
+		if err != nil {
+			m.status = err.Error()
+			return
+		}
 	}
 	m.content.renderer.SetFromFile(path)
 	out, _, _, err := m.content.renderer.RenderWithLinks(string(src), path, markdown.HighlightMarker(m.content.linkCursor))
@@ -92,6 +103,12 @@ func (m *Model) followCurrentLink() {
 // scrollToLink ensures the link's row is visible in the viewport. Pads
 // by one line above so the link isn't flush with the top edge.
 func (m *Model) scrollToLink(l markdown.Link) {
+	// Row < 0 is the embed-link sentinel: such links have no single
+	// representative row in the rendered output (they're whole fenced
+	// blocks). Move the cursor without disturbing scroll.
+	if l.Row < 0 {
+		return
+	}
 	top := m.content.viewport.YOffset
 	bottom := top + m.content.viewport.Height - 1
 	switch {

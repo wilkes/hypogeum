@@ -143,3 +143,88 @@ func TestRenderWithLinks_EmbedRangePastEOFShowsSoftWarning(t *testing.T) {
 		t.Fatalf("expected 'file ends at line 1' in rendered output:\n%s", out)
 	}
 }
+
+func TestPreprocessEmbeds_LeavesFencedBlockUntouched(t *testing.T) {
+	dir := t.TempDir()
+	src := filepath.Join(dir, "doc.md")
+	target := filepath.Join(dir, "target.go")
+	if err := os.WriteFile(target, []byte("package main\n"), 0o644); err != nil {
+		t.Fatalf("write target: %v", err)
+	}
+	md := "before\n\n```\n![[target.go]]\n```\n\nafter\n"
+	r, err := NewRenderer(80)
+	if err != nil {
+		t.Fatalf("NewRenderer: %v", err)
+	}
+	out, _, _, err := r.RenderWithLinks(md, src, nil)
+	if err != nil {
+		t.Fatalf("render: %v", err)
+	}
+	if !strings.Contains(out, "![[target.go]]") {
+		t.Fatalf("expected literal embed token inside fence; got:\n%s", out)
+	}
+	if strings.Contains(out, "⚠") {
+		t.Fatalf("expected no warning for fenced embed; got:\n%s", out)
+	}
+}
+
+func TestPreprocessEmbeds_LeavesTildeFenceUntouched(t *testing.T) {
+	dir := t.TempDir()
+	src := filepath.Join(dir, "doc.md")
+	md := "~~~\n![[missing.go]]\n~~~\n"
+	r, err := NewRenderer(80)
+	if err != nil {
+		t.Fatalf("NewRenderer: %v", err)
+	}
+	out, _, _, err := r.RenderWithLinks(md, src, nil)
+	if err != nil {
+		t.Fatalf("render: %v", err)
+	}
+	if !strings.Contains(out, "![[missing.go]]") {
+		t.Fatalf("expected literal embed in tilde fence; got:\n%s", out)
+	}
+	if strings.Contains(out, "file not found") {
+		t.Fatalf("expected no resolution attempt inside tilde fence; got:\n%s", out)
+	}
+}
+
+func TestPreprocessEmbeds_StillProcessesOutsideFence(t *testing.T) {
+	dir := t.TempDir()
+	src := filepath.Join(dir, "doc.md")
+	target := filepath.Join(dir, "target.go")
+	if err := os.WriteFile(target, []byte("alpha\nbeta\n"), 0o644); err != nil {
+		t.Fatalf("write target: %v", err)
+	}
+	md := "lead\n\n![[target.go]]\n\n```\n![[target.go]]\n```\n\n![[target.go]]\ntail\n"
+	r, err := NewRenderer(80)
+	if err != nil {
+		t.Fatalf("NewRenderer: %v", err)
+	}
+	out, _, deps, err := r.RenderWithLinks(md, src, nil)
+	if err != nil {
+		t.Fatalf("render: %v", err)
+	}
+	if strings.Count(out, "alpha") < 2 {
+		t.Fatalf("expected target body to appear twice (one per outside-fence embed); got:\n%s", out)
+	}
+	if len(deps) != 1 {
+		t.Fatalf("expected 1 deduped dep, got %d: %v", len(deps), deps)
+	}
+}
+
+func TestPreprocessEmbeds_LongerFenceContainsShorterRun(t *testing.T) {
+	dir := t.TempDir()
+	src := filepath.Join(dir, "doc.md")
+	md := "````\n```\n![[target.go]]\n```\n````\n"
+	r, err := NewRenderer(80)
+	if err != nil {
+		t.Fatalf("NewRenderer: %v", err)
+	}
+	out, _, _, err := r.RenderWithLinks(md, src, nil)
+	if err != nil {
+		t.Fatalf("render: %v", err)
+	}
+	if !strings.Contains(out, "![[target.go]]") {
+		t.Fatalf("expected literal embed inside outer 4-backtick fence; got:\n%s", out)
+	}
+}

@@ -54,6 +54,53 @@ func TestRefreshContent_CodeFile_DispatchesToCodeRenderer(t *testing.T) {
 	}
 }
 
+// TestRefreshContent_DirectoryPath_RendersListing verifies that
+// refreshContent on a directory path produces a listing (header,
+// entries) rather than the "is a directory" read error users saw
+// before directory dispatch existed.
+func TestRefreshContent_DirectoryPath_RendersListing(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "index.md"), []byte("# index\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	subdir := filepath.Join(dir, "concepts")
+	if err := os.Mkdir(subdir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(subdir, "a.md"), []byte("# a\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(subdir, "b.txt"), []byte("plain\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	m, err := New(dir, "")
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	updated, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 40})
+	m = updated.(Model)
+
+	m.refreshContent(subdir)
+
+	view := m.content.viewport.View()
+	if strings.Contains(view, "Error:") {
+		t.Errorf("directory listing should not surface a read error; got:\n%s", view)
+	}
+	if !strings.Contains(view, "a.md") {
+		t.Errorf("expected listing to mention a.md; got:\n%s", view)
+	}
+	if !strings.Contains(view, "b.txt") {
+		t.Errorf("expected listing to mention b.txt (non-markdown shown); got:\n%s", view)
+	}
+	if len(m.content.links) == 0 {
+		t.Errorf("expected directory listing to produce navigable links, got 0")
+	}
+	if m.status != subdir {
+		t.Errorf("status: got %q want %q", m.status, subdir)
+	}
+}
+
 // TestRefreshContent_CodeFileReadError_ClearsLinksAndReportsStatus
 // covers the error path: refreshContent on a missing code file should
 // still leave the model in a consistent state.

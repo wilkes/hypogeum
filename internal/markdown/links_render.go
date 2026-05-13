@@ -105,12 +105,13 @@ var wikilinkRegex = regexp.MustCompile(`\[\[([^\]\n]+)\]\]`)
 // preprocessWikilinks rewrites [[...]] occurrences in src into either
 // standard markdown links (resolved) or styled placeholder text
 // (unresolved). The resulting string is then handed to Glamour as
-// normal markdown.
+// normal markdown. Fenced code blocks are skipped (same scanner as
+// preprocessEmbeds) so wikilink demos inside fences render verbatim.
 func (r *Renderer) preprocessWikilinks(src string) string {
 	if r.resolver == nil {
 		return src
 	}
-	return wikilinkRegex.ReplaceAllStringFunc(src, func(match string) string {
+	replace := func(match string) string {
 		body := match[2 : len(match)-2]
 		w := wikilink.Parse(body)
 		if w == nil {
@@ -132,7 +133,17 @@ func (r *Renderer) preprocessWikilinks(src string) string {
 			href = path + "#" + slugify(w.Heading)
 		}
 		return "[" + display + "](" + href + ")"
-	})
+	}
+	var b strings.Builder
+	b.Grow(len(src))
+	for _, seg := range splitOutsideFences(src) {
+		if seg.isFence {
+			b.WriteString(seg.text)
+			continue
+		}
+		b.WriteString(wikilinkRegex.ReplaceAllStringFunc(seg.text, replace))
+	}
+	return b.String()
 }
 
 // slugify is the same heading-slug rule used by anchor-style links.
@@ -335,11 +346,12 @@ func lastEscapeStart(s string, end int) int {
 	return -1
 }
 
-// embedTokenRegex matches ![[...]] outside of inline code spans.
-// We deliberately scan the raw source pre-render; goldmark would have
-// reparsed embed bodies as wikilinks. Order with preprocessWikilinks
-// matters: this pass runs first so the ![[...]] form is consumed before
-// the [[...]] regex sees it.
+// embedTokenRegex matches ![[...]] outside of fenced code blocks.
+// Fence detection is handled by splitOutsideFences below — inline
+// `code` spans are NOT detected, so an embed inside a single-backtick
+// span will still be processed. Order with preprocessWikilinks
+// matters: this pass runs first so the ![[...]] form is consumed
+// before the [[...]] regex sees it.
 var embedTokenRegex = regexp.MustCompile(`!\[\[([^\]\n]+)\]\]`)
 
 // preprocessEmbeds replaces every ![[...]] in src with a markdown fenced
@@ -360,7 +372,7 @@ func (r *Renderer) preprocessEmbeds(src, base string) (string, []string, []Link)
 		seen  = map[string]struct{}{}
 		links []Link
 	)
-	out := embedTokenRegex.ReplaceAllStringFunc(src, func(match string) string {
+	replace := func(match string) string {
 		body := match[3 : len(match)-2] // strip ![[ and ]]
 		em, perr := embed.ParseEmbedToken(body)
 		if perr != nil {
@@ -411,7 +423,10 @@ func (r *Renderer) preprocessEmbeds(src, base string) (string, []string, []Link)
 		l := Link{
 			Text: em.Path,
 			Href: body,
-			Row:  -1,
+			// Row=-1 is the no-scroll sentinel honored by
+			// (*Model).scrollToLink — embeds have no representative
+			// single line, so cursor moves but viewport stays put.
+			Row: -1,
 			Resolved: ResolvedLink{
 				Kind:   LinkLocalFile,
 				Target: absPath,
@@ -423,7 +438,18 @@ func (r *Renderer) preprocessEmbeds(src, base string) (string, []string, []Link)
 		links = append(links, l)
 
 		return embed.RenderToFence(absPath, lines, startLine, displayRange, leadCtx, tailCtx, soft)
-	})
+	}
+
+	var b strings.Builder
+	b.Grow(len(src))
+	for _, seg := range splitOutsideFences(src) {
+		if seg.isFence {
+			b.WriteString(seg.text)
+			continue
+		}
+		b.WriteString(embedTokenRegex.ReplaceAllStringFunc(seg.text, replace))
+	}
+	out := b.String()
 	return out, deps, links
 }
 
@@ -431,6 +457,120 @@ func (r *Renderer) preprocessEmbeds(src, base string) (string, []string, []Link)
 // Glamour will style faintly, preserving the surrounding document flow.
 func warningBlock(path, reason string) string {
 	return "> ⚠ `" + path + "`: " + reason + "\n"
+}
+
+// fenceSegment is a chunk of source paired with whether it lies inside
+// a fenced code block. Used by preprocessEmbeds to skip embed scanning
+// inside fences.
+type fenceSegment struct {
+	text    string
+	isFence bool
+}
+
+// splitOutsideFences walks src line-by-line and returns alternating
+// segments: false = embed-eligible prose, true = fenced code block
+// (including the fence delimiters themselves). Trailing newlines are
+// preserved so concatenating segments reproduces src exactly.
+//
+// Fence semantics (a subset of CommonMark sufficient for our docs):
+//   - Opening fence: ≤3 leading spaces, then 3+ backticks OR 3+ tildes.
+//   - Closing fence: same marker char, ≥ opening length, ≤3 leading
+//     spaces, only optional whitespace after the marker run.
+//   - Mismatched marker char or shorter run does NOT close the fence.
+func splitOutsideFences(src string) []fenceSegment {
+	if !strings.ContainsAny(src, "`~") {
+		return []fenceSegment{{text: src, isFence: false}}
+	}
+	var segs []fenceSegment
+	var cur strings.Builder
+	inFence := false
+	var fenceChar byte
+	var fenceLen int
+
+	lines := strings.SplitAfter(src, "\n")
+	for _, line := range lines {
+		if !inFence {
+			if ch, n, ok := openingFence(line); ok {
+				if cur.Len() > 0 {
+					segs = append(segs, fenceSegment{text: cur.String(), isFence: false})
+					cur.Reset()
+				}
+				inFence = true
+				fenceChar = ch
+				fenceLen = n
+				cur.WriteString(line)
+				continue
+			}
+			cur.WriteString(line)
+			continue
+		}
+		// inside a fence
+		cur.WriteString(line)
+		if closingFence(line, fenceChar, fenceLen) {
+			segs = append(segs, fenceSegment{text: cur.String(), isFence: true})
+			cur.Reset()
+			inFence = false
+		}
+	}
+	if cur.Len() > 0 {
+		segs = append(segs, fenceSegment{text: cur.String(), isFence: inFence})
+	}
+	return segs
+}
+
+// openingFence returns the marker char, run length, and ok=true if line
+// is an opening code fence under our subset of CommonMark. Accepts up
+// to 3 leading spaces; the run begins with the first non-space char.
+func openingFence(line string) (byte, int, bool) {
+	i := 0
+	for i < len(line) && i < 3 && line[i] == ' ' {
+		i++
+	}
+	if i >= len(line) {
+		return 0, 0, false
+	}
+	ch := line[i]
+	if ch != '`' && ch != '~' {
+		return 0, 0, false
+	}
+	start := i
+	for i < len(line) && line[i] == ch {
+		i++
+	}
+	n := i - start
+	if n < 3 {
+		return 0, 0, false
+	}
+	return ch, n, true
+}
+
+// closingFence reports whether line closes an open fence whose marker
+// char is ch and whose opening run length is n. Closing requires ≥n
+// markers of the same char, ≤3 leading spaces, and only optional
+// whitespace afterward.
+func closingFence(line string, ch byte, n int) bool {
+	i := 0
+	for i < len(line) && i < 3 && line[i] == ' ' {
+		i++
+	}
+	if i >= len(line) || line[i] != ch {
+		return false
+	}
+	start := i
+	for i < len(line) && line[i] == ch {
+		i++
+	}
+	if i-start < n {
+		return false
+	}
+	for i < len(line) {
+		c := line[i]
+		if c != ' ' && c != '\t' && c != '\n' && c != '\r' {
+			return false
+		}
+		i++
+	}
+	return true
 }
 
 // embedDisplayRange formats em.Range for the provenance header in the
