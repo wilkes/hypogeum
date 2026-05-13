@@ -202,19 +202,33 @@ func truncateLeadingEllipsis(s string, max int) string {
 	return ell + ansi.TruncateLeft(s, ansi.StringWidth(s)-keep, "")
 }
 
-// View returns the picker's renderable string.
-func (p *pickerState) View() string {
-	if len(p.ranked) == 0 {
-		return lipgloss.NewStyle().Faint(true).Render("(no markdown files in vault)")
-	}
-	return p.vp.View()
+func (p *pickerState) renderQueryPrompt() string {
+	return "> " + p.input.View()
 }
 
-// resizePicker fits the picker viewport into the modal interior.
+func (p *pickerState) renderSeparator() string {
+	w := p.vp.Width
+	if w < 1 {
+		w = 1
+	}
+	return strings.Repeat("─", w)
+}
+
+// View returns the picker's renderable string: prompt, separator, list.
+func (p *pickerState) View() string {
+	if len(p.all) == 0 {
+		return p.renderQueryPrompt() + "\n" + p.renderSeparator() + "\n" +
+			lipgloss.NewStyle().Faint(true).Render("(no markdown files in vault)")
+	}
+	return p.renderQueryPrompt() + "\n" + p.renderSeparator() + "\n" + p.vp.View()
+}
+
+// resizePicker fits the picker viewport into the modal interior, leaving
+// two rows at the top for the query prompt and separator.
 func (m *Model) resizePicker() {
 	_, _, w, h := modalGeometry(m.width, m.height)
 	pw := w - 2
-	ph := h - 2
+	ph := h - 2 - 2 // border (2) + prompt+separator (2)
 	if pw < 1 {
 		pw = 1
 	}
@@ -223,6 +237,7 @@ func (m *Model) resizePicker() {
 	}
 	m.modals.picker.vp.Width = pw
 	m.modals.picker.vp.Height = ph
+	m.modals.picker.input.Width = pw - 2 // leave room for "> " prefix
 	m.modals.picker.refreshVP()
 }
 
