@@ -45,6 +45,14 @@ func NewRenderer(width int) *Renderer {
 //
 // A line-number gutter and soft-wrap will be added in later tasks.
 func (r *Renderer) Render(path string, src []byte) (string, error) {
+	const maxSize = 5 * 1024 * 1024
+	if len(src) > maxSize {
+		return "file too large to display", nil
+	}
+	if looksBinary(src) {
+		return "binary file, not displayed", nil
+	}
+
 	lexer := lexers.Match(filepath.Base(path))
 	if lexer == nil {
 		lexer = lexers.Analyse(string(src))
@@ -75,4 +83,14 @@ func (r *Renderer) Render(path string, src []byte) (string, error) {
 		return "", fmt.Errorf("format: %w", err)
 	}
 	return buf.String(), nil
+}
+
+// looksBinary reports whether src appears to be binary content using the
+// same heuristic git uses: a NUL byte in the first 8 KB.
+func looksBinary(src []byte) bool {
+	n := len(src)
+	if n > 8192 {
+		n = 8192
+	}
+	return bytes.IndexByte(src[:n], 0) >= 0
 }
