@@ -37,13 +37,13 @@ func NewRenderer(width int) *Renderer {
 }
 
 // Render tokenizes src with a lexer chosen from path's basename (or from
-// content analysis as a fallback) and formats it as 256-color ANSI.
-// Returns the rendered string and a nil error for all user-facing
-// problems (unrecognized syntax, tokenization failure). A non-nil error
-// indicates a programming-level invariant violation (e.g. the
-// terminal256 formatter not being registered).
+// content analysis as a fallback), formats it as 256-color ANSI, and
+// prefixes a line-number gutter. Returns the rendered string and a nil
+// error for all user-facing problems (unrecognized syntax, tokenization
+// failure). A non-nil error indicates a programming-level invariant
+// violation (e.g. the terminal256 formatter not being registered).
 //
-// A line-number gutter and soft-wrap will be added in later tasks.
+// Soft-wrap for long lines will be added in a later task.
 func (r *Renderer) Render(path string, src []byte) (string, error) {
 	const maxSize = 5 * 1024 * 1024
 	if len(src) > maxSize {

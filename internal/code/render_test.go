@@ -51,12 +51,32 @@ func TestRender_GoSource_PrefixesGutter(t *testing.T) {
 		t.Fatalf("Render returned error: %v", err)
 	}
 	lines := strings.Split(strings.TrimRight(out, "\n"), "\n")
-	if len(lines) < 3 {
-		t.Fatalf("expected at least 3 output lines, got %d:\n%q", len(lines), out)
+	// Three source lines must produce exactly three gutter rows — no
+	// phantom trailing row from Chroma's terminal256 trailing SGR reset.
+	if len(lines) != 3 {
+		t.Fatalf("expected exactly 3 output lines, got %d:\n%q", len(lines), out)
 	}
-	// First line should start with "1" (after any leading style reset).
 	if !strings.Contains(stripANSI(lines[0]), "1") {
 		t.Errorf("first line gutter missing '1': %q", lines[0])
+	}
+	if !strings.Contains(stripANSI(lines[2]), "3") {
+		t.Errorf("third line gutter missing '3': %q", lines[2])
+	}
+}
+
+// TestRender_NoTrailingNewline_StillCountsCorrectly covers the
+// asymmetric case: source without a trailing '\n' still produces one
+// gutter row per source line.
+func TestRender_NoTrailingNewline_StillCountsCorrectly(t *testing.T) {
+	r := NewRenderer(80)
+	src := []byte("package main\n\nfunc main() {}") // no trailing newline
+	out, err := r.Render("main.go", src)
+	if err != nil {
+		t.Fatalf("Render returned error: %v", err)
+	}
+	lines := strings.Split(strings.TrimRight(out, "\n"), "\n")
+	if len(lines) != 3 {
+		t.Fatalf("expected 3 lines, got %d:\n%q", len(lines), out)
 	}
 	if !strings.Contains(stripANSI(lines[2]), "3") {
 		t.Errorf("third line gutter missing '3': %q", lines[2])
