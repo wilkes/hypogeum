@@ -1,7 +1,7 @@
 # Multi-segment cursor — implementation plan
 
 Design: [2026-05-13-multi-segment-cursor-design.md](../specs/2026-05-13-multi-segment-cursor-design.md).
-Status: in progress.
+Status: shipped.
 
 Two commits — one for the failing test, one for the fix — kept separate so the bug shape is recorded in git history.
 

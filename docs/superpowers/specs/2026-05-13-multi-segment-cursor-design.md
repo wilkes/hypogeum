@@ -1,6 +1,6 @@
 # Multi-segment cursor for word-wrapped links — design
 
-**Status:** spec — not yet implemented.
+**Status:** shipped.
 **Scope:** when the selected link's visible text wraps across multiple terminal rows, every visual segment is highlighted with reverse-video SGR. Today only the first segment is highlighted; subsequent rows render unhighlighted because Glamour resets SGR at line boundaries.
 
 See also: [link-following](../../link-following.md), [docs index](../../index.md), [[sentinel-render]], [[link-cursor]], [link-following Phase 2 design](2026-05-09-link-following-phase-2-design.md).
