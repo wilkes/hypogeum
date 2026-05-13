@@ -3,6 +3,8 @@ package code
 import (
 	"strings"
 	"testing"
+
+	"github.com/wilkes/hypogeum/internal/markdown"
 )
 
 func TestRender_GoSource_ContainsANSI(t *testing.T) {
@@ -166,6 +168,53 @@ func TestRender_UnknownExtension_FallsBackToPlainTextWithGutter(t *testing.T) {
 	}
 	if !strings.Contains(stripANSI(out), "1") || !strings.Contains(stripANSI(out), "2") {
 		t.Errorf("expected line numbers 1 and 2 in gutter, got:\n%q", stripANSI(out))
+	}
+}
+
+func TestRender_HighlightReverseVideosGutter(t *testing.T) {
+	src := []byte("line1\nline2\nline3\nline4\n")
+	r := NewRenderer(80)
+	out, err := r.RenderOpts("plain.txt", src, RenderOptions{
+		Highlight: &markdown.LineRange{Start: 2, End: 3},
+	})
+	if err != nil {
+		t.Fatalf("RenderOpts: %v", err)
+	}
+	// Line 1's gutter should not contain reverse-video SGR (\x1b[7m).
+	// Lines 2 and 3 should.
+	// Line 4 should not.
+	lines := strings.Split(out, "\n")
+	if len(lines) < 4 {
+		t.Fatalf("got %d lines:\n%s", len(lines), out)
+	}
+	contains := func(s, sub string) bool { return strings.Contains(s, sub) }
+	if contains(lines[0], "\x1b[7m") {
+		t.Errorf("line 1 should not have reverse-video gutter: %q", lines[0])
+	}
+	if !contains(lines[1], "\x1b[7m") {
+		t.Errorf("line 2 should have reverse-video gutter: %q", lines[1])
+	}
+	if !contains(lines[2], "\x1b[7m") {
+		t.Errorf("line 3 should have reverse-video gutter: %q", lines[2])
+	}
+	if contains(lines[3], "\x1b[7m") {
+		t.Errorf("line 4 should not have reverse-video gutter: %q", lines[3])
+	}
+}
+
+func TestRender_NoHighlightIsUnchanged(t *testing.T) {
+	src := []byte("a\nb\n")
+	r := NewRenderer(80)
+	got, err := r.RenderOpts("plain.txt", src, RenderOptions{})
+	if err != nil {
+		t.Fatalf("RenderOpts: %v", err)
+	}
+	want, err := r.Render("plain.txt", src)
+	if err != nil {
+		t.Fatalf("Render: %v", err)
+	}
+	if got != want {
+		t.Fatalf("RenderOpts({}) differs from Render():\n got: %q\nwant: %q", got, want)
 	}
 }
 
