@@ -109,7 +109,7 @@ func (m *Model) refreshContent(path string) {
 	}
 
 	m.content.renderer.SetFromFile(path)
-	out, links, err := m.content.renderer.RenderWithLinks(string(src), path, linkZoneMarker)
+	out, links, _, err := m.content.renderer.RenderWithLinks(string(src), path, linkZoneMarker)
 	if err != nil {
 		m.status = err.Error()
 		m.content.viewport.SetContent(fmt.Sprintf("Error: %v", err))

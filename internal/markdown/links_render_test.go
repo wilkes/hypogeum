@@ -118,7 +118,7 @@ func TestPreprocessWikilinks_BlockReferencePassedToResolver(t *testing.T) {
 
 func TestRenderWithLinks_EndToEndSentinelsStripped(t *testing.T) {
 	r := rendererForTest(t)
-	out, links, err := r.RenderWithLinks("See [the docs](docs.md) here.\n", "/base/index.md", nil)
+	out, links, _, err := r.RenderWithLinks("See [the docs](docs.md) here.\n", "/base/index.md", nil)
 	if err != nil {
 		t.Fatalf("RenderWithLinks: %v", err)
 	}

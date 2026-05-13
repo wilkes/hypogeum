@@ -23,7 +23,7 @@ func TestRenderWithLinks_ResolvedWikilinkBecomesLink(t *testing.T) {
 	}
 	r.SetFromFile("/abs/source.md")
 
-	out, links, err := r.RenderWithLinks("see [[Foo]] above.", "/abs/source.md", nil)
+	out, links, _, err := r.RenderWithLinks("see [[Foo]] above.", "/abs/source.md", nil)
 	if err != nil {
 		t.Fatalf("RenderWithLinks: %v", err)
 	}
@@ -48,7 +48,7 @@ func TestRenderWithLinks_UnresolvedWikilinkIsBroken(t *testing.T) {
 	}
 	r.SetFromFile("/abs/source.md")
 
-	out, links, err := r.RenderWithLinks("see [[Missing]] above.", "/abs/source.md", nil)
+	out, links, _, err := r.RenderWithLinks("see [[Missing]] above.", "/abs/source.md", nil)
 	if err != nil {
 		t.Fatalf("RenderWithLinks: %v", err)
 	}
@@ -72,7 +72,7 @@ func TestRenderWithLinks_AliasUsedAsDisplayText(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewRenderer: %v", err)
 	}
-	out, links, err := r.RenderWithLinks("see [[Foo|the foo]] above.", "/abs/source.md", nil)
+	out, links, _, err := r.RenderWithLinks("see [[Foo|the foo]] above.", "/abs/source.md", nil)
 	if err != nil {
 		t.Fatalf("RenderWithLinks: %v", err)
 	}
