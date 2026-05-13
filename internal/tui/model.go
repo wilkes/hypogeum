@@ -33,11 +33,12 @@ func clearTransientAfter(d time.Duration) tea.Cmd {
 }
 
 // Focus indicates which pane currently receives keyboard input for movement.
+// The tree is no longer a Tab destination — it lives in a modal opened with
+// ^b — so the cycle is content ↔ backlinks (when that pane is visible).
 type focus int
 
 const (
-	focusTree focus = iota
-	focusContent
+	focusContent focus = iota
 	focusBacklinks
 )
 
@@ -95,7 +96,6 @@ type treeRow struct {
 // BubbleZone resolves these to bounding boxes during Scan, so Update can
 // route mouse events without computing pane geometry by hand.
 const (
-	zoneTreePane    = "pane:tree"
 	zoneContentPane = "pane:content"
 )
 
@@ -156,7 +156,6 @@ func New(root, initialFile string) (Model, error) {
 		diag:     diag,
 		tree: treeUIState{
 			vp:       viewport.New(0, 0),
-			visible:  false,
 			expanded: map[string]bool{},
 		},
 		content: contentUIState{
@@ -220,12 +219,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.width, m.height = msg.Width, msg.Height
-		m.normalizeFocus()
-		treeWidth := m.treeWidth()
-		contentWidth := m.width - treeWidth
-		if treeWidth > 0 {
-			contentWidth -= 2 // pane borders only count when both panes are rendered
-		}
+		contentWidth := m.width
 		if contentWidth < 20 {
 			contentWidth = 20
 		}
@@ -235,19 +229,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.content.viewport.Height = m.height - 4
 		m.backlinks.vp.Width = contentWidth
 		m.backlinks.vp.Height = backlinksHeight - 2
-		// The tree viewport gets the inside of the tree pane: width
-		// minus its border (2), height minus border + footer (4).
-		m.tree.vp.Width = treeWidth - 2
-		if m.tree.vp.Width < 0 {
-			m.tree.vp.Width = 0
-		}
-		m.tree.vp.Height = m.height - 4 - 2 // pane border (2) on top of viewport's own
-		if m.tree.vp.Height < 1 {
-			m.tree.vp.Height = 1
-		}
-		m.refreshTreeVP()
 		m.resizeModalVP()
 		m.resizePicker()
+		m.resizeTreeModalVP()
+		m.refreshTreeVP()
 		// Cap the renderer's wrap width so prose stays readable on wide
 		// terminals; the viewport pane keeps the full available width.
 		renderWidth := min(contentWidth, maxRenderWidth)
