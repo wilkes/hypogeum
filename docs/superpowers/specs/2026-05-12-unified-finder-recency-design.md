@@ -288,6 +288,7 @@ Existing tests must continue to pass — no regressions to tree-pane, history, l
 
 **Phase 2 (separate specs, if desired after dogfooding):**
 - Name-filter typing (Cmd-P-style fuzzy filter on the same surface).
+  - Extended by: [finder-fuzzy-filter](2026-05-12-finder-fuzzy-filter-design.md).
 - Sort-mode cycling (e.g. `s` cycles recent / name / path).
 - Full-text content search as another mode.
 - Updated-together view (files mtime-clustered with the current file).

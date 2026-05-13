@@ -37,7 +37,7 @@ hypogeum ~/notes/index.md # open a specific file; tree roots at its directory
 | `b` | Toggle backlinks pane |
 | `B` | Backlinks modal |
 | `^b` | Toggle tree pane |
-| `^p` | Open file finder (recent first) |
+| `^p`          | Open file finder (type to fuzzy-filter; ^j/^k cursor)                |
 | `^l` | Log viewer |
 | `?` | Help (cheat sheet) |
 | `q` | Quit |
