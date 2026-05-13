@@ -10,9 +10,13 @@ Renders GitHub Flavored Markdown via [Glamour](https://github.com/charmbracelet/
 
 ## Install
 
+Pre-built binaries are on the [releases page](https://github.com/wilkes/hypogeum/releases) — download the archive for your platform, extract, and put the `hypogeum` binary on your `$PATH`. Or:
+
 ```sh
 go install github.com/wilkes/hypogeum/cmd/hypogeum@latest
 ```
+
+Run `hypogeum --version` to confirm which build you're on.
 
 ## Usage
 
