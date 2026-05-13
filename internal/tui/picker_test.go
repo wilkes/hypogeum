@@ -5,181 +5,200 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 )
 
-func TestModel_OpenPickerModal(t *testing.T) {
-	root := writeFixture(t)
-	m := sized(t, root, "")
-
-	if m.modals.kind != modalNone {
-		t.Fatalf("precondition: no modal should be open")
+// writePickerFile writes content to p, creating parent dirs as needed.
+// Distinct from helpers_test.writeFixture so each test can build its own
+// minimal layout.
+func writePickerFile(t *testing.T, p, content string) {
+	t.Helper()
+	if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+		t.Fatal(err)
 	}
-
-	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyCtrlP})
-	m = updated.(Model)
-
-	if m.modals.kind != modalPicker {
-		t.Errorf("modalOpen = %v, want modalPicker", m.modals.kind)
-	}
-	if len(m.modals.picker.flat) == 0 {
-		t.Errorf("picker.flat should be populated on open, got empty")
+	if err := os.WriteFile(p, []byte(content), 0o644); err != nil {
+		t.Fatal(err)
 	}
 }
 
-// TestModel_PickerEscClosesFromAnyDepth replaces the old "Esc at root
-// closes" test. The vault-rooted picker has no concept of "deeper than
-// root" — Esc closes from anywhere.
-func TestModel_PickerEscClosesFromAnyDepth(t *testing.T) {
-	root := writeFixture(t)
-	m := sized(t, root, "")
+func TestPickerOpenPopulatesRanked(t *testing.T) {
+	dir := t.TempDir()
+	writePickerFile(t, filepath.Join(dir, "a.md"), "# A")
+	writePickerFile(t, filepath.Join(dir, "b.md"), "# B")
 
-	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyCtrlP})
-	m = updated.(Model)
+	m := sized(t, dir, "")
+	m = pressKey(t, m, tea.KeyMsg{Type: tea.KeyCtrlP})
+
 	if m.modals.kind != modalPicker {
-		t.Fatalf("precondition: picker should be open")
+		t.Fatalf("modal kind: got %d want %d", m.modals.kind, modalPicker)
 	}
-
-	// Expand a folder so we're "deep" — the old picker would walk up here.
-	m = pressKey(t, m, tea.KeyMsg{Type: tea.KeySpace})
-
-	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyEsc})
-	m = updated.(Model)
-
-	if m.modals.kind != modalNone {
-		t.Errorf("Esc should close picker from any depth; modalOpen = %v", m.modals.kind)
+	if len(m.modals.picker.ranked) != 2 {
+		t.Errorf("ranked: got %d want 2", len(m.modals.picker.ranked))
 	}
 }
 
-// TestModel_PickerSelectOpensFile drives the picker through Ctrl+P →
-// expand notes/ → enter on first.md, asserting the selection becomes
-// the new history entry.
-func TestModel_PickerSelectOpensFile(t *testing.T) {
-	root := writeFixture(t)
-	m := sized(t, root, "")
+func TestPickerEscClosesWithoutOpening(t *testing.T) {
+	dir := t.TempDir()
+	writePickerFile(t, filepath.Join(dir, "a.md"), "# A")
 
-	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyCtrlP})
-	m = updated.(Model)
+	m := sized(t, dir, "")
+	before := m.history.Current()
 
-	// On open, the picker shows: root/, then collapsed children.
-	// Cursor is at row 0 (root). Expand it.
-	m = pressKey(t, m, tea.KeyMsg{Type: tea.KeySpace})
+	m = pressKey(t, m, tea.KeyMsg{Type: tea.KeyCtrlP})
+	m = pressKey(t, m, tea.KeyMsg{Type: tea.KeyEsc})
 
-	// Now move down to find first.md (under notes/sub potentially); for
-	// the writeFixture layout, root expands to {notes/, index.md}.
-	// Move down to notes/, expand it.
-	want := filepath.Join(root, "index.md")
-	target := -1
-	for i, row := range m.modals.picker.flat {
-		if row.node.Path == want {
-			target = i
-			break
-		}
+	if m.modals.kind != modalNone {
+		t.Errorf("expected modalNone after Esc, got %d", m.modals.kind)
 	}
-	if target < 0 {
-		t.Fatalf("index.md not visible at depth-1; flat=%v", debugFlat(m.modals.picker.flat))
+	if m.history.Current() != before {
+		t.Errorf("Esc should not have navigated; was %q now %q", before, m.history.Current())
 	}
-	for m.modals.picker.cursor != target {
-		key := tea.KeyMsg{Type: tea.KeyDown}
-		if m.modals.picker.cursor > target {
-			key = tea.KeyMsg{Type: tea.KeyUp}
-		}
-		prev := m.modals.picker.cursor
-		m = pressKey(t, m, key)
-		if m.modals.picker.cursor == prev {
-			t.Fatalf("picker cursor stuck at %d trying to reach %d", prev, target)
-		}
-	}
+}
 
+func TestPickerJKMovesCursor(t *testing.T) {
+	dir := t.TempDir()
+	writePickerFile(t, filepath.Join(dir, "a.md"), "# A")
+	writePickerFile(t, filepath.Join(dir, "b.md"), "# B")
+
+	m := sized(t, dir, "")
+	m = pressKey(t, m, tea.KeyMsg{Type: tea.KeyCtrlP})
+
+	if got := m.modals.picker.cursor; got != 0 {
+		t.Fatalf("initial cursor: %d, want 0", got)
+	}
+	m = pressRune(t, m, 'j')
+	if got := m.modals.picker.cursor; got != 1 {
+		t.Errorf("after j: cursor=%d, want 1", got)
+	}
+	m = pressRune(t, m, 'k')
+	if got := m.modals.picker.cursor; got != 0 {
+		t.Errorf("after k: cursor=%d, want 0", got)
+	}
+	// k at top is clamped.
+	m = pressRune(t, m, 'k')
+	if got := m.modals.picker.cursor; got != 0 {
+		t.Errorf("k at top: cursor=%d, want 0", got)
+	}
+}
+
+func TestPickerEnterOpensSelected(t *testing.T) {
+	dir := t.TempDir()
+	p1 := filepath.Join(dir, "a.md")
+	p2 := filepath.Join(dir, "b.md")
+	writePickerFile(t, p1, "# A")
+	writePickerFile(t, p2, "# B")
+
+	m := sized(t, dir, "")
+	m = pressKey(t, m, tea.KeyMsg{Type: tea.KeyCtrlP})
+
+	// Whichever file is first in the ranked list is what Enter opens.
+	want := m.modals.picker.ranked[0].Path
 	m = pressKey(t, m, tea.KeyMsg{Type: tea.KeyEnter})
 
-	if got := m.history.Current(); got != want {
-		t.Errorf("history.Current = %q, want %q", got, want)
-	}
 	if m.modals.kind != modalNone {
-		t.Errorf("picker should close after selection; modalOpen = %v", m.modals.kind)
+		t.Errorf("Enter should close picker, got modal kind %d", m.modals.kind)
+	}
+	if got := m.history.Current(); got != want {
+		t.Errorf("history.Current after Enter: got %q want %q", got, want)
 	}
 }
 
-// TestModel_PickerHidesEmptyDirectories checks the user's primary ask:
-// directories that contain no markdown (anywhere in their subtree)
-// don't appear in the picker. By construction (we render m.rootNode
-// which tree.Walk has already pruned), this is automatic — the test
-// locks the property in.
-func TestModel_PickerHidesEmptyDirectories(t *testing.T) {
-	root := t.TempDir()
-	mk := func(rel, body string) {
-		full := filepath.Join(root, rel)
-		if err := os.MkdirAll(filepath.Dir(full), 0o755); err != nil {
-			t.Fatal(err)
-		}
-		if err := os.WriteFile(full, []byte(body), 0o644); err != nil {
-			t.Fatal(err)
-		}
+func TestPickerEmptyVault(t *testing.T) {
+	dir := t.TempDir()
+	// No markdown files. New may fail because there's nothing to open.
+	mRaw, err := New(dir, "")
+	if err != nil {
+		t.Skip("New on empty dir failed; not the picker's concern: " + err.Error())
 	}
-	mk("real-notes/note.md", "# note\n")
-	mk("just-pdfs/x.pdf", "binary")
-	mk("just-binaries/x.bin", "binary")
-	if err := os.MkdirAll(filepath.Join(root, "totally-empty"), 0o755); err != nil {
+	updated, _ := mRaw.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+	m := updated.(Model)
+
+	m = pressKey(t, m, tea.KeyMsg{Type: tea.KeyCtrlP})
+	if len(m.modals.picker.ranked) != 0 {
+		t.Errorf("expected empty ranked, got %d entries", len(m.modals.picker.ranked))
+	}
+	// Enter on empty list is a no-op (may or may not close the modal
+	// depending on the early-exit path; we don't assert).
+	m = pressKey(t, m, tea.KeyMsg{Type: tea.KeyEnter})
+	_ = m
+}
+
+func TestPickerRecentVisitBoostsRank(t *testing.T) {
+	dir := t.TempDir()
+	p1 := filepath.Join(dir, "a.md")
+	p2 := filepath.Join(dir, "b.md")
+	writePickerFile(t, p1, "# A")
+	writePickerFile(t, p2, "# B")
+	// Make mtimes deliberately equal.
+	now := time.Now()
+	if err := os.Chtimes(p1, now, now); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chtimes(p2, now, now); err != nil {
 		t.Fatal(err)
 	}
 
-	m := sized(t, root, "")
-	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyCtrlP})
-	m = updated.(Model)
-	// Expand the root so subdirs are visible.
-	m = pressKey(t, m, tea.KeyMsg{Type: tea.KeySpace})
+	m := sized(t, dir, "")
+	// Open p1 → its visit bumps its score above p2.
+	m.openFile(p1)
 
-	flatPaths := make([]string, len(m.modals.picker.flat))
-	for i, r := range m.modals.picker.flat {
-		flatPaths[i] = r.node.Path
+	m = pressKey(t, m, tea.KeyMsg{Type: tea.KeyCtrlP})
+	if len(m.modals.picker.ranked) < 2 {
+		t.Fatalf("ranked: got %d, want >=2", len(m.modals.picker.ranked))
 	}
-	allFlat := strings.Join(flatPaths, "\n")
-
-	if !strings.Contains(allFlat, "real-notes") {
-		t.Errorf("real-notes/ should appear in picker (contains a .md): %s", allFlat)
-	}
-	for _, banned := range []string{"just-pdfs", "just-binaries", "totally-empty"} {
-		if strings.Contains(allFlat, banned) {
-			t.Errorf("%s/ should NOT appear in picker (no markdown): %s", banned, allFlat)
-		}
+	if got := m.modals.picker.ranked[0].Path; got != p1 {
+		t.Errorf("top of rank after visiting p1: got %q want %q", got, p1)
 	}
 }
 
-// TestModel_PickerExpansionIndependentFromTreePane verifies that
-// expanding/collapsing folders in the picker doesn't affect the left
-// pane's expansion state, and vice versa.
-func TestModel_PickerExpansionIndependentFromTreePane(t *testing.T) {
-	root := writeFixture(t)
-	m := sized(t, root, "")
-
-	// Snapshot left-pane expansion state before opening picker.
-	leftExpandedBefore := len(m.tree.expanded)
-
-	// Open picker, expand a folder in it.
-	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyCtrlP})
-	m = updated.(Model)
-	m = pressKey(t, m, tea.KeyMsg{Type: tea.KeySpace}) // expand root
-
-	if len(m.modals.picker.expanded) == 0 {
-		t.Fatalf("precondition: picker should have at least one expanded entry")
+func TestHumanRecency(t *testing.T) {
+	now := time.Date(2026, 5, 12, 12, 0, 0, 0, time.UTC)
+	cases := []struct {
+		name string
+		t    time.Time
+		want string
+	}{
+		{"zero", time.Time{}, "never"},
+		{"30s", now.Add(-30 * time.Second), "just now"},
+		{"5m", now.Add(-5 * time.Minute), "5m ago"},
+		{"3h", now.Add(-3 * time.Hour), "3h ago"},
+		{"30h", now.Add(-30 * time.Hour), "yesterday"},
+		{"3d", now.Add(-3 * 24 * time.Hour), "3d ago"},
+		{"3w", now.Add(-3 * 7 * 24 * time.Hour), "3w ago"},
+		{"3mo", now.Add(-90 * 24 * time.Hour), "2026-02-11"},
 	}
-
-	// Close the picker.
-	m = pressKey(t, m, tea.KeyMsg{Type: tea.KeyEsc})
-
-	// Left pane expansion should be unchanged.
-	if len(m.tree.expanded) != leftExpandedBefore {
-		t.Errorf("left-pane expanded changed: before=%d after=%d", leftExpandedBefore, len(m.tree.expanded))
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			got := humanRecency(now, c.t)
+			if got != c.want {
+				t.Errorf("humanRecency(%s): got %q want %q", c.name, got, c.want)
+			}
+		})
 	}
 }
 
-// debugFlat formats a picker's flat list for test failure messages.
-func debugFlat(rows []treeRow) string {
-	parts := make([]string, len(rows))
-	for i, r := range rows {
-		parts[i] = filepath.Base(r.node.Path)
+func TestFormatPickerRowFits(t *testing.T) {
+	out := formatPickerRow("a/b/c.md", "2h ago", 30)
+	if w := len(out); w == 0 {
+		t.Fatal("formatPickerRow returned empty")
 	}
-	return strings.Join(parts, ", ")
+	if !strings.Contains(out, "a/b/c.md") {
+		t.Errorf("row missing left content: %q", out)
+	}
+	if !strings.Contains(out, "2h ago") {
+		t.Errorf("row missing right content: %q", out)
+	}
+}
+
+func TestFormatPickerRowTruncates(t *testing.T) {
+	long := "very/long/nested/path/to/some/note.md"
+	out := formatPickerRow(long, "1h ago", 20)
+	if !strings.Contains(out, "…") {
+		t.Errorf("expected leading ellipsis in narrow row, got %q", out)
+	}
+	if !strings.Contains(out, "note.md") {
+		t.Errorf("basename should remain visible: %q", out)
+	}
 }

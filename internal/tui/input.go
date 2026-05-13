@@ -7,6 +7,8 @@ import (
 	"github.com/charmbracelet/bubbles/key"
 	tea "github.com/charmbracelet/bubbletea"
 	zone "github.com/lrstanley/bubblezone"
+
+	"github.com/wilkes/hypogeum/internal/recent"
 )
 
 // debugMouse logs every left-click to /tmp/hypogeum-mouse.log for
@@ -142,8 +144,12 @@ func (m *Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		})
 	case key.Matches(msg, m.keys.OpenPicker):
 		return *m, m.openModalWith(modalPicker, func() {
-			// Each open starts fresh: cursor at top, all dirs collapsed.
-			m.modals.picker.reset(m.rootNode)
+			paths := m.allVaultMarkdownPaths()
+			ranked := []recent.Ranked{}
+			if m.recent != nil {
+				ranked = m.recent.Rank(paths)
+			}
+			m.modals.picker.reset(ranked, m.root)
 		})
 	}
 
@@ -160,7 +166,7 @@ func (m *Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if m.modals.kind != modalNone {
 		if m.modals.kind == modalPicker {
 			switch {
-			case key.Matches(msg, m.keys.ClearLink): // Esc closes from any depth
+			case key.Matches(msg, m.keys.ClearLink): // Esc
 				m.modals.kind = modalNone
 				m.focus = m.modals.prevFocus
 			case key.Matches(msg, m.keys.Up):
@@ -169,20 +175,15 @@ func (m *Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 					m.modals.picker.refreshVP()
 				}
 			case key.Matches(msg, m.keys.Down):
-				if m.modals.picker.cursor < len(m.modals.picker.flat)-1 {
+				if m.modals.picker.cursor < len(m.modals.picker.ranked)-1 {
 					m.modals.picker.cursor++
 					m.modals.picker.refreshVP()
 				}
-			case key.Matches(msg, m.keys.ToggleFolder):
-				m.modals.picker.toggleAt(m.rootNode)
 			case key.Matches(msg, m.keys.Open):
-				if path, ok := m.modals.picker.selectedFile(); ok {
+				if path, ok := m.modals.picker.selectedPath(); ok {
 					m.modals.kind = modalNone
 					m.focus = m.modals.prevFocus
 					m.navigateTo(path)
-				} else {
-					// On a directory: Enter expands/collapses it, same as space.
-					m.modals.picker.toggleAt(m.rootNode)
 				}
 			}
 			return *m, nil
