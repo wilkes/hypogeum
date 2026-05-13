@@ -134,6 +134,7 @@ func TestViewportClamp_RowsPerEntryGreaterThanOne(t *testing.T) {
 }
 
 func TestOpenFileRecordsVisit(t *testing.T) {
+	isolatedHome(t)
 	dir := t.TempDir()
 	// Create an initial file so New won't fail on an empty tree.
 	initFile := filepath.Join(dir, "init.md")

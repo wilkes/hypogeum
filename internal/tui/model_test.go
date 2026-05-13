@@ -81,6 +81,7 @@ func TestModel_OpensInitialFile(t *testing.T) {
 }
 
 func TestNewBuildsVault(t *testing.T) {
+	isolatedHome(t)
 	dir := t.TempDir()
 	m, err := New(dir, "")
 	if err != nil {
@@ -92,6 +93,7 @@ func TestNewBuildsVault(t *testing.T) {
 }
 
 func TestKeyBTogglesBacklinksOpen(t *testing.T) {
+	isolatedHome(t)
 	dir := t.TempDir()
 	m, err := New(dir, "")
 	if err != nil {
@@ -111,6 +113,7 @@ func TestKeyBTogglesBacklinksOpen(t *testing.T) {
 }
 
 func TestNewInitializesRecentStore(t *testing.T) {
+	isolatedHome(t)
 	dir := t.TempDir()
 	notePath := filepath.Join(dir, "n.md")
 	if err := os.WriteFile(notePath, []byte("# N"), 0o644); err != nil {
@@ -127,6 +130,7 @@ func TestNewInitializesRecentStore(t *testing.T) {
 }
 
 func TestAllVaultMarkdownPaths(t *testing.T) {
+	isolatedHome(t)
 	dir := t.TempDir()
 	// Create:  dir/a.md, dir/sub/b.md, dir/sub/sub2/c.md, dir/d.txt (excluded)
 	mustWrite := func(p string) {

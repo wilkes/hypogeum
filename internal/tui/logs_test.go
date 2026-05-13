@@ -12,6 +12,7 @@ import (
 func ctrlL() tea.KeyMsg { return tea.KeyMsg{Type: tea.KeyCtrlL} }
 
 func TestLogsModalShowsRingBuffer(t *testing.T) {
+	isolatedHome(t)
 	dir := t.TempDir()
 	m, _ := New(dir, "")
 	mm, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 40})
@@ -34,6 +35,7 @@ func TestLogsModalShowsRingBuffer(t *testing.T) {
 // invariant still holds for B and ^l (the two "swap" modals). Help (?)
 // is anchored and does not swap — see TestHelpModalDoesNotSwap.
 func TestLogsModalReplacesBacklinksModal(t *testing.T) {
+	isolatedHome(t)
 	dir := t.TempDir()
 	m, _ := New(dir, "")
 	mm, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 40})

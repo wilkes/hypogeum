@@ -106,6 +106,7 @@ func TestPickerEnterOpensSelected(t *testing.T) {
 }
 
 func TestPickerEmptyVault(t *testing.T) {
+	isolatedHome(t)
 	dir := t.TempDir()
 	// No markdown files. New may fail because there's nothing to open.
 	mRaw, err := New(dir, "")
