@@ -152,6 +152,116 @@ func TestModel_ToggleFolderShowsAndHidesChildren(t *testing.T) {
 	}
 }
 
+// TestModel_ArrowKeysCollapseAndExpand checks that ← collapses an
+// expanded directory and → expands a collapsed one, with both being
+// no-ops when there is nothing to change or when the cursor is on a
+// file row.
+func TestModel_ArrowKeysCollapseAndExpand(t *testing.T) {
+	root := writeFixture(t)
+	m := sized(t, root, filepath.Join(root, "index.md"))
+
+	notesDir := filepath.Join(root, "notes")
+	target := m.rowIndexByPath(notesDir)
+	if target < 0 {
+		t.Fatalf("notes/ directory row not found in flatTree")
+	}
+	m = driveCursorTo(t, m, target)
+
+	// → on collapsed dir expands it.
+	if m.tree.expanded[notesDir] {
+		t.Fatalf("precondition: notes/ should start collapsed")
+	}
+	m = pressKey(t, m, tea.KeyMsg{Type: tea.KeyRight})
+	if !m.tree.expanded[notesDir] {
+		t.Errorf("→ on collapsed notes/ should expand it")
+	}
+
+	// → on already-expanded dir is a no-op.
+	flatLen := len(m.tree.flat)
+	m = pressKey(t, m, tea.KeyMsg{Type: tea.KeyRight})
+	if !m.tree.expanded[notesDir] {
+		t.Errorf("→ on already-expanded notes/ should leave it expanded")
+	}
+	if len(m.tree.flat) != flatLen {
+		t.Errorf("→ on already-expanded dir should not change flat size: was %d now %d", flatLen, len(m.tree.flat))
+	}
+
+	// ← on expanded dir collapses it.
+	m = pressKey(t, m, tea.KeyMsg{Type: tea.KeyLeft})
+	if m.tree.expanded[notesDir] {
+		t.Errorf("← on expanded notes/ should collapse it")
+	}
+
+	// ← on already-collapsed dir is a no-op.
+	flatLen = len(m.tree.flat)
+	m = pressKey(t, m, tea.KeyMsg{Type: tea.KeyLeft})
+	if m.tree.expanded[notesDir] {
+		t.Errorf("← on already-collapsed notes/ should leave it collapsed")
+	}
+	if len(m.tree.flat) != flatLen {
+		t.Errorf("← on already-collapsed dir should not change flat size: was %d now %d", flatLen, len(m.tree.flat))
+	}
+}
+
+// TestModel_ArrowKeysAreNoopOnFileRow confirms that ← and → do nothing
+// when the cursor is on a file row (not a directory).
+func TestModel_ArrowKeysAreNoopOnFileRow(t *testing.T) {
+	root := writeFixture(t)
+	m := sized(t, root, filepath.Join(root, "index.md"))
+
+	// Cursor lands on index.md after opening, which is a file row.
+	indexPath := filepath.Join(root, "index.md")
+	m = pressKey(t, m, tea.KeyMsg{Type: tea.KeyCtrlB})
+	if m.modals.kind != modalTree {
+		t.Fatalf("setup: ^b should open tree modal")
+	}
+	target := m.rowIndexByPath(indexPath)
+	if target < 0 {
+		t.Fatalf("index.md not found in flat tree")
+	}
+	m.tree.cursor = target
+
+	before := len(m.tree.flat)
+	m = pressKey(t, m, tea.KeyMsg{Type: tea.KeyLeft})
+	if len(m.tree.flat) != before {
+		t.Errorf("← on file row should not change flat size: was %d now %d", before, len(m.tree.flat))
+	}
+	m = pressKey(t, m, tea.KeyMsg{Type: tea.KeyRight})
+	if len(m.tree.flat) != before {
+		t.Errorf("→ on file row should not change flat size: was %d now %d", before, len(m.tree.flat))
+	}
+	// History must not change either — ← would otherwise be the global
+	// Back binding, which would step out of the auto-opened index.md.
+	if got := m.history.Current(); got != indexPath {
+		t.Errorf("← in tree modal must not trigger history Back; current = %q, want %q", got, indexPath)
+	}
+}
+
+// TestModel_ArrowKeysShadowHistoryWhileTreeModalOpen confirms that ←
+// inside the tree modal does NOT trigger history Back, even when the
+// cursor is on a file row (where ← is a no-op for collapse purposes).
+// The modal's key dispatch runs before the global Back/Forward switch.
+func TestModel_ArrowKeysShadowHistoryWhileTreeModalOpen(t *testing.T) {
+	root := writeFixture(t)
+	firstPath := filepath.Join(root, "notes", "first.md")
+	m := sized(t, root, firstPath)
+
+	// Open a second file to put something in history.
+	indexPath := filepath.Join(root, "index.md")
+	m.navigateTo(indexPath)
+	if m.history.Current() != indexPath {
+		t.Fatalf("setup: expected history at index.md")
+	}
+
+	// Open tree modal; ← should not navigate back to firstPath.
+	m = pressKey(t, m, tea.KeyMsg{Type: tea.KeyCtrlB})
+	m = pressKey(t, m, tea.KeyMsg{Type: tea.KeyLeft})
+	if m.history.Current() != indexPath {
+		t.Errorf("← in tree modal triggered history Back; current = %q, want %q",
+			m.history.Current(), indexPath)
+	}
+}
+
 // TestModel_SelectInTreeExpandsAncestors checks that selectInTree
 // expands every directory on the target file's ancestor chain so the
 // cursor lands on a visible row, and collapses everything else.

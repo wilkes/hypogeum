@@ -353,8 +353,11 @@ func (m *Model) handleBacklinksKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 }
 
 // handleTreeModalKey routes keystrokes while the tree modal is open.
-// Up/Down/k/j move the cursor; Space toggles a folder; Enter opens a
-// file (closing the modal) or toggles a folder.
+// Up/Down/k/j move the cursor; Space toggles a folder; Left/h collapses
+// an expanded directory; Right/l expands a collapsed directory; Enter
+// opens a file (closing the modal) or toggles a folder. Back/Forward
+// are intercepted here so they shadow their usual history meaning only
+// while the tree modal is open.
 func (m *Model) handleTreeModalKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch {
 	case key.Matches(msg, m.keys.Up):
@@ -366,6 +369,14 @@ func (m *Model) handleTreeModalKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if m.tree.cursor < len(m.tree.flat)-1 {
 			m.tree.cursor++
 			m.refreshTreeVP()
+		}
+	case key.Matches(msg, m.keys.Back):
+		if row, ok := m.cursorRow(); ok && row.node.IsDir && m.tree.expanded[row.node.Path] {
+			m.toggleFolder(row.node.Path)
+		}
+	case key.Matches(msg, m.keys.Forward):
+		if row, ok := m.cursorRow(); ok && row.node.IsDir && !m.tree.expanded[row.node.Path] {
+			m.toggleFolder(row.node.Path)
 		}
 	case key.Matches(msg, m.keys.ToggleFolder):
 		if row, ok := m.cursorRow(); ok && row.node.IsDir {
