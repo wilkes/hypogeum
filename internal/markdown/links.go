@@ -3,6 +3,8 @@ package markdown
 import (
 	"net/url"
 	"path/filepath"
+	"regexp"
+	"strconv"
 	"strings"
 
 	"github.com/yuin/goldmark"
@@ -25,11 +27,21 @@ const (
 	LinkInvalid
 )
 
+// LineRange is an inclusive [Start, End] pair of 1-indexed source-file line
+// numbers. Carried by ResolvedLink when the link's fragment is a #L<n>-L<n>
+// or #L<n> form, and produced by internal/embed.ParseEmbedToken. The type
+// lives in markdown so cross-package consumers can pass it through without
+// importing embed (which would create a cycle the other direction).
+type LineRange struct {
+	Start, End int
+}
+
 // ResolvedLink describes a link target after resolution against a base file.
 type ResolvedLink struct {
 	Kind   LinkKind
-	Target string // absolute path for LinkLocalFile, raw URL otherwise
-	Anchor string // fragment, if any (without leading '#')
+	Target string     // absolute path for LinkLocalFile, raw URL otherwise
+	Anchor string     // fragment, if any (without leading '#')
+	Range  *LineRange // non-nil when href fragment was a #L<n>-L<n> form
 }
 
 // ResolveLink interprets the href of a link found inside the file at base.
@@ -69,7 +81,12 @@ func ResolveLink(base, href string) ResolvedLink {
 	if err != nil {
 		return ResolvedLink{Kind: LinkInvalid}
 	}
-	return ResolvedLink{Kind: LinkLocalFile, Target: abs, Anchor: anchor}
+	out := ResolvedLink{Kind: LinkLocalFile, Target: abs, Anchor: anchor}
+	if r := parseLineFragment(anchor); r != nil {
+		out.Range = r
+		out.Anchor = "" // line-range claims the fragment; not an anchor
+	}
+	return out
 }
 
 // ASTLink is a single hyperlink as it appears in the markdown source.
@@ -127,4 +144,33 @@ func nodeText(n ast.Node, source []byte) string {
 		out = append(out, []byte(nodeText(c, source))...)
 	}
 	return string(out)
+}
+
+// lineFragmentRegex matches "L<n>" or "L<n>-L<n>" with no surrounding
+// characters. Kept separate from internal/embed.lineSpec so the markdown
+// package doesn't import embed.
+var lineFragmentRegex = regexp.MustCompile(`^L(\d+)(?:-L(\d+))?$`)
+
+// parseLineFragment returns a *LineRange when fragment is exactly a
+// GitHub-style L<n> or L<n>-L<n> spec, or nil otherwise.
+func parseLineFragment(fragment string) *LineRange {
+	if fragment == "" {
+		return nil
+	}
+	m := lineFragmentRegex.FindStringSubmatch(fragment)
+	if m == nil {
+		return nil
+	}
+	start, _ := strconv.Atoi(m[1])
+	if start < 1 {
+		return nil
+	}
+	end := start
+	if m[2] != "" {
+		end, _ = strconv.Atoi(m[2])
+		if end < start {
+			return nil
+		}
+	}
+	return &LineRange{Start: start, End: end}
 }
