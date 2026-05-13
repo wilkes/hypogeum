@@ -43,10 +43,15 @@ changelog:
   sort: asc
   use: github
   filters:
+    # Conventional-commit prefixes can carry an optional scope (e.g.
+    # `test(watch):`) and an optional `!` breaking-change marker. The regex
+    # mirrors the `groups[].regexp` shape below so scoped commits don't slip
+    # through unfiltered — that's how `test(watch): ...` ended up in the
+    # v0.1.2 release notes despite `^test:` being listed here.
     exclude:
-      - "^test:"
-      - "^chore:"
-      - "^ci:"
+      - '^test(\(.+\))??!?:'
+      - '^chore(\(.+\))??!?:'
+      - '^ci(\(.+\))??!?:'
       - "Merge pull request"
       - "Merge branch"
   groups:
