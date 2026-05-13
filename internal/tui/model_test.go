@@ -274,6 +274,33 @@ func TestModel_EscClearsRangeHighlight(t *testing.T) {
 	}
 }
 
+func TestModel_EscClearingRangeHighlightPreservesScroll(t *testing.T) {
+	dir := t.TempDir()
+	src := filepath.Join(dir, "big.go")
+	var b strings.Builder
+	for i := 0; i < 200; i++ {
+		b.WriteString("line content\n")
+	}
+	if err := os.WriteFile(src, []byte(b.String()), 0o644); err != nil {
+		t.Fatalf("write src: %v", err)
+	}
+	m := sized(t, dir, src)
+	m.content.rangeHighlight = &markdown.LineRange{Start: 1, End: 2}
+	m.refreshContent(src)
+	m.content.viewport.SetYOffset(60)
+	want := m.content.viewport.YOffset
+
+	m.handleKey(tea.KeyMsg{Type: tea.KeyEsc})
+
+	if m.content.rangeHighlight != nil {
+		t.Fatalf("Esc should clear rangeHighlight; got %+v", m.content.rangeHighlight)
+	}
+	if m.content.viewport.YOffset != want {
+		t.Fatalf("Esc should preserve scroll: YOffset %d -> %d",
+			want, m.content.viewport.YOffset)
+	}
+}
+
 func TestModel_CyclingOntoEmbedDoesNotScroll(t *testing.T) {
 	dir := t.TempDir()
 	target := filepath.Join(dir, "target.go")
