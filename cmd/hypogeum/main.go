@@ -13,6 +13,15 @@ import (
 	"github.com/wilkes/hypogeum/internal/tui"
 )
 
+// Build-time injected metadata. Defaults are placeholders for local
+// `go build`; release builds overwrite these via ldflags in
+// .goreleaser.yaml so the binary reports its tag, commit, and build date.
+var (
+	version = "devel"
+	commit  = "none"
+	date    = "unknown"
+)
+
 func main() {
 	if err := run(os.Args[1:]); err != nil {
 		fmt.Fprintln(os.Stderr, "hypogeum:", err)
@@ -21,6 +30,12 @@ func main() {
 }
 
 func run(args []string) error {
+	for _, a := range args {
+		if a == "--version" || a == "-v" {
+			fmt.Printf("hypogeum %s (commit %s, built %s)\n", version, commit, date)
+			return nil
+		}
+	}
 	root, initialFile, err := resolveTarget(args)
 	if err != nil {
 		return err

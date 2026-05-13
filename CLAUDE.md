@@ -19,6 +19,12 @@ go install ./cmd/hypogeum               # install to $GOBIN
 
 The TUI requires a real terminal — `go run` from inside a non-TTY harness will produce nothing useful. Use the model-level tests in `internal/tui/model_test.go` to exercise behavior without a terminal.
 
+## Releases
+
+Tag-driven via GoReleaser. To cut a release: `git tag v0.x.0 -m "..." && git push origin v0.x.0`. The `.github/workflows/release.yml` action triggers on any `v*` tag push, runs `goreleaser release --clean` against `.goreleaser.yaml`, and publishes archives for darwin/linux × amd64/arm64 plus a changelog auto-grouped by conventional-commit prefix.
+
+The binary reports its identity via `hypogeum --version` / `-v`. Local `go build` stamps `devel/none/unknown`; release builds inject the real values via `-X main.version/commit/date` ldflags. The variables live in `cmd/hypogeum/main.go`; do not rename without also updating `.goreleaser.yaml`.
+
 ## Layout
 
 ```
