@@ -37,7 +37,7 @@ What's in:
 
 What's out:
 - ✅ Inline highlight of the active link in the rendered text. (Shipped in Phase 2.)
-- Multi-segment cursor visualization for word-wrapped links. (Still open.)
+- ✅ Multi-segment cursor visualization for word-wrapped links. (Shipped — see [multi-segment-cursor-design](superpowers/specs/2026-05-13-multi-segment-cursor-design.md).)
 - ✅ Actually launching external URLs with `open`/`xdg-open`. (Shipped in Phase 3.)
 
 ## Implementation steps (commits)

@@ -248,9 +248,13 @@ func stripSentinels(raw string, marker LinkMarker) (string, []sentinelSpan) {
 			}
 			i = j
 		case '\n':
-			if inLink && !openEmit {
-				out.WriteString(openMark)
-				openEmit = true
+			if inLink && openEmit {
+				// Close the highlight before the newline so Glamour's
+				// per-row \e[0m tail doesn't suppress reverse-video on
+				// continuation rows. The lazy emit below re-opens on
+				// the next row's first content byte.
+				out.WriteString(closeMark)
+				openEmit = false
 			}
 			row++
 			out.WriteByte(c)
