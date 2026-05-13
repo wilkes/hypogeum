@@ -30,7 +30,7 @@ func TestClassify(t *testing.T) {
 		{
 			name: "write to non-markdown",
 			ev:   fsnotify.Event{Name: "/tmp/note.txt", Op: fsnotify.Write},
-			want: classifyResult{Path: "/tmp/note.txt", Ignore: true},
+			want: classifyResult{Kind: FileModified, Path: "/tmp/note.txt"},
 		},
 		{
 			name: "remove",
@@ -66,5 +66,31 @@ func TestClassify(t *testing.T) {
 				t.Errorf("classify(%+v) = %+v, want %+v", tt.ev, got, tt.want)
 			}
 		})
+	}
+}
+
+func TestClassify_WriteOnNonMarkdown_NotIgnored(t *testing.T) {
+	r := classify(fsnotify.Event{Name: "/tmp/notes/main.go", Op: fsnotify.Write})
+	if r.Ignore {
+		t.Error("expected write on .go file to NOT be ignored (live-reload for code files)")
+	}
+	if r.Kind != FileModified {
+		t.Errorf("expected Kind=FileModified, got %v", r.Kind)
+	}
+	if r.Path != "/tmp/notes/main.go" {
+		t.Errorf("expected Path preserved, got %q", r.Path)
+	}
+}
+
+func TestClassify_CreateOnNonMarkdown_StillStructureChange(t *testing.T) {
+	// Structure changes stay markdown-only: a new .py file should not
+	// trigger a tree re-walk. classify returns StructureChanged +
+	// MaybeNewDir; the stage() wrapper does the IsMarkdown check.
+	r := classify(fsnotify.Event{Name: "/tmp/notes/script.py", Op: fsnotify.Create})
+	if r.Ignore {
+		t.Error("classify should not ignore Create on .py — that's stage()'s job")
+	}
+	if !r.MaybeNewDir {
+		t.Error("expected MaybeNewDir on Create event")
 	}
 }

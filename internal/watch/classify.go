@@ -39,9 +39,11 @@ func classify(ev fsnotify.Event) classifyResult {
 		// rename inside a watched dir triggers a structure refresh.
 		return classifyResult{Kind: StructureChanged, Path: ev.Name}
 	case ev.Op&fsnotify.Write != 0:
-		if !tree.IsMarkdown(ev.Name) {
-			return classifyResult{Path: ev.Name, Ignore: true}
-		}
+		// Emit FileModified for any write. The TUI's handleFSEvent
+		// filters by "is this the currently open file?" so writes to
+		// non-md files we don't have open are discarded one layer up
+		// at zero cost. Relaxing here is what makes live-reload work
+		// when the open file is a .go/.rb/.py/etc.
 		return classifyResult{Kind: FileModified, Path: ev.Name}
 	}
 	return classifyResult{Path: ev.Name, Ignore: true}
