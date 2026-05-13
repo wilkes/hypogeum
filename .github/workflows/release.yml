@@ -30,3 +30,80 @@ jobs:
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  update-changelog:
+    needs: goreleaser
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Prepend release section to CHANGELOG.md
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+
+          body=$(gh release view "$TAG" --json body -q .body)
+          published=$(gh release view "$TAG" --json publishedAt -q .publishedAt | cut -d'T' -f1)
+
+          # Extract the "## Changelog" section (everything between that header
+          # and the trailing `---` separator GoReleaser writes before the footer).
+          section=$(printf '%s\n' "$body" | awk '
+            /^## Changelog$/ {flag=1; next}
+            /^---$/          {flag=0}
+            flag             {print}
+          ')
+
+          if [ -z "${section// }" ]; then
+            echo "No changelog section in $TAG release body; nothing to commit."
+            exit 0
+          fi
+
+          # Already present? Idempotent re-runs (e.g. retries) shouldn't double-write.
+          if grep -qF "## [$TAG]" CHANGELOG.md; then
+            echo "CHANGELOG.md already contains $TAG; skipping."
+            exit 0
+          fi
+
+          marker='<!-- next-release-here -->'
+          if ! grep -qF "$marker" CHANGELOG.md; then
+            echo "Marker '$marker' missing from CHANGELOG.md; aborting." >&2
+            exit 1
+          fi
+
+          # Stage the entry in a file so awk doesn't have to swallow a
+          # multi-line `-v` value (BSD awk rejects those — be portable).
+          {
+            printf '\n## [%s] - %s\n\n' "$TAG" "$published"
+            printf '%s\n' "$section"
+          } > /tmp/entry.md
+
+          awk -v marker="$marker" '
+            { print }
+            $0 == marker && !inserted {
+              while ((getline line < "/tmp/entry.md") > 0) print line
+              inserted = 1
+            }
+          ' CHANGELOG.md > CHANGELOG.md.new
+          mv CHANGELOG.md.new CHANGELOG.md
+
+      - name: Commit and push
+        run: |
+          set -euo pipefail
+          if git diff --quiet CHANGELOG.md; then
+            echo "CHANGELOG.md unchanged; nothing to commit."
+            exit 0
+          fi
+          git config user.name  'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add CHANGELOG.md
+          git commit -m "docs(changelog): ${{ github.ref_name }}"
+          git push origin main

@@ -89,7 +89,13 @@ func TestWatcher_NewMarkdownFileTriggersStructure(t *testing.T) {
 	}
 }
 
-func TestWatcher_IgnoresHiddenAndNonMarkdown(t *testing.T) {
+// TestWatcher_IgnoresHidden verifies the hidden-path filter in classify.
+// Non-markdown writes are NOT filtered here — that's a deliberate
+// relaxation so live-reload works for the open .go/.py/etc. file; the
+// TUI's handleFSEvent does the "is this the open file?" filtering one
+// layer up. (See classify.go and CLAUDE.md's "write classifier accepts
+// any path" gotcha.) So this test only asserts the hidden filter.
+func TestWatcher_IgnoresHidden(t *testing.T) {
 	root := t.TempDir()
 	w, err := New(root)
 	if err != nil {
@@ -97,11 +103,7 @@ func TestWatcher_IgnoresHiddenAndNonMarkdown(t *testing.T) {
 	}
 	defer w.Close()
 
-	// non-markdown
-	if err := os.WriteFile(filepath.Join(root, "note.txt"), []byte("hi"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	// hidden directory contents are filtered by isHiddenPath even though
+	// Hidden directory contents are filtered by IsHiddenPath even though
 	// we never Add'd the dir itself; the create event for the dir comes
 	// through the parent and is hidden-prefixed.
 	if err := os.MkdirAll(filepath.Join(root, ".git"), 0o755); err != nil {
@@ -112,7 +114,7 @@ func TestWatcher_IgnoresHiddenAndNonMarkdown(t *testing.T) {
 	}
 
 	if ev, ok := receive(t, w, 400*time.Millisecond); ok {
-		t.Errorf("expected no event, got %+v", ev)
+		t.Errorf("expected no event for hidden path, got %+v", ev)
 	}
 }
 
