@@ -335,3 +335,24 @@ func (m *Model) scrollToLine(n int) {
 	}
 	m.content.viewport.SetYOffset(target)
 }
+
+// allVaultMarkdownPaths walks m.rootNode and returns every markdown file
+// as an absolute path. Tree was already pruned to markdown-only by tree.Walk.
+func (m *Model) allVaultMarkdownPaths() []string {
+	if m.rootNode == nil {
+		return nil
+	}
+	var out []string
+	var walk func(n *tree.Node)
+	walk = func(n *tree.Node) {
+		if !n.IsDir {
+			out = append(out, n.Path)
+			return
+		}
+		for _, c := range n.Children {
+			walk(c)
+		}
+	}
+	walk(m.rootNode)
+	return out
+}

@@ -125,3 +125,38 @@ func TestNewInitializesRecentStore(t *testing.T) {
 		t.Fatal("Model.recent is nil; want non-nil Store")
 	}
 }
+
+func TestAllVaultMarkdownPaths(t *testing.T) {
+	dir := t.TempDir()
+	// Create:  dir/a.md, dir/sub/b.md, dir/sub/sub2/c.md, dir/d.txt (excluded)
+	mustWrite := func(p string) {
+		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(p, []byte("x"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	mustWrite(filepath.Join(dir, "a.md"))
+	mustWrite(filepath.Join(dir, "sub", "b.md"))
+	mustWrite(filepath.Join(dir, "sub", "sub2", "c.md"))
+	mustWrite(filepath.Join(dir, "d.txt"))
+
+	m, err := New(dir, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	paths := m.allVaultMarkdownPaths()
+	if len(paths) != 3 {
+		t.Errorf("got %d paths, want 3: %v", len(paths), paths)
+	}
+	// All paths absolute and end in .md
+	for _, p := range paths {
+		if !filepath.IsAbs(p) {
+			t.Errorf("path not absolute: %q", p)
+		}
+		if filepath.Ext(p) != ".md" {
+			t.Errorf("non-md path: %q", p)
+		}
+	}
+}
