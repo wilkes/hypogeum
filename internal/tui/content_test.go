@@ -1,12 +1,15 @@
 package tui
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
+
+	"github.com/wilkes/hypogeum/internal/markdown"
 )
 
 // TestRefreshContent_CodeFile_DispatchesToCodeRenderer verifies that
@@ -128,5 +131,36 @@ func TestRefreshContent_CodeFileReadError_ClearsLinksAndReportsStatus(t *testing
 	}
 	if m.content.linkCursor != -1 {
 		t.Errorf("expected linkCursor == -1 after read error, got %d", m.content.linkCursor)
+	}
+}
+
+// TestRefreshContent_MarkdownHonorsRangeHighlight pins that a non-nil
+// m.content.rangeHighlight set before refreshContent on a markdown
+// file causes the viewport to scroll to that line. Search-Enter uses
+// pendingPreselectRange → rangeHighlight as the scroll-to-line carrier.
+func TestRefreshContent_MarkdownHonorsRangeHighlight(t *testing.T) {
+	dir := t.TempDir()
+	// Build a markdown file that renders tall enough to require scrolling.
+	var sb strings.Builder
+	for i := 1; i <= 60; i++ {
+		fmt.Fprintf(&sb, "line %d filler text to fill the viewport\n\n", i)
+	}
+	p := filepath.Join(dir, "tall.md")
+	if err := os.WriteFile(p, []byte(sb.String()), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	m, err := New(dir, "")
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	updated, _ := m.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
+	m = updated.(Model)
+
+	m.pendingPreselectRange = &markdown.LineRange{Start: 50, End: 50}
+	m.openFile(p)
+
+	if m.content.viewport.YOffset == 0 {
+		t.Errorf("YOffset = 0, expected non-zero scroll to line 50")
 	}
 }

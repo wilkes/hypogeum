@@ -145,8 +145,16 @@ func (m *Model) refreshContent(path string) {
 		return
 	}
 
-	// Opening a markdown file always clears any prior source-range
-	// highlight; the renderer doesn't carry it across non-source files.
+	// Capture rangeHighlight (if any) BEFORE clearing — search-Enter
+	// and any future caller can set this to ask the markdown render
+	// path to scroll to a specific line after rendering. Then clear so
+	// subsequent re-renders (e.g. on resize) don't keep re-scrolling.
+	// NOTE: on the markdown path m.content.rangeHighlight is not set
+	// from pendingPreselectRange; use the local preselectRange instead.
+	pendingScrollLine := 0
+	if preselectRange != nil {
+		pendingScrollLine = preselectRange.Start
+	}
 	m.content.rangeHighlight = nil
 	m.content.renderer.SetFromFile(path)
 	out, links, deps, err := m.content.renderer.RenderWithLinks(string(src), path, linkZoneMarker)
@@ -161,6 +169,9 @@ func (m *Model) refreshContent(path string) {
 	m.status = path
 	m.content.viewport.SetContent(out)
 	m.content.viewport.GotoTop()
+	if pendingScrollLine > 0 {
+		m.scrollToLine(pendingScrollLine)
+	}
 	m.content.links = links
 
 	m.content.embedDeps = make(map[string]struct{}, len(deps))
