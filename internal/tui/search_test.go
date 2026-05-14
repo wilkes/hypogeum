@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 
@@ -190,5 +191,39 @@ func TestSearch_EnterNavigatesAndScrolls(t *testing.T) {
 	}
 	if mm.content.viewport.YOffset == 0 {
 		t.Errorf("Expected viewport scrolled, YOffset = 0")
+	}
+}
+
+func TestSearch_RecencyRerank(t *testing.T) {
+	dir := t.TempDir()
+	a := filepath.Join(dir, "a.md")
+	b := filepath.Join(dir, "b.md")
+	if err := os.WriteFile(a, []byte("alpha needle\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(b, []byte("bravo needle\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	m, err := New(dir, "")
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	// Visit b first so it scores higher in recency than a, then a so a
+	// is the most-recent — final order should put a first.
+	m.openFile(b)
+	time.Sleep(2 * time.Millisecond)
+	m.openFile(a)
+
+	// Synthesize search results in alphabetical input order: a, b.
+	hits := []search.Hit{
+		{Path: a, Line: 1, Snippet: "alpha \x11needle\x12"},
+		{Path: b, Line: 1, Snippet: "bravo \x11needle\x12"},
+	}
+	reranked := rerankByRecency(m.recent, hits)
+	if len(reranked) != 2 {
+		t.Fatalf("got %d hits, want 2", len(reranked))
+	}
+	if reranked[0].Path != a {
+		t.Errorf("reranked[0].Path = %q, want %q (most recent)", reranked[0].Path, a)
 	}
 }
