@@ -252,6 +252,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.content.viewport.Height = m.height - 4
 		m.resizeModalVP()
 		m.resizePicker()
+		m.resizeSearch()
 		m.resizeTreeModalVP()
 		m.refreshTreeVP()
 		// Cap the renderer's wrap width so prose stays readable on wide

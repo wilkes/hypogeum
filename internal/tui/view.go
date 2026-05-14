@@ -44,6 +44,8 @@ func (m Model) View() string {
 			modalBody = m.modals.picker.View()
 		case modalTree:
 			modalBody = m.tree.vp.View()
+		case modalSearch:
+			modalBody = m.searchView()
 		default:
 			modalBody = m.modals.vp.View()
 		}
