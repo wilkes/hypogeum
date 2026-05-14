@@ -8,6 +8,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	zone "github.com/lrstanley/bubblezone"
 
+	"github.com/wilkes/hypogeum/internal/markdown"
 	"github.com/wilkes/hypogeum/internal/recent"
 	"github.com/wilkes/hypogeum/internal/tree"
 )
@@ -232,6 +233,45 @@ func (m *Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				m.modals.picker.refilter()
 			}
 			return *m, cmd
+		}
+		if m.modals.kind == modalSearch {
+			switch {
+			case key.Matches(msg, m.keys.ClearLink): // Esc
+				if m.modals.search.input.Value() != "" {
+					m.modals.search.input.SetValue("")
+					m.modals.search.hits = nil
+					m.modals.search.cursor = 0
+					if m.modals.search.scanStop != nil {
+						m.modals.search.scanStop()
+						m.modals.search.scanStop = nil
+					}
+					m.modals.search.inFlight = false
+					m.refreshSearchVP()
+					return *m, nil
+				}
+				m.closeModal()
+				return *m, nil
+			case key.Matches(msg, m.keys.Open): // Enter
+				if 0 <= m.modals.search.cursor && m.modals.search.cursor < len(m.modals.search.hits) {
+					h := m.modals.search.hits[m.modals.search.cursor]
+					m.closeModal()
+					m.pendingPreselectRange = &markdown.LineRange{Start: h.Line, End: h.Line}
+					m.navigateTo(h.Path)
+				}
+				return *m, nil
+			case key.Matches(msg, m.keys.SearchCursorDown):
+				cursorMoveAndRefresh(&m.modals.search.cursor, len(m.modals.search.hits), 1, m.refreshSearchVP)
+				return *m, nil
+			case key.Matches(msg, m.keys.SearchCursorUp):
+				cursorMoveAndRefresh(&m.modals.search.cursor, len(m.modals.search.hits), -1, m.refreshSearchVP)
+				return *m, nil
+			case key.Matches(msg, m.keys.Up):
+				cursorMoveAndRefresh(&m.modals.search.cursor, len(m.modals.search.hits), -1, m.refreshSearchVP)
+				return *m, nil
+			case key.Matches(msg, m.keys.Down):
+				cursorMoveAndRefresh(&m.modals.search.cursor, len(m.modals.search.hits), 1, m.refreshSearchVP)
+				return *m, nil
+			}
 		}
 		if key.Matches(msg, m.keys.ClearLink) { // Esc
 			m.closeModal()

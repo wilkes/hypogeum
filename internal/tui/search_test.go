@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -95,5 +96,99 @@ func TestSearch_HitsRenderAsPathPlusSnippet(t *testing.T) {
 	}
 	if !strings.Contains(out, "foo") {
 		t.Errorf("expected snippet text in output, got: %q", out)
+	}
+}
+
+func TestSearch_CursorDownAndUp(t *testing.T) {
+	dir := t.TempDir()
+	m, err := New(dir, "")
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	m.modals.kind = modalSearch
+	m.modals.search.hits = []search.Hit{
+		{Path: "/x/a.md", Line: 1, Snippet: "a"},
+		{Path: "/x/b.md", Line: 1, Snippet: "b"},
+		{Path: "/x/c.md", Line: 1, Snippet: "c"},
+	}
+
+	// ^j moves down
+	updated, _ := m.handleKey(tea.KeyMsg{Type: tea.KeyCtrlJ})
+	mm := updated.(Model)
+	if mm.modals.search.cursor != 1 {
+		t.Errorf("cursor = %d after ^j, want 1", mm.modals.search.cursor)
+	}
+	// ^k moves up
+	updated, _ = mm.handleKey(tea.KeyMsg{Type: tea.KeyCtrlK})
+	mm = updated.(Model)
+	if mm.modals.search.cursor != 0 {
+		t.Errorf("cursor = %d after ^k, want 0", mm.modals.search.cursor)
+	}
+	// Don't overshoot at boundaries
+	updated, _ = mm.handleKey(tea.KeyMsg{Type: tea.KeyCtrlK})
+	mm = updated.(Model)
+	if mm.modals.search.cursor != 0 {
+		t.Errorf("cursor = %d after ^k at top, want 0", mm.modals.search.cursor)
+	}
+}
+
+func TestSearch_EscClearsQueryThenCloses(t *testing.T) {
+	dir := t.TempDir()
+	m, err := New(dir, "")
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	m.modals.kind = modalSearch
+	m.modals.search.input.SetValue("foo")
+
+	updated, _ := m.handleKey(tea.KeyMsg{Type: tea.KeyEsc})
+	mm := updated.(Model)
+	if mm.modals.kind != modalSearch {
+		t.Errorf("first Esc should not close, kind = %v", mm.modals.kind)
+	}
+	if mm.modals.search.input.Value() != "" {
+		t.Errorf("first Esc should clear query, got %q", mm.modals.search.input.Value())
+	}
+
+	updated, _ = mm.handleKey(tea.KeyMsg{Type: tea.KeyEsc})
+	mm = updated.(Model)
+	if mm.modals.kind != modalNone {
+		t.Errorf("second Esc should close modal, kind = %v", mm.modals.kind)
+	}
+}
+
+func TestSearch_EnterNavigatesAndScrolls(t *testing.T) {
+	dir := t.TempDir()
+	p := filepath.Join(dir, "x.md")
+	var sb strings.Builder
+	for i := 1; i <= 60; i++ {
+		fmt.Fprintf(&sb, "line %d\n\n", i)
+	}
+	if err := os.WriteFile(p, []byte(sb.String()), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	m, err := New(dir, "")
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	updated, _ := m.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
+	m = updated.(Model)
+
+	m.modals.kind = modalSearch
+	m.modals.search.hits = []search.Hit{
+		{Path: p, Line: 50, Snippet: "line 50"},
+	}
+	m.modals.search.cursor = 0
+
+	updated, _ = m.handleKey(tea.KeyMsg{Type: tea.KeyEnter})
+	mm := updated.(Model)
+	if mm.modals.kind != modalNone {
+		t.Errorf("Enter should close modal, kind = %v", mm.modals.kind)
+	}
+	if mm.history.Current() != p {
+		t.Errorf("Current = %q, want %q", mm.history.Current(), p)
+	}
+	if mm.content.viewport.YOffset == 0 {
+		t.Errorf("Expected viewport scrolled, YOffset = 0")
 	}
 }
