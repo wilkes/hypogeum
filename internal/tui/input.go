@@ -127,6 +127,9 @@ func (m *Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if m.modals.kind == modalPicker && msg.Type == tea.KeyRunes {
 		return m.handlePickerKey(msg)
 	}
+	if m.modals.kind == modalSearch && msg.Type == tea.KeyRunes {
+		return m.handleSearchKey(msg)
+	}
 
 	// Modal-toggle keys take priority — they open/close modals regardless
 	// of which pane has focus. They must run before the modal-forwarding

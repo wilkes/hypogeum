@@ -2,11 +2,13 @@ package tui
 
 import (
 	"context"
+	"strings"
 	"time"
 
 	"github.com/charmbracelet/bubbles/textinput"
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 
 	"github.com/wilkes/hypogeum/internal/search"
 )
@@ -115,4 +117,78 @@ func runSearchCmd(ctx context.Context, paths []string, query string) tea.Cmd {
 		hits, err := search.Search(ctx, paths, query, searchMaxHits)
 		return searchResultsMsg{query: query, hits: hits, err: err}
 	}
+}
+
+// handleSearchKey forwards printable runes to the textinput, then
+// decides whether to schedule a debounced scan tick. Called only when
+// modalSearch is open and msg.Type is tea.KeyRunes.
+func (m *Model) handleSearchKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	var cmd tea.Cmd
+	m.modals.search.input, cmd = m.modals.search.input.Update(msg)
+	query := m.modals.search.input.Value()
+	if len(query) < searchMinQuery {
+		// Below the minimum — clear any prior results and don't fire a
+		// scan. A previous tick may still be in flight from a longer
+		// query; its result will be discarded by the stale-query check.
+		// Discard the textinput's cursor-blink cmd too: no async work
+		// should be scheduled when the query is too short.
+		m.modals.search.hits = nil
+		m.modals.search.cursor = 0
+		m.modals.search.inFlight = false
+		m.refreshSearchVP()
+		return *m, nil
+	}
+	// Cancel any prior in-flight scan immediately. The tick may not
+	// have fired yet, but if a scan is mid-flight cancelling now lets
+	// workers return early.
+	if m.modals.search.scanStop != nil {
+		m.modals.search.scanStop()
+		m.modals.search.scanStop = nil
+		m.modals.search.scanCtx = nil
+	}
+	tick := scheduleSearchTick(query)
+	if cmd != nil {
+		return *m, tea.Batch(cmd, tick)
+	}
+	return *m, tick
+}
+
+// refreshSearchVP regenerates the search modal's viewport content
+// from the current hits / cursor / input value. Called whenever any
+// of those change.
+func (m *Model) refreshSearchVP() {
+	m.modals.search.vp.SetContent(m.renderSearchRows())
+	viewportClamp(&m.modals.search.vp, m.modals.search.cursor, 2)
+}
+
+// renderSearchRows produces the viewport body: the empty-state /
+// loading / no-match placeholders when no hits should display, or the
+// hit list otherwise. Each branch returns faint-styled text via lipgloss
+// so the visual hierarchy stays consistent with the picker.
+func (m *Model) renderSearchRows() string {
+	q := m.modals.search.input.Value()
+	faint := lipgloss.NewStyle().Faint(true)
+	switch {
+	case len(m.modals.search.paths) == 0:
+		return faint.Render("(no markdown files in vault)")
+	case len(q) < searchMinQuery:
+		return faint.Render("(type 2+ chars to search)")
+	case m.modals.search.inFlight && len(m.modals.search.hits) == 0:
+		return faint.Render("(searching…)")
+	case !m.modals.search.inFlight && len(m.modals.search.hits) == 0:
+		return faint.Render(`(no match for "` + q + `")`)
+	default:
+		return strings.Join(formatHitsPlaceholder(m.modals.search.hits), "\n")
+	}
+}
+
+// formatHitsPlaceholder is the minimal one-row-per-hit renderer.
+// A later commit swaps it for the two-row-per-entry path/snippet layout
+// once the hit-formatting helpers are in place.
+func formatHitsPlaceholder(hits []search.Hit) []string {
+	out := make([]string, 0, len(hits))
+	for _, h := range hits {
+		out = append(out, h.Path)
+	}
+	return out
 }
