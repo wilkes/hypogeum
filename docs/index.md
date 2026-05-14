@@ -39,6 +39,7 @@ Cross-cutting ideas that show up in multiple specs and packages. Each is its own
 - [Source embeds — follow-up fixes](superpowers/specs/2026-05-13-source-embeds-followups-design.md) — four narrow fixes surfaced by post-merge review of #30: fence-aware embed regex, embed-link no-scroll on `Row=-1`, Esc preserves scroll on range-highlight clear, `followBacklink` captures pre-select range. [Plan](superpowers/plans/2026-05-13-source-embeds-followups.md).
 - [Directory listing](superpowers/specs/2026-05-13-directory-listing-design.md) — shipped — directory link targets now render an in-pane listing (header + absolute path + bullet list of every non-hidden entry, dirs first with trailing `/`). Previously surfaced `Error: read /path: is a directory`. [Plan](superpowers/plans/2026-05-13-directory-listing.md).
 - [Multi-segment cursor for wrapped links](superpowers/specs/2026-05-13-multi-segment-cursor-design.md) — shipped — `stripSentinels` closes/reopens the reverse-video marker on every wrapped row so the link cursor stays visible across the whole link. [Plan](superpowers/plans/2026-05-13-multi-segment-cursor.md).
+- [Full-text search](superpowers/specs/2026-05-14-full-text-search-design.md) — design approved 2026-05-14 — `^s` opens a modal that scans every vault markdown file for the query, renders hits as `path:line` + highlighted snippet, recency-ranks the result list, and on `Enter` opens the file scrolled to the matched line.
 
 ## Conventions for adding to this folder
 
