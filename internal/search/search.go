@@ -15,6 +15,7 @@ import (
 	"io"
 	"os"
 	"strings"
+	"sync"
 )
 
 // Hit is one match: a path, a 1-indexed line number, and a display
@@ -183,4 +184,86 @@ func scanFile(ctx context.Context, path, query string) ([]Hit, error) {
 		return hits, err
 	}
 	return hits, nil
+}
+
+// numWorkers is the goroutine fan-out width. Four is enough to overlap
+// disk reads on a typical SSD without over-subscribing the OS.
+const numWorkers = 4
+
+// Search scans every path for case-insensitive substring matches of
+// query. Returns hits in unspecified order (the TUI sorts them). An
+// empty query returns nil immediately. Cancellation may return partial
+// results; callers should check ctx.Err().
+func Search(ctx context.Context, paths []string, query string, maxHits int) ([]Hit, error) {
+	if query == "" || len(paths) == 0 || maxHits <= 0 {
+		return nil, nil
+	}
+	if ctx.Err() != nil {
+		return nil, ctx.Err()
+	}
+
+	workCh := make(chan string, len(paths))
+	for _, p := range paths {
+		workCh <- p
+	}
+	close(workCh)
+
+	hitsCh := make(chan Hit, maxHits)
+	stopCtx, stopAll := context.WithCancel(ctx)
+	defer stopAll()
+
+	var wg sync.WaitGroup
+	for i := 0; i < numWorkers; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for path := range workCh {
+				if stopCtx.Err() != nil {
+					return
+				}
+				hits, err := scanFile(stopCtx, path, query)
+				if err != nil {
+					if stopCtx.Err() != nil {
+						return // cancelled — stop immediately
+					}
+					continue // I/O error on this file — skip and try the next
+				}
+				for _, h := range hits {
+					select {
+					case hitsCh <- h:
+					case <-stopCtx.Done():
+						return
+					}
+				}
+			}
+		}()
+	}
+
+	// Closer goroutine: when all workers finish, close hitsCh so the
+	// collector loop terminates.
+	go func() {
+		wg.Wait()
+		close(hitsCh)
+	}()
+
+	var out []Hit
+	hitsCapped := false
+	for h := range hitsCh {
+		out = append(out, h)
+		if len(out) >= maxHits {
+			hitsCapped = true
+			stopAll() // tell workers to stop producing
+			// Drain remaining hits without appending so workers don't
+			// block on hitsCh.
+			go func() {
+				for range hitsCh {
+				}
+			}()
+			break
+		}
+	}
+	if !hitsCapped && ctx.Err() != nil {
+		return out, ctx.Err()
+	}
+	return out, nil
 }
