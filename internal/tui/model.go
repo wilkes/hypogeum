@@ -287,6 +287,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 		return m, clearTransientAfter(time.Second)
+
+	case searchTickMsg:
+		return m.handleSearchTick(msg)
+	case searchResultsMsg:
+		return m.handleSearchResults(msg)
 	}
 
 	// Forward other messages to the viewport when content has focus.

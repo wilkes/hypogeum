@@ -2,6 +2,7 @@ package tui
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"time"
 
@@ -10,6 +11,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
+	"github.com/wilkes/hypogeum/internal/recent"
 	"github.com/wilkes/hypogeum/internal/search"
 )
 
@@ -191,4 +193,96 @@ func formatHitsPlaceholder(hits []search.Hit) []string {
 		out = append(out, h.Path)
 	}
 	return out
+}
+
+// handleSearchTick fires when a debounce tick lands. If the modal has
+// closed, the tick is dropped. If the user has typed more characters
+// since this tick was scheduled, the tick's query won't match the
+// current input value and we drop it (the latest keystroke scheduled
+// its own tick).
+func (m *Model) handleSearchTick(msg searchTickMsg) (tea.Model, tea.Cmd) {
+	if m.modals.kind != modalSearch {
+		return *m, nil
+	}
+	if msg.query != m.modals.search.input.Value() {
+		return *m, nil
+	}
+	if len(msg.query) < searchMinQuery {
+		return *m, nil
+	}
+	// Allocate a new ctx for this scan. Previous ctxs (if any) have
+	// been cancelled by handleSearchKey.
+	ctx, cancel := context.WithCancel(context.Background())
+	m.modals.search.scanCtx = ctx
+	m.modals.search.scanStop = cancel
+	m.modals.search.inFlight = true
+	m.refreshSearchVP()
+	return *m, runSearchCmd(ctx, m.modals.search.paths, msg.query)
+}
+
+// handleSearchResults consumes the scan's output. Stale results — from
+// a cancelled scan whose query no longer matches the input — are
+// discarded. Otherwise hits are recency-ranked and stored.
+func (m *Model) handleSearchResults(msg searchResultsMsg) (tea.Model, tea.Cmd) {
+	if m.modals.kind != modalSearch {
+		return *m, nil
+	}
+	if msg.query != m.modals.search.input.Value() {
+		// Stale: user has typed more since this scan started.
+		return *m, nil
+	}
+	m.modals.search.inFlight = false
+	m.modals.search.scanCtx = nil
+	m.modals.search.scanStop = nil
+	if msg.err != nil && msg.err != context.Canceled {
+		if m.diag != nil {
+			m.diag.Info(fmt.Sprintf("search %q: %v", msg.query, msg.err))
+		}
+	}
+	m.modals.search.hits = rerankByRecency(m.recent, msg.hits)
+	m.modals.search.cursor = 0
+	m.refreshSearchVP()
+	if m.diag != nil {
+		m.diag.Info(fmt.Sprintf("search %q: %d hits", msg.query, len(msg.hits)))
+	}
+	return *m, nil
+}
+
+// rerankByRecency reorders hits so files visited more recently come
+// first. Hits from the same file keep their (line) order. Hits whose
+// path doesn't appear in any recent.Ranked entry sort last in file-
+// alphabetical order.
+//
+// store may be nil — happens in tests; we degrade to file-then-line
+// order (input order).
+func rerankByRecency(store recentStore, hits []search.Hit) []search.Hit {
+	if store == nil || len(hits) == 0 {
+		return hits
+	}
+	// Unique paths in stable input order.
+	seen := map[string]int{}
+	var uniquePaths []string
+	for _, h := range hits {
+		if _, ok := seen[h.Path]; !ok {
+			seen[h.Path] = len(uniquePaths)
+			uniquePaths = append(uniquePaths, h.Path)
+		}
+	}
+	ranked := store.Rank(uniquePaths)
+	// Group hits by path, then emit groups in priority order.
+	byPath := map[string][]search.Hit{}
+	for _, h := range hits {
+		byPath[h.Path] = append(byPath[h.Path], h)
+	}
+	out := make([]search.Hit, 0, len(hits))
+	for _, r := range ranked {
+		out = append(out, byPath[r.Path]...)
+	}
+	return out
+}
+
+// recentStore is the subset of *recent.Store that rerankByRecency uses.
+// Defined as an interface so tests can swap in a nil-tolerant fake.
+type recentStore interface {
+	Rank(paths []string) []recent.Ranked
 }
