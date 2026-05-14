@@ -4,7 +4,7 @@ Guidance for Claude Code working in this repo. Keep this file short and accurate
 
 ## What this is
 
-`hypogeum` is a terminal markdown browser. Point it at a directory of `.md` files; rendered content fills the screen, `^p` opens a fuzzy file finder, `^b` opens the directory tree in a modal, and `h`/`l` navigate browser-style history.
+`hypogeum` is a terminal markdown browser. Point it at a directory of `.md` files; rendered content fills the screen, `^p` opens a fuzzy file finder, `^s` opens a full-text search modal, `^b` opens the directory tree in a modal, and `h`/`l` navigate browser-style history.
 
 Built on the Charm stack: Bubble Tea (Elm-style update loop), Bubbles (widgets — viewport, key bindings), Lip Gloss (styling), Glamour (markdown → ANSI).
 
@@ -37,10 +37,11 @@ internal/tree/           Walks the filesystem, returns a *Node tree of markdown 
 internal/markdown/       Glamour wrapper + link resolution (relative paths, anchors, external URLs)
 internal/nav/            Browser-style back/forward history stack, no I/O
 internal/watch/          fsnotify-backed live-update watcher, debounced and markdown-aware
-internal/tui/            Bubble Tea Model that wires the four above into the content-first UI (tree opens as a modal)
+internal/search/         Pure case-insensitive substring scan with worker fan-out and ctx cancellation
+internal/tui/            Bubble Tea Model that wires the five above into the content-first UI (tree opens as a modal)
 ```
 
-The packages are layered: `tui` depends on `tree`, `markdown`, `nav`, `watch`; the lower layers know nothing about the TUI.
+The packages are layered: `tui` depends on `tree`, `markdown`, `nav`, `watch`, `search`; the lower layers know nothing about the TUI.
 
 ## Conventions
 

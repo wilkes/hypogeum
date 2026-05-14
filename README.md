@@ -40,6 +40,7 @@ hypogeum ~/notes/index.md # open a specific file; tree roots at its directory
 | `b` | Open backlinks (modal) |
 | `^b` | Open directory tree (modal) |
 | `^p` | Open file finder (type to fuzzy-filter; `^j`/`^k` cursor) |
+| `^s` | Full-text search across vault markdown (type to search; `^j`/`^k` cursor) |
 | `^l` | Log viewer |
 | `?` | Help (cheat sheet) |
 | `q` | Quit |
