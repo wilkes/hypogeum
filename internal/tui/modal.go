@@ -21,6 +21,7 @@ const (
 	modalPicker
 	modalHelp
 	modalTree
+	modalSearch
 )
 
 // modalUIState bundles modal render state. kind is which modal is up
@@ -32,6 +33,7 @@ type modalUIState struct {
 	kind      modalKind
 	vp        viewport.Model
 	picker    pickerState
+	search    searchState
 	prevFocus focus
 }
 
