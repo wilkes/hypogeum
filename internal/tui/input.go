@@ -166,6 +166,10 @@ func (m *Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			}
 			m.modals.picker.reset(ranked, m.root)
 		})
+	case key.Matches(msg, m.keys.OpenSearch):
+		return *m, m.openModalWith(modalSearch, func() {
+			m.modals.search.reset(m.allVaultMarkdownPaths())
+		})
 	case key.Matches(msg, m.keys.ToggleTree):
 		return *m, m.openModalWith(modalTree, func() {
 			// Ensure the cursor points at the file currently open so the

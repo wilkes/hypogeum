@@ -190,6 +190,7 @@ func New(root, initialFile string) (Model, error) {
 	m.tree.flat = m.flattenVisible()
 	m.modals.vp = newModalViewport()
 	m.modals.picker = newPicker()
+	m.modals.search = newSearch()
 
 	// A watcher is best-effort: if it fails (e.g. inotify limits hit on
 	// Linux), we silently fall back to the previous reload-on-navigate
