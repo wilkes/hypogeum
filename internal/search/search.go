@@ -9,7 +9,13 @@
 // lines within a file.
 package search
 
-import "strings"
+import (
+	"bufio"
+	"context"
+	"io"
+	"os"
+	"strings"
+)
 
 // Hit is one match: a path, a 1-indexed line number, and a display
 // snippet. The snippet is the matched line, optionally trimmed with
@@ -101,4 +107,80 @@ func min(a, b int) int {
 		return a
 	}
 	return b
+}
+
+// snippetBudget is the visible-char budget for snippet rendering.
+// 60 chars matches the spec's recommended width; the TUI may re-trim
+// smaller without re-reading the file.
+const snippetBudget = 60
+
+// maxFileBytes caps the read budget for any single file. Files larger
+// than this are scanned up to the cap and the rest is silently dropped.
+// tree.Walk filters non-markdown so we shouldn't see huge files in
+// practice — this is defense-in-depth.
+const maxFileBytes = 1 << 20 // 1 MiB
+
+// binaryProbe is the byte count examined for a NUL byte. NUL in the
+// first binaryProbe bytes means we treat the file as binary and skip.
+const binaryProbe = 512
+
+// scanFile reads path and returns one Hit per line containing
+// case-insensitive substring matches of query. The query is assumed
+// non-empty (caller's responsibility — Search filters short queries).
+//
+// Returns an error only for I/O failures opening the file. Cancellation
+// returns (nil, ctx.Err()).
+func scanFile(ctx context.Context, path, query string) ([]Hit, error) {
+	if ctx.Err() != nil {
+		return nil, ctx.Err()
+	}
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+
+	// Binary probe.
+	probe := make([]byte, binaryProbe)
+	n, _ := f.Read(probe)
+	for i := 0; i < n; i++ {
+		if probe[i] == 0 {
+			return nil, nil // skip binary file silently
+		}
+	}
+	// Rewind so the scanner sees the same bytes.
+	if _, err := f.Seek(0, 0); err != nil {
+		return nil, err
+	}
+
+	loweredQuery := strings.ToLower(query)
+	queryLen := len(query)
+	var hits []Hit
+
+	scanner := bufio.NewScanner(io.LimitReader(f, maxFileBytes))
+	scanner.Buffer(make([]byte, 64*1024), 1024*1024)
+
+	lineNum := 0
+	for scanner.Scan() {
+		lineNum++
+		if lineNum&0xFF == 0 { // check ctx every 256 lines
+			if ctx.Err() != nil {
+				return hits, ctx.Err()
+			}
+		}
+		line := scanner.Text()
+		idx := strings.Index(strings.ToLower(line), loweredQuery)
+		if idx < 0 {
+			continue
+		}
+		hits = append(hits, Hit{
+			Path:    path,
+			Line:    lineNum,
+			Snippet: buildSnippet(line, idx, queryLen, snippetBudget),
+		})
+	}
+	if err := scanner.Err(); err != nil {
+		return hits, err
+	}
+	return hits, nil
 }
