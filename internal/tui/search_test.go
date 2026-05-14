@@ -1,10 +1,14 @@
 package tui
 
 import (
+	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
+
+	"github.com/wilkes/hypogeum/internal/search"
 )
 
 // minimal smoke test that ^s opens the modal. Fuller behavior covered in later tasks.
@@ -60,5 +64,36 @@ func TestSearch_TypingTwoCharsSchedulesTick(t *testing.T) {
 	}
 	if cmd == nil {
 		t.Errorf("expected non-nil cmd (tick scheduled) for 2-char query, got nil")
+	}
+}
+
+func TestSearch_HitsRenderAsPathPlusSnippet(t *testing.T) {
+	dir := t.TempDir()
+	p := filepath.Join(dir, "note.md")
+	if err := os.WriteFile(p, []byte("line one\nline with foo here\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	m, err := New(dir, "")
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	updated, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
+	m = updated.(Model)
+
+	m.modals.kind = modalSearch
+	m.modals.search.input.SetValue("foo")
+	m.modals.search.paths = []string{p}
+	m.modals.search.hits = []search.Hit{
+		{Path: p, Line: 2, Snippet: "line with \x11foo\x12 here"},
+	}
+	m.modals.search.cursor = 0
+	m.resizeSearch()
+
+	out := m.renderSearchRows()
+	if !strings.Contains(out, "note.md:2") {
+		t.Errorf("expected path:line in output, got: %q", out)
+	}
+	if !strings.Contains(out, "foo") {
+		t.Errorf("expected snippet text in output, got: %q", out)
 	}
 }

@@ -3,6 +3,7 @@ package tui
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -180,19 +181,8 @@ func (m *Model) renderSearchRows() string {
 	case !m.modals.search.inFlight && len(m.modals.search.hits) == 0:
 		return faint.Render(`(no match for "` + q + `")`)
 	default:
-		return strings.Join(formatHitsPlaceholder(m.modals.search.hits), "\n")
+		return formatSearchHits(m.modals.search.hits, m.root, m.modals.search.vp.Width, m.modals.search.cursor)
 	}
-}
-
-// formatHitsPlaceholder is the minimal one-row-per-hit renderer.
-// A later commit swaps it for the two-row-per-entry path/snippet layout
-// once the hit-formatting helpers are in place.
-func formatHitsPlaceholder(hits []search.Hit) []string {
-	out := make([]string, 0, len(hits))
-	for _, h := range hits {
-		out = append(out, h.Path)
-	}
-	return out
 }
 
 // handleSearchTick fires when a debounce tick lands. If the modal has
@@ -285,4 +275,74 @@ func rerankByRecency(store recentStore, hits []search.Hit) []search.Hit {
 // Defined as an interface so tests can swap in a nil-tolerant fake.
 type recentStore interface {
 	Rank(paths []string) []recent.Ranked
+}
+
+// formatSearchHits renders each hit as a two-row entry:
+//
+//	▌ <relative-path>:<line>
+//	  <snippet with \x11/\x12 → bold yellow>
+//
+// The cursor marker appears only on the selected hit. width is the
+// viewport's visible width; snippets are truncated to width-4.
+//
+// applyHighlight (internal/tui/backlinks.go) handles the \x11/\x12 →
+// SGR conversion; this function delegates to it for the snippet row.
+func formatSearchHits(hits []search.Hit, root string, width, cursor int) string {
+	if len(hits) == 0 {
+		return ""
+	}
+	var b strings.Builder
+	for i, h := range hits {
+		marker := "  "
+		if i == cursor {
+			marker = cursorMarkerStyle.Render("▌") + " "
+		}
+		header := marker + relativeTo(root, h.Path) + ":" + strconv.Itoa(h.Line)
+		snippet := "  " + truncateOneLine(applyHighlight(h.Snippet), width-4)
+		if i == cursor {
+			header = lipgloss.NewStyle().Reverse(true).Render(header)
+			snippet = lipgloss.NewStyle().Reverse(true).Render(snippet)
+		}
+		b.WriteString(header)
+		b.WriteByte('\n')
+		b.WriteString(snippet)
+		b.WriteByte('\n')
+	}
+	return strings.TrimRight(b.String(), "\n")
+}
+
+// resizeSearch fits the search modal's viewport into the modal interior,
+// reserving rows for the query prompt and separator on top.
+func (m *Model) resizeSearch() {
+	_, _, w, h := modalGeometry(m.width, m.height)
+	pw := w - 2
+	ph := h - 2 - 2 // border (2) + prompt+separator (2)
+	if pw < 1 {
+		pw = 1
+	}
+	if ph < 1 {
+		ph = 1
+	}
+	m.modals.search.vp.Width = pw
+	m.modals.search.vp.Height = ph
+	m.modals.search.input.Width = pw - 2 // leave room for "> " prefix
+	m.refreshSearchVP()
+}
+
+// searchView returns the modal's renderable body — prompt, separator,
+// viewport, and an optional overflow footer.
+func (m *Model) searchView() string {
+	p := &m.modals.search
+	prompt := "> " + p.input.View()
+	sepW := p.vp.Width
+	if sepW < 1 {
+		sepW = 1
+	}
+	sep := strings.Repeat("─", sepW)
+	body := prompt + "\n" + sep + "\n" + p.vp.View()
+	if len(p.hits) >= searchMaxHits {
+		body += "\n" + lipgloss.NewStyle().Faint(true).
+			Render("… results truncated at "+strconv.Itoa(searchMaxHits)+", refine the query")
+	}
+	return body
 }
