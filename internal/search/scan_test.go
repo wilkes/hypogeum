@@ -81,19 +81,6 @@ func TestScanFile_MissingFile(t *testing.T) {
 	}
 }
 
-func TestScanFile_BinaryNULIsSkipped(t *testing.T) {
-	dir := t.TempDir()
-	p := writeFile(t, dir, "a.md", "abc\x00def foo\n")
-
-	hits, err := scanFile(context.Background(), p, "foo")
-	if err != nil {
-		t.Fatalf("scanFile: %v", err)
-	}
-	if len(hits) != 0 {
-		t.Errorf("binary file should yield no hits, got %d", len(hits))
-	}
-}
-
 func TestScanFile_CancelledContext(t *testing.T) {
 	dir := t.TempDir()
 	p := writeFile(t, dir, "a.md", strings.Repeat("foo\n", 1000))

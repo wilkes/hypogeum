@@ -58,7 +58,15 @@ func (m *Model) toggleModal(kind modalKind, onOpen func() tea.Cmd) tea.Cmd {
 // path. Safe to call when no modal is open: kind goes from modalNone
 // back to modalNone and focus is set to prevFocus (which is either the
 // last-used value or focusContent zero-value).
+//
+// Cancels any in-flight search scan so workers don't grind through the
+// vault for results the modal will never show.
 func (m *Model) closeModal() {
+	if m.modals.search.scanStop != nil {
+		m.modals.search.scanStop()
+		m.modals.search.scanStop = nil
+		m.modals.search.inFlight = false
+	}
 	m.modals.kind = modalNone
 	m.focus = m.modals.prevFocus
 }

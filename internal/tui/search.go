@@ -51,7 +51,6 @@ type searchState struct {
 	hits     []search.Hit
 	cursor   int
 	vp       viewport.Model
-	scanCtx  context.Context
 	scanStop context.CancelFunc
 	// inFlight is true between the moment a scan is dispatched and the
 	// moment its searchResultsMsg lands (or is discarded as stale).
@@ -81,7 +80,6 @@ func (s *searchState) reset(paths []string) {
 	s.paths = paths
 	s.hits = nil
 	s.cursor = 0
-	s.scanCtx = nil
 	s.scanStop = nil
 	s.inFlight = false
 	s.input.SetValue("")
@@ -147,7 +145,6 @@ func (m *Model) handleSearchKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if m.modals.search.scanStop != nil {
 		m.modals.search.scanStop()
 		m.modals.search.scanStop = nil
-		m.modals.search.scanCtx = nil
 	}
 	tick := scheduleSearchTick(query)
 	if cmd != nil {
@@ -203,7 +200,6 @@ func (m *Model) handleSearchTick(msg searchTickMsg) (tea.Model, tea.Cmd) {
 	// Allocate a new ctx for this scan. Previous ctxs (if any) have
 	// been cancelled by handleSearchKey.
 	ctx, cancel := context.WithCancel(context.Background())
-	m.modals.search.scanCtx = ctx
 	m.modals.search.scanStop = cancel
 	m.modals.search.inFlight = true
 	m.refreshSearchVP()
@@ -217,13 +213,13 @@ func (m *Model) handleSearchResults(msg searchResultsMsg) (tea.Model, tea.Cmd) {
 	if m.modals.kind != modalSearch {
 		return *m, nil
 	}
+	m.modals.search.inFlight = false
+	m.modals.search.scanStop = nil
 	if msg.query != m.modals.search.input.Value() {
 		// Stale: user has typed more since this scan started.
+		m.refreshSearchVP()
 		return *m, nil
 	}
-	m.modals.search.inFlight = false
-	m.modals.search.scanCtx = nil
-	m.modals.search.scanStop = nil
 	if msg.err != nil && msg.err != context.Canceled {
 		if m.diag != nil {
 			m.diag.Info(fmt.Sprintf("search %q: %v", msg.query, msg.err))
