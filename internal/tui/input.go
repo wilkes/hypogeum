@@ -113,9 +113,9 @@ func (m *Model) clickTree(row int) (tea.Model, tea.Cmd) {
 		m.toggleFolder(node.Path)
 		return *m, nil
 	}
-	m.closeModal()
+	cmd := m.closeModal()
 	m.openFile(node.Path)
-	return *m, nil
+	return *m, cmd
 }
 
 func (m *Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
@@ -199,14 +199,14 @@ func (m *Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 					m.modals.picker.refilter()
 					return *m, nil
 				}
-				m.closeModal()
-				return *m, nil
+				return *m, m.closeModal()
 			case key.Matches(msg, m.keys.Open):
+				var cmd tea.Cmd
 				if path, ok := m.modals.picker.selectedPath(); ok {
-					m.closeModal()
+					cmd = m.closeModal()
 					m.navigateTo(path)
 				}
-				return *m, nil
+				return *m, cmd
 			case key.Matches(msg, m.keys.Up),
 				key.Matches(msg, m.keys.PickerCursorUp):
 				if m.modals.picker.cursor > 0 {
@@ -250,16 +250,16 @@ func (m *Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 					m.refreshSearchVP()
 					return *m, nil
 				}
-				m.closeModal()
-				return *m, nil
+				return *m, m.closeModal()
 			case key.Matches(msg, m.keys.Open): // Enter
+				var cmd tea.Cmd
 				if 0 <= m.modals.search.cursor && m.modals.search.cursor < len(m.modals.search.hits) {
 					h := m.modals.search.hits[m.modals.search.cursor]
-					m.closeModal()
+					cmd = m.closeModal()
 					m.pendingPreselectRange = &markdown.LineRange{Start: h.Line, End: h.Line}
 					m.navigateTo(h.Path)
 				}
-				return *m, nil
+				return *m, cmd
 			case key.Matches(msg, m.keys.SearchCursorDown):
 				cursorMoveAndRefresh(&m.modals.search.cursor, len(m.modals.search.hits), 1, m.refreshSearchVP)
 				return *m, nil
@@ -278,8 +278,7 @@ func (m *Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m.handleSearchKey(msg)
 		}
 		if key.Matches(msg, m.keys.ClearLink) { // Esc
-			m.closeModal()
-			return *m, nil
+			return *m, m.closeModal()
 		}
 		if m.modals.kind == modalTree {
 			return m.handleTreeModalKey(msg)
@@ -456,8 +455,9 @@ func (m *Model) handleTreeModalKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.toggleFolder(row.node.Path)
 			return *m, nil
 		}
-		m.closeModal()
+		cmd := m.closeModal()
 		m.openFile(row.node.Path)
+		return *m, cmd
 	}
 	return *m, nil
 }

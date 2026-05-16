@@ -161,10 +161,14 @@ func (m *Model) handleSearchKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 	m.refreshSearchVP()
 	tick := scheduleSearchTick(query)
+	// ClearScreen on every keystroke that changes the query: under
+	// rapid typing with slow scans, Bubble Tea's diff renderer can
+	// leave stale prompt rows on screen. A full repaint is cheap
+	// inside a debounced 150ms window and visually crisp.
 	if cmd != nil {
-		return *m, tea.Batch(cmd, tick)
+		return *m, tea.Batch(cmd, tick, tea.ClearScreen)
 	}
-	return *m, tick
+	return *m, tea.Batch(tick, tea.ClearScreen)
 }
 
 // refreshSearchVP regenerates the search modal's viewport content
@@ -245,7 +249,10 @@ func (m *Model) handleSearchResults(msg searchResultsMsg) (tea.Model, tea.Cmd) {
 	if m.diag != nil {
 		m.diag.Info(fmt.Sprintf("search %q: %d hits", msg.query, len(msg.hits)))
 	}
-	return *m, nil
+	// Force a full repaint when results arrive: the modal frame may have
+	// shifted rows since the scan started, and Bubble Tea's diff
+	// renderer doesn't always clear the stale ones.
+	return *m, tea.ClearScreen
 }
 
 // rerankByRecency reorders hits so files visited more recently come
