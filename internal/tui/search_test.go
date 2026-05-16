@@ -227,3 +227,67 @@ func TestSearch_RecencyRerank(t *testing.T) {
 		t.Errorf("reranked[0].Path = %q, want %q (most recent)", reranked[0].Path, a)
 	}
 }
+
+// Regression: opening the modal with paths populated should not show
+// "(no markdown files in vault)" — that branch is for a truly empty
+// vault. The pre-fix bug came from resizeSearch caching the empty-
+// vault placeholder before the modal was opened.
+func TestSearch_InitialOpenShowsEmptyQueryHint(t *testing.T) {
+	dir := t.TempDir()
+	writePickerFile(t, filepath.Join(dir, "a.md"), "# A\n")
+	m := sized(t, dir, "")
+	m = pressKey(t, m, tea.KeyMsg{Type: tea.KeyCtrlS})
+	body := m.searchView()
+	if strings.Contains(body, "no markdown files in vault") {
+		t.Errorf("first open showed (no markdown files in vault) despite paths being populated:\n%s", body)
+	}
+	if !strings.Contains(body, "type 2+ chars to search") {
+		t.Errorf("first open did not show the type-more hint:\n%s", body)
+	}
+}
+
+// Regression: Backspace must edit the textinput query inside the
+// search modal. Prior to the fix, only KeyRunes were routed to the
+// textinput so Backspace fell through to the global handler and the
+// query couldn't be edited.
+func TestSearch_BackspaceEditsQuery(t *testing.T) {
+	dir := t.TempDir()
+	writePickerFile(t, filepath.Join(dir, "a.md"), "# A\nfoobar\n")
+	m := sized(t, dir, "")
+	m = pressKey(t, m, tea.KeyMsg{Type: tea.KeyCtrlS})
+	m = pressKey(t, m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("fool")})
+	if got := m.modals.search.input.Value(); got != "fool" {
+		t.Fatalf("setup: input=%q want %q", got, "fool")
+	}
+	m = pressKey(t, m, tea.KeyMsg{Type: tea.KeyBackspace})
+	if got := m.modals.search.input.Value(); got != "foo" {
+		t.Errorf("after backspace: input=%q want %q", got, "foo")
+	}
+}
+
+// Regression: when the query changes, prior hits must disappear from
+// the viewport immediately — not linger until the next scan returns.
+// Prior to the fix, typing more characters after results landed kept
+// the old hits visible alongside whatever the next render produced.
+func TestSearch_QueryChangeClearsStaleHits(t *testing.T) {
+	dir := t.TempDir()
+	p := filepath.Join(dir, "a.md")
+	writePickerFile(t, p, "# A\nfoobar\n")
+	m := sized(t, dir, "")
+	m = pressKey(t, m, tea.KeyMsg{Type: tea.KeyCtrlS})
+	m = pressKey(t, m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("fo")})
+	// Inject a result for "fo".
+	updated, _ := m.Update(searchResultsMsg{
+		query: "fo",
+		hits:  []search.Hit{{Path: p, Line: 2, Snippet: "foobar"}},
+	})
+	m = updated.(Model)
+	if len(m.modals.search.hits) != 1 {
+		t.Fatalf("setup: want 1 hit, got %d", len(m.modals.search.hits))
+	}
+	// Now type more characters — hits must clear immediately.
+	m = pressKey(t, m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("ol")})
+	if got := len(m.modals.search.hits); got != 0 {
+		t.Errorf("after query change: hits=%d want 0 (stale hits not cleared)", got)
+	}
+}

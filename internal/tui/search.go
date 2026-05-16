@@ -120,21 +120,34 @@ func runSearchCmd(ctx context.Context, paths []string, query string) tea.Cmd {
 	}
 }
 
-// handleSearchKey forwards printable runes to the textinput, then
-// decides whether to schedule a debounced scan tick. Called only when
-// modalSearch is open and msg.Type is tea.KeyRunes.
+// handleSearchKey forwards a key to the textinput, then decides whether
+// to schedule a debounced scan tick. Called for printable runes via the
+// top-level KeyRunes gate and for editing keys (Backspace, Delete,
+// ←/→) via the modal-mode fallthrough.
 func (m *Model) handleSearchKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	before := m.modals.search.input.Value()
 	var cmd tea.Cmd
 	m.modals.search.input, cmd = m.modals.search.input.Update(msg)
 	query := m.modals.search.input.Value()
+	if query == before {
+		// Cursor/selection keystroke that didn't change the query;
+		// nothing to do except forward the textinput's cmd.
+		return *m, cmd
+	}
+	// Query changed — drop the previous hits so the user doesn't see
+	// stale results until the new scan returns.
+	m.modals.search.hits = nil
+	m.modals.search.cursor = 0
 	if len(query) < searchMinQuery {
-		// Below the minimum — clear any prior results and don't fire a
-		// scan. A previous tick may still be in flight from a longer
-		// query; its result will be discarded by the stale-query check.
-		// Discard the textinput's cursor-blink cmd too: no async work
-		// should be scheduled when the query is too short.
-		m.modals.search.hits = nil
-		m.modals.search.cursor = 0
+		// Below the minimum — clear and don't fire a scan. A previous
+		// tick may still be in flight from a longer query; its result
+		// will be discarded by the stale-query check. Discard the
+		// textinput's cursor-blink cmd: no async work should be
+		// scheduled when the query is too short.
+		if m.modals.search.scanStop != nil {
+			m.modals.search.scanStop()
+			m.modals.search.scanStop = nil
+		}
 		m.modals.search.inFlight = false
 		m.refreshSearchVP()
 		return *m, nil
@@ -146,6 +159,7 @@ func (m *Model) handleSearchKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.modals.search.scanStop()
 		m.modals.search.scanStop = nil
 	}
+	m.refreshSearchVP()
 	tick := scheduleSearchTick(query)
 	if cmd != nil {
 		return *m, tea.Batch(cmd, tick)

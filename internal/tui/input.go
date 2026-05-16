@@ -173,6 +173,7 @@ func (m *Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case key.Matches(msg, m.keys.OpenSearch):
 		return *m, m.openModalWith(modalSearch, func() {
 			m.modals.search.reset(m.allVaultMarkdownPaths())
+			m.refreshSearchVP()
 		})
 	case key.Matches(msg, m.keys.ToggleTree):
 		return *m, m.openModalWith(modalTree, func() {
@@ -272,6 +273,9 @@ func (m *Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				cursorMoveAndRefresh(&m.modals.search.cursor, len(m.modals.search.hits), 1, m.refreshSearchVP)
 				return *m, nil
 			}
+			// Forward unhandled keys (Backspace, Delete, ←/→) to the
+			// textinput so the user can edit the query. Mirrors picker.
+			return m.handleSearchKey(msg)
 		}
 		if key.Matches(msg, m.keys.ClearLink) { // Esc
 			m.closeModal()
