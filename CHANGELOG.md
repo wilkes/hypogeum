@@ -9,6 +9,35 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 <!-- next-release-here -->
 
+## [v0.2.0] - 2026-05-16
+
+### Features
+* e78ce6da26714d8daea902af89a1a6e39eb6733b: feat(search): add Search with goroutine fan-out and cancellation (@wilkes)
+* 88d90429a5ce94a67d32143bcf9943e65803c760: feat(search): add buildSnippet with centered match window (@wilkes)
+* 3d32e87011d48480e3307dff8b1b3d0e9fb69ed0: feat(search): add scanFile with binary skip and ctx cancellation (@wilkes)
+* 0f37c3331d103767e646602bb982993598227e12: feat(search): scaffold internal/search with Hit type (@wilkes)
+* f4b7c53929d5ca2c866124a8b5ab1900e0019d43: feat(tui): bind ^s to open the search modal (@wilkes)
+* 7f9dca516f77a2ea460a5fd49720c41d3db469ef: feat(tui): debounce-schedule scans on search keystrokes (@wilkes)
+* dbf27a8d032b66746f6e71e7e3bac92d11bc20a9: feat(tui): handle cursor, Esc, Enter inside the search modal (@wilkes)
+* bc839d8cff36b8e3b80a8018d954f64a063f97f2: feat(tui): markdown render path honors pendingPreselectRange scroll (@wilkes)
+* 94bbf8ebc7989d66070423854640efe27bdb415f: feat(tui): render search hits as path:line + snippet two-row entries (@wilkes)
+* 5e78ebd137a9f4eefccc7702099f2014af709d40: feat(tui): render search modal in View, resize on WindowSizeMsg (@wilkes)
+* 95d6ed6b22107ed4ffdaf9b270ab5ea4218da98f: feat(tui): scaffold searchState, modalSearch, message types (@wilkes)
+* d69c3dd0dd6d339f6774b9255f30bd51e9132765: feat(tui): wire searchTickMsg and searchResultsMsg into Update (@wilkes)
+### Fixes
+* 5dee7446cf055974d84528f55b0c62b4c7484300: fix(tui): clamp search prompt to one row with lipgloss MaxHeight(1) (@wilkes)
+* 6b82076f46e806240bd966e2150e38c51de09f3b: fix(tui): force full repaint on search modal open/close/refresh (@wilkes)
+* 7275d3f43d4a02456861e53b50e5e15fe4d7302f: fix(tui): reserve cursor-block column so search prompt fits modal interior (@wilkes)
+* 6d0e728573aa3b5259cd59c175a5f25ff2c45ff7: fix(tui): three ^s search modal bugs (initial msg, backspace, stale hits) (@wilkes)
+### Refactors
+* 01a0a8f02c81acd566626ee407cd5dbbe89ab645: refactor(search): simplify state, cancel scans on modal close (@wilkes)
+### Docs
+* ff90cdd0473f15aaa8ab02ef0da9a0d38b1dcea6: docs(changelog): v0.1.2 (@github-actions[bot])
+* d03d9c5815d4afccf028f0a38ba9995b0007aa67: docs(search): add full-text search design spec (@wilkes)
+* 0c02fc644b4d7e77bb9cbd321e4902c581f944e1: docs(search): add full-text search implementation plan (@wilkes)
+* 095daf10935fbae6713fd77af573e4d8a19b4ae2: docs: add internal/search to layout + ^s to README keys table (@wilkes)
+* e7092421050e1d0ba46635e1821a2b4ab65ca5d3: docs: document ^s full-text search gotchas and ship status (@wilkes)
+
 ## [v0.1.2] - 2026-05-13
 
 ### Other
