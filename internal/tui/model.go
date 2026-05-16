@@ -190,6 +190,7 @@ func New(root, initialFile string) (Model, error) {
 	m.tree.flat = m.flattenVisible()
 	m.modals.vp = newModalViewport()
 	m.modals.picker = newPicker()
+	m.modals.search = newSearch()
 
 	// A watcher is best-effort: if it fails (e.g. inotify limits hit on
 	// Linux), we silently fall back to the previous reload-on-navigate
@@ -251,6 +252,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.content.viewport.Height = m.height - 4
 		m.resizeModalVP()
 		m.resizePicker()
+		m.resizeSearch()
 		m.resizeTreeModalVP()
 		m.refreshTreeVP()
 		// Cap the renderer's wrap width so prose stays readable on wide
@@ -286,6 +288,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 		return m, clearTransientAfter(time.Second)
+
+	case searchTickMsg:
+		return m.handleSearchTick(msg)
+	case searchResultsMsg:
+		return m.handleSearchResults(msg)
 	}
 
 	// Forward other messages to the viewport when content has focus.

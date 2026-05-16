@@ -21,6 +21,7 @@ const (
 	modalPicker
 	modalHelp
 	modalTree
+	modalSearch
 )
 
 // modalUIState bundles modal render state. kind is which modal is up
@@ -32,6 +33,7 @@ type modalUIState struct {
 	kind      modalKind
 	vp        viewport.Model
 	picker    pickerState
+	search    searchState
 	prevFocus focus
 }
 
@@ -39,16 +41,30 @@ type modalUIState struct {
 // otherwise it saves the current focus, sets the modal open, and runs
 // onOpen for per-modal init. The returned Cmd is whatever onOpen
 // produced, threaded back to Bubble Tea.
+//
+// When closing the search modal, also emits a tea.ClearScreen Cmd so
+// the renderer fully repaints — Bubble Tea's diff renderer otherwise
+// leaves phantom prompt rows on screen if the modal frame shifted
+// position during slow scans.
 func (m *Model) toggleModal(kind modalKind, onOpen func() tea.Cmd) tea.Cmd {
 	if m.modals.kind == kind {
-		m.closeModal()
-		return nil
+		return m.closeModal()
 	}
 	if m.modals.kind == modalNone {
 		m.modals.prevFocus = m.focus
 	}
+	prev := m.modals.kind
 	m.modals.kind = kind
-	return onOpen()
+	open := onOpen()
+	// Opening the search modal also clears the screen to avoid carrying
+	// stale frames from a prior modal that may have shifted position.
+	if kind == modalSearch || prev == modalSearch {
+		if open == nil {
+			return tea.ClearScreen
+		}
+		return tea.Batch(open, tea.ClearScreen)
+	}
+	return open
 }
 
 // closeModal closes the active modal and restores focus to whatever
@@ -56,9 +72,24 @@ func (m *Model) toggleModal(kind modalKind, onOpen func() tea.Cmd) tea.Cmd {
 // path. Safe to call when no modal is open: kind goes from modalNone
 // back to modalNone and focus is set to prevFocus (which is either the
 // last-used value or focusContent zero-value).
-func (m *Model) closeModal() {
+//
+// Cancels any in-flight search scan so workers don't grind through the
+// vault for results the modal will never show. Returns tea.ClearScreen
+// when closing the search modal to force a full repaint — Bubble Tea's
+// diff renderer otherwise leaves stale prompt rows on screen.
+func (m *Model) closeModal() tea.Cmd {
+	wasSearch := m.modals.kind == modalSearch
+	if m.modals.search.scanStop != nil {
+		m.modals.search.scanStop()
+		m.modals.search.scanStop = nil
+		m.modals.search.inFlight = false
+	}
 	m.modals.kind = modalNone
 	m.focus = m.modals.prevFocus
+	if wasSearch {
+		return tea.ClearScreen
+	}
+	return nil
 }
 
 // modalGeometry returns the (x, y, w, h) of the modal frame given the

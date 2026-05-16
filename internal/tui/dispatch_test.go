@@ -1,10 +1,13 @@
 package tui
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
+	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/bubbles/viewport"
 )
 
@@ -170,5 +173,77 @@ func TestOpenFileRecordsVisit(t *testing.T) {
 	}
 	if post[0].Visit.IsZero() {
 		t.Error("post Rank: visit should be non-zero after openFile")
+	}
+}
+
+// TestSearch_EndToEnd opens the search modal via ^s, types a query that
+// matches a single file, simulates the debounce tick + scan result, presses
+// Enter, and verifies the destination renders scrolled to the matched line.
+// This is the wire-it-all-up sanity check — fine-grained behavior covered
+// in search_test.go.
+func TestSearch_EndToEnd(t *testing.T) {
+	isolatedHome(t)
+	dir := t.TempDir()
+	p := filepath.Join(dir, "target.md")
+	var sb strings.Builder
+	for i := 1; i <= 60; i++ {
+		fmt.Fprintf(&sb, "line %d\n\n", i)
+	}
+	sb.WriteString("the magic phrase appears here\n")
+	for i := 1; i <= 10; i++ {
+		sb.WriteString("trailing line\n")
+	}
+	if err := os.WriteFile(p, []byte(sb.String()), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	m, err := New(dir, "")
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	updated, _ := m.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
+	m = updated.(Model)
+
+	// ^s opens the modal
+	updated, _ = m.handleKey(tea.KeyMsg{Type: tea.KeyCtrlS})
+	mm := updated.(Model)
+	if mm.modals.kind != modalSearch {
+		t.Fatalf("modal not opened, kind = %v", mm.modals.kind)
+	}
+
+	// Type "magic"
+	for _, r := range "magic" {
+		updated, _ = mm.handleKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{r}})
+		mm = updated.(Model)
+	}
+
+	// Simulate the debounce tick by feeding the message directly. In a real
+	// tea.Program, tea.Tick would deliver this; here we synthesize it so the
+	// test doesn't depend on wall-clock timing.
+	updated, cmd := mm.Update(searchTickMsg{query: "magic"})
+	mm = updated.(Model)
+	if cmd != nil {
+		// Run the cmd to get the searchResultsMsg.
+		msg := cmd()
+		updated, _ = mm.Update(msg)
+		mm = updated.(Model)
+	}
+
+	if len(mm.modals.search.hits) == 0 {
+		t.Fatalf("expected hits for 'magic', got 0")
+	}
+
+	// Enter on the hit
+	updated, _ = mm.handleKey(tea.KeyMsg{Type: tea.KeyEnter})
+	mm = updated.(Model)
+
+	if mm.modals.kind != modalNone {
+		t.Errorf("Enter should close modal, kind = %v", mm.modals.kind)
+	}
+	if mm.history.Current() != p {
+		t.Errorf("Current = %q, want %q", mm.history.Current(), p)
+	}
+	if mm.content.viewport.YOffset == 0 {
+		t.Errorf("expected viewport scrolled after Enter, YOffset = 0")
 	}
 }

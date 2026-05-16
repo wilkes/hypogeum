@@ -26,6 +26,10 @@ type keyMap struct {
 	OpenPicker       key.Binding
 	PickerCursorDown key.Binding
 	PickerCursorUp   key.Binding
+
+	OpenSearch       key.Binding
+	SearchCursorDown key.Binding
+	SearchCursorUp   key.Binding
 }
 
 func defaultKeys() keyMap {
@@ -51,5 +55,9 @@ func defaultKeys() keyMap {
 		OpenPicker:       key.NewBinding(key.WithKeys("ctrl+p"), key.WithHelp("^p", "open file…")),
 		PickerCursorDown: key.NewBinding(key.WithKeys("ctrl+j"), key.WithHelp("^j", "picker: next")),
 		PickerCursorUp:   key.NewBinding(key.WithKeys("ctrl+k"), key.WithHelp("^k", "picker: prev")),
+
+		OpenSearch:       key.NewBinding(key.WithKeys("ctrl+s"), key.WithHelp("^s", "search…")),
+		SearchCursorDown: key.NewBinding(key.WithKeys("ctrl+j"), key.WithHelp("^j", "search: next")),
+		SearchCursorUp:   key.NewBinding(key.WithKeys("ctrl+k"), key.WithHelp("^k", "search: prev")),
 	}
 }

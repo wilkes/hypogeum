@@ -150,7 +150,7 @@ func (m *Model) followBacklink() {
 		cursor:     m.backlinks.cursor,
 	}
 
-	m.closeModal()
+	_ = m.closeModal()
 	m.focus = focusContent
 
 	// Pre-select the inline link in the source file that points back to

@@ -4,7 +4,7 @@ Guidance for Claude Code working in this repo. Keep this file short and accurate
 
 ## What this is
 
-`hypogeum` is a terminal markdown browser. Point it at a directory of `.md` files; rendered content fills the screen, `^p` opens a fuzzy file finder, `^b` opens the directory tree in a modal, and `h`/`l` navigate browser-style history.
+`hypogeum` is a terminal markdown browser. Point it at a directory of `.md` files; rendered content fills the screen, `^p` opens a fuzzy file finder, `^s` opens a full-text search modal, `^b` opens the directory tree in a modal, and `h`/`l` navigate browser-style history.
 
 Built on the Charm stack: Bubble Tea (Elm-style update loop), Bubbles (widgets — viewport, key bindings), Lip Gloss (styling), Glamour (markdown → ANSI).
 
@@ -37,10 +37,11 @@ internal/tree/           Walks the filesystem, returns a *Node tree of markdown 
 internal/markdown/       Glamour wrapper + link resolution (relative paths, anchors, external URLs)
 internal/nav/            Browser-style back/forward history stack, no I/O
 internal/watch/          fsnotify-backed live-update watcher, debounced and markdown-aware
-internal/tui/            Bubble Tea Model that wires the four above into the content-first UI (tree opens as a modal)
+internal/search/         Pure case-insensitive substring scan with worker fan-out and ctx cancellation
+internal/tui/            Bubble Tea Model that wires the five above into the content-first UI (tree opens as a modal)
 ```
 
-The packages are layered: `tui` depends on `tree`, `markdown`, `nav`, `watch`; the lower layers know nothing about the TUI.
+The packages are layered: `tui` depends on `tree`, `markdown`, `nav`, `watch`, `search`; the lower layers know nothing about the TUI.
 
 ## Conventions
 
@@ -76,6 +77,9 @@ The packages are layered: `tui` depends on `tree`, `markdown`, `nav`, `watch`; t
 - **Embed live-sync uses `m.content.embedDeps`.** `RenderWithLinks` returns the list of absolute source paths sliced into the output; `refreshContent` persists them and calls `m.watcher.AddPath` for each parent directory. `handleFSEvent`'s `FileModified` branch checks `embedDeps` alongside the open path. A markdown file that *removes* an embed still leaves the prior source dir watched until the watcher is destroyed — cheap, churn-free.
 - **Range-link Enter sets `m.content.rangeHighlight`** before `navigateTo`. The code renderer reads it via `RenderOptions.Highlight` and reverse-videos the gutter for those lines. Esc clears the highlight (handled at the *top* of the Esc cascade so it fires before link-cursor clear). Every navigation-out path (Back, Forward, followBacklink) captures `rangeHighlight` into `pendingPreselectRange` before navigating so the destination can reapply it; if you add a fifth navigation path, capture both `pendingPreselectTarget` and `pendingPreselectRange` together.
 - **URL-suppress preserves column width in tables.** Glamour sizes table cells (and right-pads wrapped prose lines) counting the URL bytes between `urlSuppressStart`/`urlSuppressEnd` as visible content. Stripping them naively shortens the cell by `<space>/url`, which is why an earlier version rendered link-bearing tables with ragged right edges. `urlSuppressStrip` in `internal/markdown/links_render.go` looks at what follows `urlSuppressEnd`: if it's only whitespace, ANSI escapes, a table border (`│`), or `\n` (i.e. a padding context), the URL range is replaced with spaces of equivalent visible width and the leading space is *kept*. In prose mid-sentence (next non-space char is content), the strip is clean (leading space + URL bytes both removed). Both the plain renderer (`stripURLSentinels`) and the instrumented renderer (`stripSentinels`) call this helper — keep them in sync.
+- **`^s` opens the full-text search modal**, scanning every vault markdown file for a case-insensitive substring of the query. Lives in `internal/search` (pure, no TUI deps) + `internal/tui/search.go` (modal integration). Scans run on a 150ms debounce; each keystroke cancels the prior `scanCtx`. Results re-rank by `recent.Rank` before display. Enter sets `m.pendingPreselectRange = &markdown.LineRange{Start: hit.Line, End: hit.Line}` and calls `m.navigateTo(hit.Path)`. The destination scroll-to-line is the same plumbing range-link Enter and `followBacklink` use.
+- **`searchState.paths` is a snapshot taken at modal-open time.** Files added/removed by the watcher during the modal's lifetime won't change the search corpus — closing and reopening `^s` refreshes. Deliberate: re-running every search on every fsnotify event would yank the user's cursor and burn CPU.
+- **The markdown render path now honors `pendingPreselectRange` for scroll-to-line.** Previously this field was code-files-only. `refreshContent` captures the local `preselectRange` (taken from `m.pendingPreselectRange` near the top of the function) into a `pendingScrollLine` variable before clearing, and after `GotoTop()` on the markdown branch calls `scrollToLine(pendingScrollLine)` when non-zero. Search-Enter is the first caller, but any future caller that wants markdown-destination scroll can set `pendingPreselectRange` before `navigateTo`.
 
 ## What's not built yet
 

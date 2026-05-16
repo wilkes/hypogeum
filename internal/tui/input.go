@@ -8,6 +8,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	zone "github.com/lrstanley/bubblezone"
 
+	"github.com/wilkes/hypogeum/internal/markdown"
 	"github.com/wilkes/hypogeum/internal/recent"
 	"github.com/wilkes/hypogeum/internal/tree"
 )
@@ -112,9 +113,9 @@ func (m *Model) clickTree(row int) (tea.Model, tea.Cmd) {
 		m.toggleFolder(node.Path)
 		return *m, nil
 	}
-	m.closeModal()
+	cmd := m.closeModal()
 	m.openFile(node.Path)
-	return *m, nil
+	return *m, cmd
 }
 
 func (m *Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
@@ -126,6 +127,9 @@ func (m *Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	// same way they opened it.
 	if m.modals.kind == modalPicker && msg.Type == tea.KeyRunes {
 		return m.handlePickerKey(msg)
+	}
+	if m.modals.kind == modalSearch && msg.Type == tea.KeyRunes {
+		return m.handleSearchKey(msg)
 	}
 
 	// Modal-toggle keys take priority — they open/close modals regardless
@@ -166,6 +170,11 @@ func (m *Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			}
 			m.modals.picker.reset(ranked, m.root)
 		})
+	case key.Matches(msg, m.keys.OpenSearch):
+		return *m, m.openModalWith(modalSearch, func() {
+			m.modals.search.reset(m.allVaultMarkdownPaths())
+			m.refreshSearchVP()
+		})
 	case key.Matches(msg, m.keys.ToggleTree):
 		return *m, m.openModalWith(modalTree, func() {
 			// Ensure the cursor points at the file currently open so the
@@ -190,14 +199,14 @@ func (m *Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 					m.modals.picker.refilter()
 					return *m, nil
 				}
-				m.closeModal()
-				return *m, nil
+				return *m, m.closeModal()
 			case key.Matches(msg, m.keys.Open):
+				var cmd tea.Cmd
 				if path, ok := m.modals.picker.selectedPath(); ok {
-					m.closeModal()
+					cmd = m.closeModal()
 					m.navigateTo(path)
 				}
-				return *m, nil
+				return *m, cmd
 			case key.Matches(msg, m.keys.Up),
 				key.Matches(msg, m.keys.PickerCursorUp):
 				if m.modals.picker.cursor > 0 {
@@ -226,9 +235,50 @@ func (m *Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			}
 			return *m, cmd
 		}
+		if m.modals.kind == modalSearch {
+			switch {
+			case key.Matches(msg, m.keys.ClearLink): // Esc
+				if m.modals.search.input.Value() != "" {
+					m.modals.search.input.SetValue("")
+					m.modals.search.hits = nil
+					m.modals.search.cursor = 0
+					if m.modals.search.scanStop != nil {
+						m.modals.search.scanStop()
+						m.modals.search.scanStop = nil
+					}
+					m.modals.search.inFlight = false
+					m.refreshSearchVP()
+					return *m, nil
+				}
+				return *m, m.closeModal()
+			case key.Matches(msg, m.keys.Open): // Enter
+				var cmd tea.Cmd
+				if 0 <= m.modals.search.cursor && m.modals.search.cursor < len(m.modals.search.hits) {
+					h := m.modals.search.hits[m.modals.search.cursor]
+					cmd = m.closeModal()
+					m.pendingPreselectRange = &markdown.LineRange{Start: h.Line, End: h.Line}
+					m.navigateTo(h.Path)
+				}
+				return *m, cmd
+			case key.Matches(msg, m.keys.SearchCursorDown):
+				cursorMoveAndRefresh(&m.modals.search.cursor, len(m.modals.search.hits), 1, m.refreshSearchVP)
+				return *m, nil
+			case key.Matches(msg, m.keys.SearchCursorUp):
+				cursorMoveAndRefresh(&m.modals.search.cursor, len(m.modals.search.hits), -1, m.refreshSearchVP)
+				return *m, nil
+			case key.Matches(msg, m.keys.Up):
+				cursorMoveAndRefresh(&m.modals.search.cursor, len(m.modals.search.hits), -1, m.refreshSearchVP)
+				return *m, nil
+			case key.Matches(msg, m.keys.Down):
+				cursorMoveAndRefresh(&m.modals.search.cursor, len(m.modals.search.hits), 1, m.refreshSearchVP)
+				return *m, nil
+			}
+			// Forward unhandled keys (Backspace, Delete, ←/→) to the
+			// textinput so the user can edit the query. Mirrors picker.
+			return m.handleSearchKey(msg)
+		}
 		if key.Matches(msg, m.keys.ClearLink) { // Esc
-			m.closeModal()
-			return *m, nil
+			return *m, m.closeModal()
 		}
 		if m.modals.kind == modalTree {
 			return m.handleTreeModalKey(msg)
@@ -405,8 +455,9 @@ func (m *Model) handleTreeModalKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.toggleFolder(row.node.Path)
 			return *m, nil
 		}
-		m.closeModal()
+		cmd := m.closeModal()
 		m.openFile(row.node.Path)
+		return *m, cmd
 	}
 	return *m, nil
 }
