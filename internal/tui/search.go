@@ -348,11 +348,18 @@ func (m *Model) resizeSearch() {
 // viewport, and an optional overflow footer.
 func (m *Model) searchView() string {
 	p := &m.modals.search
-	prompt := "> " + p.input.View()
 	sepW := p.vp.Width
 	if sepW < 1 {
 		sepW = 1
 	}
+	// Force the prompt to exactly one row of width sepW so any cursor
+	// overhang or width-miscount from the textinput View cannot wrap
+	// onto a second row. Without MaxHeight(1), a wrapped prompt under
+	// rapid keystrokes leaves stale prompts stacked in the modal.
+	prompt := lipgloss.NewStyle().
+		Width(sepW).
+		MaxHeight(1).
+		Render("> " + p.input.View())
 	sep := strings.Repeat("─", sepW)
 	body := prompt + "\n" + sep + "\n" + p.vp.View()
 	if len(p.hits) >= searchMaxHits {

@@ -295,6 +295,35 @@ func TestSearch_PromptFitsModalInterior(t *testing.T) {
 	}
 }
 
+// Regression: the prompt must be exactly one row tall, regardless of
+// the query length. A wrapped prompt under rapid-typing render cycles
+// is what produced the stacked-prompts bug. searchView wraps the
+// prompt in lipgloss MaxHeight(1) to enforce this; the test exercises
+// pathological inputs (100+ char queries) to ensure the clamp holds.
+func TestSearch_PromptStaysSingleRow(t *testing.T) {
+	dir := t.TempDir()
+	writePickerFile(t, filepath.Join(dir, "a.md"), "# A\n")
+	queries := []string{"x", "footer af",
+		"a very long query string that almost certainly exceeds the modal interior",
+		strings.Repeat("y", 200)}
+	for _, q := range queries {
+		m := newTestModelAtSize(t, dir, "", 100, 30)
+		m = pressKey(t, m, tea.KeyMsg{Type: tea.KeyCtrlS})
+		m = pressKey(t, m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(q)})
+		body := m.searchView()
+		lines := strings.Split(body, "\n")
+		if len(lines) < 2 {
+			t.Fatalf("q=%q: searchView returned %d lines, want >= 2", q, len(lines))
+		}
+		// Line 1 must be the separator ─. If the prompt wrapped, line 1
+		// would still be prompt content.
+		if !strings.HasPrefix(lines[1], "─") {
+			t.Errorf("q=%q: line[1] is not the separator (prompt wrapped):\n  line[0]=%q\n  line[1]=%q",
+				q, lines[0], lines[1])
+		}
+	}
+}
+
 func newTestModelAtSize(t *testing.T, dir, initial string, w, h int) Model {
 	t.Helper()
 	m, err := New(dir, initial)
