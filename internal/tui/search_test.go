@@ -265,6 +265,65 @@ func TestSearch_BackspaceEditsQuery(t *testing.T) {
 	}
 }
 
+// Regression: the prompt line ("> " + textinput View()) must fit
+// inside the modal interior width. The textinput's cursor block
+// renders one column past the visible value, so reserving only the
+// "> " prefix (pw-2) leaves the line 1 char wider than the modal —
+// which can wrap onto the next row under some render conditions and
+// produce a stack of duplicate prompts in the modal.
+func TestSearch_PromptFitsModalInterior(t *testing.T) {
+	dir := t.TempDir()
+	writePickerFile(t, filepath.Join(dir, "a.md"), "# A\n")
+	cases := []struct{ w, h int }{
+		{100, 30},
+		{120, 40},
+		{162, 40},
+	}
+	for _, c := range cases {
+		m := newTestModelAtSize(t, dir, "", c.w, c.h)
+		m = pressKey(t, m, tea.KeyMsg{Type: tea.KeyCtrlS})
+		m = pressKey(t, m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("xxxxxxxx")})
+		_, _, mw, _ := modalGeometry(c.w, c.h)
+		interior := mw - 2
+		body := m.searchView()
+		first := strings.SplitN(body, "\n", 2)[0]
+		visible := visibleWidth(first)
+		if visible > interior {
+			t.Errorf("term %dx%d: prompt visible width %d > modal interior %d",
+				c.w, c.h, visible, interior)
+		}
+	}
+}
+
+func newTestModelAtSize(t *testing.T, dir, initial string, w, h int) Model {
+	t.Helper()
+	m, err := New(dir, initial)
+	if err != nil {
+		t.Fatal(err)
+	}
+	updated, _ := m.Update(tea.WindowSizeMsg{Width: w, Height: h})
+	return updated.(Model)
+}
+
+func visibleWidth(s string) int {
+	count := 0
+	inEsc := false
+	for _, r := range s {
+		if r == 0x1b {
+			inEsc = true
+			continue
+		}
+		if inEsc {
+			if r == 'm' {
+				inEsc = false
+			}
+			continue
+		}
+		count++
+	}
+	return count
+}
+
 // Regression: when the query changes, prior hits must disappear from
 // the viewport immediately — not linger until the next scan returns.
 // Prior to the fix, typing more characters after results landed kept

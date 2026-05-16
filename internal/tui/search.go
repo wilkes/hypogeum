@@ -335,7 +335,12 @@ func (m *Model) resizeSearch() {
 	}
 	m.modals.search.vp.Width = pw
 	m.modals.search.vp.Height = ph
-	m.modals.search.input.Width = pw - 2 // leave room for "> " prefix
+	// Reserve 2 cols for the "> " prefix AND 1 col for the textinput's
+	// cursor block which renders past the value's end. Without that extra
+	// column the prompt line is one char wider than the modal interior
+	// (96 vs 95 at 162×40), and the wrap pushes a duplicate prompt onto
+	// the next row under slow-search refresh cycles.
+	m.modals.search.input.Width = pw - 3
 	m.refreshSearchVP()
 }
 
