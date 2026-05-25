@@ -3,6 +3,7 @@ package tui
 import (
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/wilkes/hypogeum/internal/markdown"
 )
@@ -75,9 +76,18 @@ func (m *Model) applyLinkHighlight() {
 func (m *Model) followLink(l markdown.Link) {
 	switch l.Resolved.Kind {
 	case markdown.LinkLocalFile:
-		if l.Resolved.Range != nil {
+		switch {
+		case l.Resolved.Range != nil:
 			m.content.rangeHighlight = l.Resolved.Range
-		} else {
+		case l.Resolved.Anchor != "":
+			m.content.rangeHighlight = nil
+			if m.vault != nil {
+				heading, block := splitAnchor(l.Resolved.Anchor)
+				if line, ok := m.vault.ResolveAnchor(l.Resolved.Target, heading, block); ok {
+					m.pendingPreselectRange = &markdown.LineRange{Start: line, End: line}
+				}
+			}
+		default:
 			m.content.rangeHighlight = nil
 		}
 		m.navigateTo(l.Resolved.Target)
@@ -85,7 +95,7 @@ func (m *Model) followLink(l markdown.Link) {
 		m.pendingExternal = l.Href
 		m.status = "press Enter again to open: " + l.Href
 	case markdown.LinkAnchor:
-		m.status = "anchor navigation not implemented: #" + l.Resolved.Anchor
+		m.status = "same-document anchor not supported: #" + l.Resolved.Anchor
 	default:
 		m.status = "unrecognized link: " + l.Href
 	}
@@ -126,6 +136,15 @@ func (m Model) selectedLink() *markdown.Link {
 		return nil
 	}
 	return &m.content.links[m.content.linkCursor]
+}
+
+// splitAnchor splits a URL fragment into (heading, block). A leading '^'
+// means block-id; otherwise the fragment is a heading slug.
+func splitAnchor(anchor string) (heading, block string) {
+	if strings.HasPrefix(anchor, "^") {
+		return "", strings.TrimPrefix(anchor, "^")
+	}
+	return anchor, ""
 }
 
 // linkLabel formats a link's target for footer display: relative path
