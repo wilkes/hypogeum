@@ -25,6 +25,10 @@ type contentUIState struct {
 	codeRenderer *code.Renderer
 	links        []markdown.Link
 	linkCursor   int
+	// brokenCount is the sum of unresolved wikilinks plus inline local
+	// links whose target file is missing in the currently rendered
+	// document. Recomputed by refreshContent; surfaced by renderFooter.
+	brokenCount int
 	// embedDeps holds the absolute paths of every source file embedded
 	// in the currently displayed markdown. The TUI's handleFSEvent
 	// FileModified branch re-renders the open file when a watcher event
