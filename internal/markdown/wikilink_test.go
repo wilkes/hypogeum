@@ -14,6 +14,10 @@ func (f fakeResolver) Resolve(fromFile, name, heading, block string) (string, bo
 	return v, ok
 }
 
+func (f fakeResolver) ResolveAnchor(string, string, string) (int, bool) {
+	return 0, false
+}
+
 func TestRenderWithLinks_ResolvedWikilinkBecomesLink(t *testing.T) {
 	r, err := NewRenderer(80, WithResolver(fakeResolver{
 		answers: map[string]string{"Foo": "/abs/foo.md"},

@@ -51,3 +51,26 @@ func scoreProximity(candidates []string, fromFile string) string {
 	})
 	return scoredCands[0].path
 }
+
+// ResolveAnchor looks up the destination line for a heading or block
+// anchor inside the file at path. Both args empty returns (0, false).
+// When both heading and block are non-empty, block wins (it's more
+// specific — Obsidian's `#Heading^block` syntax).
+func (v *Vault) ResolveAnchor(path, heading, block string) (int, bool) {
+	v.mu.RLock()
+	defer v.mu.RUnlock()
+
+	entry := v.files[path]
+	if entry == nil {
+		return 0, false
+	}
+	if block != "" {
+		line, ok := entry.anchors.blocks[block]
+		return line, ok
+	}
+	if heading != "" {
+		line, ok := entry.anchors.headings[slugifyAnchor(heading)]
+		return line, ok
+	}
+	return 0, false
+}

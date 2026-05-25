@@ -8,6 +8,7 @@ package markdown
 // import vault.
 type Resolver interface {
 	Resolve(fromFile, name, heading, block string) (path string, ok bool)
+	ResolveAnchor(path, heading, block string) (line int, ok bool)
 }
 
 // nopResolver returns ("", false) for every lookup. Used when no
@@ -16,4 +17,8 @@ type nopResolver struct{}
 
 func (nopResolver) Resolve(string, string, string, string) (string, bool) {
 	return "", false
+}
+
+func (nopResolver) ResolveAnchor(string, string, string) (int, bool) {
+	return 0, false
 }

@@ -26,6 +26,10 @@ func (r *recordingResolver) Resolve(fromFile, name, heading, block string) (stri
 	return v, ok
 }
 
+func (r *recordingResolver) ResolveAnchor(string, string, string) (int, bool) {
+	return 0, false
+}
+
 func TestPreprocessWikilinks_NilResolverPassesThrough(t *testing.T) {
 	r, err := NewRenderer(80)
 	if err != nil {

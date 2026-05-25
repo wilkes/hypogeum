@@ -77,3 +77,32 @@ func TestVault_BuildPopulatesAnchors(t *testing.T) {
 		t.Errorf("blocks[para1] = %d, want 3", entry.anchors.blocks["para1"])
 	}
 }
+
+func TestVault_ResolveAnchor(t *testing.T) {
+	dir := t.TempDir()
+	notePath := filepath.Join(dir, "note.md")
+	src := "# A Heading\n\nBody paragraph. ^bx\n"
+	if err := os.WriteFile(notePath, []byte(src), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	v, err := Build(dir, NopDiagnostics{})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if line, ok := v.ResolveAnchor(notePath, "A Heading", ""); !ok || line != 1 {
+		t.Errorf("ResolveAnchor heading: got (%d, %v), want (1, true)", line, ok)
+	}
+	if line, ok := v.ResolveAnchor(notePath, "", "bx"); !ok || line != 3 {
+		t.Errorf("ResolveAnchor block: got (%d, %v), want (3, true)", line, ok)
+	}
+	if line, ok := v.ResolveAnchor(notePath, "A Heading", "bx"); !ok || line != 3 {
+		t.Errorf("ResolveAnchor both: got (%d, %v), want (3, true)", line, ok)
+	}
+	if _, ok := v.ResolveAnchor(notePath, "", "nope"); ok {
+		t.Error("ResolveAnchor missing block: ok=true, want false")
+	}
+	if _, ok := v.ResolveAnchor("/nonexistent.md", "A Heading", ""); ok {
+		t.Error("ResolveAnchor missing file: ok=true, want false")
+	}
+}
