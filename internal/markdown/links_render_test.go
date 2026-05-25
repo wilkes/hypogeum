@@ -368,3 +368,23 @@ func TestHighlightMarker_WrappedLinkHighlightsEverySegment(t *testing.T) {
 	}
 }
 
+func TestCountUnresolvedWikilinks(t *testing.T) {
+	r, err := NewRenderer(80, WithResolver(fakeResolver{
+		answers: map[string]string{"Found": "/abs/found.md"},
+	}))
+	if err != nil {
+		t.Fatalf("NewRenderer: %v", err)
+	}
+	r.SetFromFile("/abs/source.md")
+
+	src := "see [[Found]], [[Missing]] and [[AlsoMissing|alias]]\n" +
+		"```\n" +
+		"[[InsideFence]]\n" +
+		"```\n"
+
+	got := r.CountUnresolvedWikilinks(src)
+	if got != 2 {
+		t.Fatalf("CountUnresolvedWikilinks = %d, want 2", got)
+	}
+}
+
