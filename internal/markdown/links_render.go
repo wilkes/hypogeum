@@ -148,14 +148,24 @@ func (r *Renderer) preprocessWikilinks(src string) string {
 			display = w.Name
 			if w.Heading != "" {
 				display = w.Name + " > " + w.Heading
+			} else if w.Block != "" {
+				display = w.Name + " > ^" + w.Block
 			}
 		}
 		path, ok := r.resolver.Resolve(r.fromFile, w.Name, w.Heading, w.Block)
 		if !ok {
 			return display + "?"
 		}
+		if w.Heading != "" || w.Block != "" {
+			if _, anchorOK := r.resolver.ResolveAnchor(path, w.Heading, w.Block); !anchorOK {
+				return display + "?"
+			}
+		}
 		href := path
-		if w.Heading != "" {
+		switch {
+		case w.Block != "":
+			href = path + "#^" + w.Block
+		case w.Heading != "":
 			href = path + "#" + slugify(w.Heading)
 		}
 		return "[" + display + "](" + href + ")"

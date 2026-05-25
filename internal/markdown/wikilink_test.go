@@ -15,7 +15,7 @@ func (f fakeResolver) Resolve(fromFile, name, heading, block string) (string, bo
 }
 
 func (f fakeResolver) ResolveAnchor(string, string, string) (int, bool) {
-	return 0, false
+	return 0, true
 }
 
 func TestRenderWithLinks_ResolvedWikilinkBecomesLink(t *testing.T) {

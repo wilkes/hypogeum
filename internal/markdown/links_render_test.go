@@ -27,7 +27,7 @@ func (r *recordingResolver) Resolve(fromFile, name, heading, block string) (stri
 }
 
 func (r *recordingResolver) ResolveAnchor(string, string, string) (int, bool) {
-	return 0, false
+	return 0, true
 }
 
 func TestPreprocessWikilinks_NilResolverPassesThrough(t *testing.T) {
@@ -392,6 +392,62 @@ func TestCountUnresolvedWikilinks(t *testing.T) {
 	}
 }
 
+
+// anchorResolver resolves wikilink names AND anchors (heading slugs or
+// block ids), keyed per-path. Used by the block-anchor tests below.
+type anchorResolver struct {
+	pathByName map[string]string
+	lines      map[string]map[string]int // path → anchor key → line; key="^id" or "#slug"
+}
+
+func (a anchorResolver) Resolve(_, name, _, _ string) (string, bool) {
+	p, ok := a.pathByName[strings.ToLower(name)]
+	return p, ok
+}
+
+func (a anchorResolver) ResolveAnchor(path, heading, block string) (int, bool) {
+	m, ok := a.lines[path]
+	if !ok {
+		return 0, false
+	}
+	if block != "" {
+		l, ok := m["^"+block]
+		return l, ok
+	}
+	if heading != "" {
+		l, ok := m["#"+slugify(heading)]
+		return l, ok
+	}
+	return 0, false
+}
+
+func TestPreprocessWikilinks_BlockAnchorPreserved(t *testing.T) {
+	r, err := NewRenderer(80, WithResolver(anchorResolver{
+		pathByName: map[string]string{"note": "/notes/note.md"},
+		lines:      map[string]map[string]int{"/notes/note.md": {"^foo": 7}},
+	}))
+	if err != nil {
+		t.Fatalf("NewRenderer: %v", err)
+	}
+	got := r.preprocessWikilinks("See [[Note^foo]]")
+	if !strings.Contains(got, "/notes/note.md#^foo") {
+		t.Errorf("expected block anchor in href; got %q", got)
+	}
+}
+
+func TestPreprocessWikilinks_BrokenAnchor_RendersBroken(t *testing.T) {
+	r, err := NewRenderer(80, WithResolver(anchorResolver{
+		pathByName: map[string]string{"note": "/notes/note.md"},
+		lines:      map[string]map[string]int{"/notes/note.md": {}},
+	}))
+	if err != nil {
+		t.Fatalf("NewRenderer: %v", err)
+	}
+	got := r.preprocessWikilinks("See [[Note#missing]]")
+	if !strings.Contains(got, "?") {
+		t.Errorf("expected broken marker '?' in output; got %q", got)
+	}
+}
 
 func TestPreprocessBlockMarkers_StripsOutsideFences(t *testing.T) {
 	src := "First paragraph. ^p1\n\n```\nin code ^kept\n```\n\nSecond. ^p2\n"
