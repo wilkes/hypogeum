@@ -3,6 +3,7 @@ package vault
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -104,5 +105,25 @@ func TestVault_ResolveAnchor(t *testing.T) {
 	}
 	if _, ok := v.ResolveAnchor("/nonexistent.md", "A Heading", ""); ok {
 		t.Error("ResolveAnchor missing file: ok=true, want false")
+	}
+}
+
+type captureDiag struct {
+	warns []string
+}
+
+func (c *captureDiag) Warn(s string)  { c.warns = append(c.warns, s) }
+func (c *captureDiag) Info(s string)  {}
+func (c *captureDiag) Error(s string) {}
+
+func TestExtractAnchors_DuplicateBlockID_EmitsDiagnostic(t *testing.T) {
+	src := "First. ^dup\n\nSecond. ^dup\n"
+	diag := &captureDiag{}
+	extractAnchorsWithDiag(src, "/tmp/note.md", diag)
+	if len(diag.warns) != 1 {
+		t.Fatalf("want 1 warn, got %d (%v)", len(diag.warns), diag.warns)
+	}
+	if !strings.Contains(diag.warns[0], "dup") || !strings.Contains(diag.warns[0], "note.md") {
+		t.Errorf("warn message lacks expected substrings: %s", diag.warns[0])
 	}
 }

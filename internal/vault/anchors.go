@@ -1,6 +1,7 @@
 package vault
 
 import (
+	"fmt"
 	"regexp"
 	"strings"
 
@@ -30,7 +31,14 @@ func newAnchors() anchors {
 // extractAnchors parses src and returns the per-file anchor index.
 // Heading slugs follow the same rule used by internal/markdown.slugify
 // (kept in sync; see slugifyAnchor below).
+//
+// extractAnchors is the no-diagnostics convenience.
 func extractAnchors(src string) anchors {
+	return extractAnchorsWithDiag(src, "", NopDiagnostics{})
+}
+
+// extractAnchorsWithDiag also reports duplicate block ids via diag.
+func extractAnchorsWithDiag(src, path string, diag Diagnostics) anchors {
 	source := []byte(src)
 	md := goldmark.New(goldmark.WithExtensions(WikilinkExtension))
 	doc := md.Parser().Parse(text.NewReader(source))
@@ -52,7 +60,9 @@ func extractAnchors(src string) anchors {
 		case *ast.Paragraph, *ast.ListItem, *ast.Blockquote:
 			if id, ok := trailingBlockID(nn, source); ok {
 				line := lineForNode(nn, source)
-				if _, dup := out.blocks[id]; !dup {
+				if prev, dup := out.blocks[id]; dup {
+					diag.Warn(fmt.Sprintf("vault: duplicate block id ^%s in %s (lines %d and %d)", id, path, prev, line))
+				} else {
 					out.blocks[id] = line
 				}
 			}

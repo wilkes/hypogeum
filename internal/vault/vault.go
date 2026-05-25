@@ -145,7 +145,7 @@ func (v *Vault) indexFile(path string) {
 		return
 	}
 	refs := extractReferences(string(src), path)
-	anchorIdx := extractAnchors(string(src))
+	anchorIdx := extractAnchorsWithDiag(string(src), path, v.diag)
 
 	v.mu.Lock()
 	defer v.mu.Unlock()
