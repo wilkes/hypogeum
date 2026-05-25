@@ -205,8 +205,15 @@ func (r *Renderer) CountUnresolvedWikilinks(src string) int {
 			count++
 			return match
 		}
-		if _, ok := r.resolver.Resolve(r.fromFile, w.Name, w.Heading, w.Block); !ok {
+		path, ok := r.resolver.Resolve(r.fromFile, w.Name, w.Heading, w.Block)
+		if !ok {
 			count++
+			return match
+		}
+		if w.Heading != "" || w.Block != "" {
+			if _, aok := r.resolver.ResolveAnchor(path, w.Heading, w.Block); !aok {
+				count++
+			}
 		}
 		return match
 	}

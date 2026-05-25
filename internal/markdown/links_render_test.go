@@ -421,6 +421,20 @@ func (a anchorResolver) ResolveAnchor(path, heading, block string) (int, bool) {
 	return 0, false
 }
 
+func TestCountUnresolvedWikilinks_BrokenAnchorCounts(t *testing.T) {
+	r, err := NewRenderer(80, WithResolver(anchorResolver{
+		pathByName: map[string]string{"note": "/notes/note.md"},
+		lines:      map[string]map[string]int{"/notes/note.md": {"^foo": 7}},
+	}))
+	if err != nil {
+		t.Fatalf("NewRenderer: %v", err)
+	}
+	src := "[[Note^foo]] and [[Note^missing]] and [[Note#unknown-heading]]"
+	if got := r.CountUnresolvedWikilinks(src); got != 2 {
+		t.Errorf("CountUnresolvedWikilinks = %d, want 2", got)
+	}
+}
+
 func TestPreprocessWikilinks_BlockAnchorPreserved(t *testing.T) {
 	r, err := NewRenderer(80, WithResolver(anchorResolver{
 		pathByName: map[string]string{"note": "/notes/note.md"},
