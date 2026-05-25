@@ -72,6 +72,7 @@ func HighlightMarker(selected int) LinkMarker {
 // They flow through downstream styling without changing visible width
 // (caller's responsibility — typically zero-width sentinel sequences).
 func (r *Renderer) RenderWithLinks(src, base string, marker LinkMarker) (string, []Link, []string, error) {
+	src = preprocessBlockMarkers(src)
 	src, embedDeps, embedLinks := r.preprocessEmbeds(src, base)
 	src = r.preprocessWikilinks(src)
 	raw, err := r.instrumented.Render(src)
@@ -95,6 +96,30 @@ func (r *Renderer) RenderWithLinks(src, base string, marker LinkMarker) (string,
 	}
 	links = append(links, embedLinks...)
 	return cleaned, links, embedDeps, nil
+}
+
+// blockMarkerLineRegex matches a trailing ` ^id` marker at end of line.
+// Block-id grammar matches the vault's extractor.
+var blockMarkerLineRegex = regexp.MustCompile(` \^[a-zA-Z0-9-]+\s*$`)
+
+// preprocessBlockMarkers strips trailing ` ^id` block-id markers from
+// every non-fence line in src. Markers inside fenced code blocks are
+// left intact (consistent with preprocessEmbeds / preprocessWikilinks).
+func preprocessBlockMarkers(src string) string {
+	var b strings.Builder
+	b.Grow(len(src))
+	for _, seg := range splitOutsideFences(src) {
+		if seg.isFence {
+			b.WriteString(seg.text)
+			continue
+		}
+		lines := strings.Split(seg.text, "\n")
+		for i, line := range lines {
+			lines[i] = blockMarkerLineRegex.ReplaceAllString(line, "")
+		}
+		b.WriteString(strings.Join(lines, "\n"))
+	}
+	return b.String()
 }
 
 // wikilinkRegex matches the wikilink syntax for the source-rewrite pass.

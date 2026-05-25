@@ -392,3 +392,12 @@ func TestCountUnresolvedWikilinks(t *testing.T) {
 	}
 }
 
+
+func TestPreprocessBlockMarkers_StripsOutsideFences(t *testing.T) {
+	src := "First paragraph. ^p1\n\n```\nin code ^kept\n```\n\nSecond. ^p2\n"
+	got := preprocessBlockMarkers(src)
+	want := "First paragraph.\n\n```\nin code ^kept\n```\n\nSecond.\n"
+	if got != want {
+		t.Errorf("got:\n%q\nwant:\n%q", got, want)
+	}
+}
