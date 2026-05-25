@@ -1,6 +1,6 @@
 # Block references and heading anchors — design
 
-**Status:** spec — not yet implemented.
+**Status:** shipped.
 **Scope:** resolve `#Heading` and `^block-id` anchors in both wikilinks (`[[Note#Heading]]`, `[[Note#^block]]`) and standard inline links (`[text](note.md#heading)`, `[text](note.md#^block)`). Following an anchored link navigates to the file and scrolls to the anchor's line. Anchors that don't resolve count as broken.
 **Out of scope:** rename-and-rewrite of block ids, `![[Note#^block]]` markdown transclusion, configurable vault root.
 
