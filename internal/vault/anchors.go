@@ -1,12 +1,17 @@
 package vault
 
 import (
+	"regexp"
 	"strings"
 
 	"github.com/yuin/goldmark"
 	"github.com/yuin/goldmark/ast"
 	"github.com/yuin/goldmark/text"
 )
+
+// blockMarkerRegex matches a trailing block-id marker ` ^id` at end of
+// text. The id is alphanumerics + hyphens, matching Obsidian's syntax.
+var blockMarkerRegex = regexp.MustCompile(`(?:^| )\^([a-zA-Z0-9-]+)\s*$`)
 
 // anchors holds the per-file lookup tables for [[Note#Heading]] and
 // [[Note#^block-id]] anchor resolution.
@@ -35,14 +40,24 @@ func extractAnchors(src string) anchors {
 		if !entering {
 			return ast.WalkContinue, nil
 		}
-		if h, ok := n.(*ast.Heading); ok {
-			line := lineForNode(h, source)
-			slug := slugifyAnchor(headingText(h, source))
+		switch nn := n.(type) {
+		case *ast.Heading:
+			line := lineForNode(nn, source)
+			slug := slugifyAnchor(headingText(nn, source))
 			if slug != "" {
 				if _, dup := out.headings[slug]; !dup {
 					out.headings[slug] = line
 				}
 			}
+		case *ast.Paragraph, *ast.ListItem, *ast.Blockquote:
+			if id, ok := trailingBlockID(nn, source); ok {
+				line := lineForNode(nn, source)
+				if _, dup := out.blocks[id]; !dup {
+					out.blocks[id] = line
+				}
+			}
+		case *ast.FencedCodeBlock, *ast.CodeBlock:
+			return ast.WalkSkipChildren, nil
 		}
 		return ast.WalkContinue, nil
 	})
@@ -74,5 +89,32 @@ func slugifyAnchor(s string) string {
 			b.WriteByte('-')
 		}
 	}
+	return b.String()
+}
+
+// trailingBlockID returns the block-id from a trailing ` ^id` marker on
+// the last text segment of block n. Returns ("", false) if no marker.
+func trailingBlockID(n ast.Node, source []byte) (string, bool) {
+	text := blockText(n, source)
+	text = strings.TrimRight(text, " \t\n")
+	m := blockMarkerRegex.FindStringSubmatch(text)
+	if m == nil {
+		return "", false
+	}
+	return m[1], true
+}
+
+// blockText returns the concatenated text content of block n.
+func blockText(n ast.Node, source []byte) string {
+	var b strings.Builder
+	_ = ast.Walk(n, func(c ast.Node, entering bool) (ast.WalkStatus, error) {
+		if !entering {
+			return ast.WalkContinue, nil
+		}
+		if t, ok := c.(*ast.Text); ok {
+			b.Write(t.Segment.Value(source))
+		}
+		return ast.WalkContinue, nil
+	})
 	return b.String()
 }
