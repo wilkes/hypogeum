@@ -111,6 +111,7 @@ func (m *Model) refreshContent(path string) {
 			m.content.viewport.SetContent(fmt.Sprintf("Error: %v", dirErr))
 			m.content.links = nil
 			m.content.linkCursor = -1
+			m.content.brokenCount = 0
 			return
 		}
 		src = []byte(listing)
@@ -123,11 +124,13 @@ func (m *Model) refreshContent(path string) {
 			m.content.viewport.SetContent(fmt.Sprintf("Error: %v", err))
 			m.content.links = nil
 			m.content.linkCursor = -1
+			m.content.brokenCount = 0
 			return
 		}
 	}
 
 	if !isDir && !tree.IsMarkdown(path) {
+		m.content.brokenCount = 0
 		out, rerr := m.content.codeRenderer.RenderOpts(path, src, code.RenderOptions{
 			Highlight: m.content.rangeHighlight,
 		})
@@ -168,6 +171,7 @@ func (m *Model) refreshContent(path string) {
 		m.content.links = nil
 		m.content.linkCursor = -1
 		m.content.embedDeps = nil
+		m.content.brokenCount = 0
 		return
 	}
 	m.status = path
@@ -177,6 +181,15 @@ func (m *Model) refreshContent(path string) {
 		m.scrollToLine(pendingScrollLine)
 	}
 	m.content.links = links
+	m.content.brokenCount = m.content.renderer.CountUnresolvedWikilinks(string(src))
+	for _, l := range links {
+		if l.Resolved.Kind != markdown.LinkLocalFile {
+			continue
+		}
+		if _, err := os.Stat(l.Resolved.Target); err != nil {
+			m.content.brokenCount++
+		}
+	}
 
 	m.content.embedDeps = make(map[string]struct{}, len(deps))
 	for _, p := range deps {
