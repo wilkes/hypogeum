@@ -68,6 +68,23 @@ func TestFollowLink_BlockAnchor_ScrollsToBlock(t *testing.T) {
 	}
 }
 
+func TestBrokenAnchor_IncrementsBrokenCount(t *testing.T) {
+	dir := t.TempDir()
+	target := filepath.Join(dir, "target.md")
+	if err := os.WriteFile(target, []byte("# Real\n\njust text\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	source := filepath.Join(dir, "source.md")
+	if err := os.WriteFile(source, []byte("See [[target^missing]]\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	m := newTestModelAtSize(t, dir, source, 100, 30)
+	if got := m.content.brokenCount; got != 1 {
+		t.Errorf("brokenCount = %d, want 1 (file exists, anchor doesn't)", got)
+	}
+}
+
 func TestSplitAnchor(t *testing.T) {
 	tests := []struct {
 		in            string
