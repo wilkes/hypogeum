@@ -25,6 +25,10 @@ type contentUIState struct {
 	codeRenderer *code.Renderer
 	links        []markdown.Link
 	linkCursor   int
+	// brokenCount is the sum of unresolved wikilinks plus inline local
+	// links whose target file is missing in the currently rendered
+	// document. Recomputed by refreshContent; surfaced by renderFooter.
+	brokenCount int
 	// embedDeps holds the absolute paths of every source file embedded
 	// in the currently displayed markdown. The TUI's handleFSEvent
 	// FileModified branch re-renders the open file when a watcher event
@@ -107,6 +111,7 @@ func (m *Model) refreshContent(path string) {
 			m.content.viewport.SetContent(fmt.Sprintf("Error: %v", dirErr))
 			m.content.links = nil
 			m.content.linkCursor = -1
+			m.content.brokenCount = 0
 			return
 		}
 		src = []byte(listing)
@@ -119,11 +124,13 @@ func (m *Model) refreshContent(path string) {
 			m.content.viewport.SetContent(fmt.Sprintf("Error: %v", err))
 			m.content.links = nil
 			m.content.linkCursor = -1
+			m.content.brokenCount = 0
 			return
 		}
 	}
 
 	if !isDir && !tree.IsMarkdown(path) {
+		m.content.brokenCount = 0
 		out, rerr := m.content.codeRenderer.RenderOpts(path, src, code.RenderOptions{
 			Highlight: m.content.rangeHighlight,
 		})
@@ -164,6 +171,7 @@ func (m *Model) refreshContent(path string) {
 		m.content.links = nil
 		m.content.linkCursor = -1
 		m.content.embedDeps = nil
+		m.content.brokenCount = 0
 		return
 	}
 	m.status = path
@@ -173,6 +181,15 @@ func (m *Model) refreshContent(path string) {
 		m.scrollToLine(pendingScrollLine)
 	}
 	m.content.links = links
+	m.content.brokenCount = m.content.renderer.CountUnresolvedWikilinks(string(src))
+	for _, l := range links {
+		if l.Resolved.Kind != markdown.LinkLocalFile {
+			continue
+		}
+		if _, err := os.Stat(l.Resolved.Target); err != nil {
+			m.content.brokenCount++
+		}
+	}
 
 	m.content.embedDeps = make(map[string]struct{}, len(deps))
 	for _, p := range deps {

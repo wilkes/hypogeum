@@ -147,6 +147,43 @@ func (r *Renderer) preprocessWikilinks(src string) string {
 	return b.String()
 }
 
+// CountUnresolvedWikilinks counts every [[...]] in src that the
+// configured resolver does NOT resolve. Fences are skipped (matches
+// preprocessWikilinks). When no resolver is configured, every
+// well-formed wikilink counts as unresolved.
+//
+// Used by the TUI footer's broken-link tally; the count complements
+// the per-document link list (which intentionally excludes unresolved
+// wikilinks, since they can't be followed).
+func (r *Renderer) CountUnresolvedWikilinks(src string) int {
+	if !strings.Contains(src, "[[") {
+		return 0
+	}
+	count := 0
+	check := func(match string) string {
+		body := match[2 : len(match)-2]
+		w := wikilink.Parse(body)
+		if w == nil {
+			return match
+		}
+		if r.resolver == nil {
+			count++
+			return match
+		}
+		if _, ok := r.resolver.Resolve(r.fromFile, w.Name, w.Heading, w.Block); !ok {
+			count++
+		}
+		return match
+	}
+	for _, seg := range splitOutsideFences(src) {
+		if seg.isFence {
+			continue
+		}
+		wikilinkRegex.ReplaceAllStringFunc(seg.text, check)
+	}
+	return count
+}
+
 // slugify is the same heading-slug rule used by anchor-style links.
 func slugify(s string) string {
 	s = strings.ToLower(s)

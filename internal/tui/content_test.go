@@ -164,3 +164,31 @@ func TestRefreshContent_MarkdownHonorsRangeHighlight(t *testing.T) {
 		t.Errorf("YOffset = 0, expected non-zero scroll to line 50")
 	}
 }
+
+// TestRefreshContent_BrokenCount verifies that refreshContent populates
+// m.content.brokenCount with the sum of unresolved wikilinks plus inline
+// local-file links whose targets are missing on disk.
+func TestRefreshContent_BrokenCount(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "Found.md"), []byte("# Found\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	notePath := filepath.Join(dir, "note.md")
+	body := "# Note\n\n[[Found]] [[Missing]] [[AlsoMissing]]\n\n[gone](gone.md)\n"
+	if err := os.WriteFile(notePath, []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	m, err := New(dir, "")
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	updated, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 40})
+	m = updated.(Model)
+
+	m.refreshContent(notePath)
+
+	if m.content.brokenCount != 3 {
+		t.Errorf("brokenCount = %d, want 3", m.content.brokenCount)
+	}
+}
