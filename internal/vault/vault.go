@@ -29,8 +29,9 @@ type Vault struct {
 }
 
 type fileEntry struct {
-	path string
-	refs []reference
+	path    string
+	refs    []reference
+	anchors anchors
 }
 
 // Build walks root and indexes every .md file's wikilinks and standard
@@ -144,11 +145,12 @@ func (v *Vault) indexFile(path string) {
 		return
 	}
 	refs := extractReferences(string(src), path)
+	anchorIdx := extractAnchors(string(src))
 
 	v.mu.Lock()
 	defer v.mu.Unlock()
 
-	v.files[path] = &fileEntry{path: path, refs: refs}
+	v.files[path] = &fileEntry{path: path, refs: refs, anchors: anchorIdx}
 
 	key := nameKey(path)
 	// Keep names index unique-by-path: drop any prior occurrence of this

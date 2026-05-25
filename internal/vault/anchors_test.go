@@ -1,6 +1,8 @@
 package vault
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
 )
 
@@ -48,5 +50,30 @@ func TestExtractAnchors_DuplicateBlockIDs_FirstWins(t *testing.T) {
 	got := extractAnchors(src)
 	if got.blocks["dup"] != 1 {
 		t.Errorf("blocks[dup] = %d, want 1 (first wins)", got.blocks["dup"])
+	}
+}
+
+func TestVault_BuildPopulatesAnchors(t *testing.T) {
+	dir := t.TempDir()
+	notePath := filepath.Join(dir, "note.md")
+	src := "# Top Heading\n\nA paragraph. ^para1\n"
+	if err := os.WriteFile(notePath, []byte(src), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	v, err := Build(dir, NopDiagnostics{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	v.mu.RLock()
+	defer v.mu.RUnlock()
+	entry := v.files[notePath]
+	if entry == nil {
+		t.Fatalf("file entry missing for %s", notePath)
+	}
+	if entry.anchors.headings["top-heading"] != 1 {
+		t.Errorf("headings[top-heading] = %d, want 1", entry.anchors.headings["top-heading"])
+	}
+	if entry.anchors.blocks["para1"] != 3 {
+		t.Errorf("blocks[para1] = %d, want 3", entry.anchors.blocks["para1"])
 	}
 }
