@@ -188,6 +188,13 @@ func (m *Model) refreshContent(path string) {
 		}
 		if _, err := os.Stat(l.Resolved.Target); err != nil {
 			m.content.brokenCount++
+			continue
+		}
+		if l.Resolved.Anchor != "" && m.vault != nil {
+			heading, block := splitAnchor(l.Resolved.Anchor)
+			if _, ok := m.vault.ResolveAnchor(l.Resolved.Target, heading, block); !ok {
+				m.content.brokenCount++
+			}
 		}
 	}
 
