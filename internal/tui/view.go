@@ -103,10 +103,12 @@ func (m Model) renderFooter() string {
 		}
 	}
 
+	transientActive := false
 	transientStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("11"))
 	if m.diag != nil {
 		if e, ok := m.diag.transientStatus(); ok {
 			loc = transientStyle.Render(e.Severity.String() + ": " + e.Message)
+			transientActive = true
 		}
 	}
 
@@ -114,6 +116,11 @@ func (m Model) renderFooter() string {
 	if sel := m.selectedLink(); sel != nil {
 		loc = fmt.Sprintf("%s%s [%d/%d] %s", linkFooterMarker, loc, m.content.linkCursor+1, len(m.content.links), linkLabel(*sel, m.root))
 		hasLink = true
+	}
+
+	if !transientActive && m.content.brokenCount > 0 {
+		brokenStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("11")).Faint(true)
+		loc += brokenStyle.Render(fmt.Sprintf(" ⚠ %d broken", m.content.brokenCount))
 	}
 	// The help row is always faint. The location row is faint by default
 	// but gets full brightness when a link is selected, since it's the
