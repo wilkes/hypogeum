@@ -24,7 +24,7 @@ func openViaTree(t *testing.T, m Model, path string) Model {
 		t.Fatalf("openViaTree: ^b should open tree modal, got kind=%v", m.modals.kind)
 	}
 	// Expand the ancestor chain so the target row is visible.
-	for dir := filepath.Dir(path); dir != m.root && dir != filepath.Dir(dir); dir = filepath.Dir(dir) {
+	for dir := filepath.Dir(path); dir != m.roots[0] && dir != filepath.Dir(dir); dir = filepath.Dir(dir) {
 		m.tree.expanded[dir] = true
 	}
 	m.tree.flat = m.flattenVisible()

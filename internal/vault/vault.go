@@ -21,7 +21,7 @@ import (
 // The reverse index (which files link *to* a given path) is computed
 // on demand from `files` — see Backlinks.
 type Vault struct {
-	root  string
+	roots []string
 	mu    sync.RWMutex
 	files map[string]*fileEntry
 	names map[string][]string
@@ -41,12 +41,23 @@ type fileEntry struct {
 // emit a diagnostic and are skipped. A fatal error (root unreadable)
 // returns (nil, err).
 func Build(root string, diag Diagnostics) (*Vault, error) {
-	abs, err := filepath.Abs(root)
-	if err != nil {
-		return nil, err
+	return BuildRoots([]string{root}, diag)
+}
+
+// BuildRoots is Build over multiple overlaid roots. Every root is walked into
+// the same shared name index, so wikilinks resolve across roots as if the
+// directories were superimposed into one vault.
+func BuildRoots(roots []string, diag Diagnostics) (*Vault, error) {
+	abs := make([]string, 0, len(roots))
+	for _, r := range roots {
+		a, err := filepath.Abs(r)
+		if err != nil {
+			return nil, err
+		}
+		abs = append(abs, a)
 	}
 	v := &Vault{
-		root:  abs,
+		roots: abs,
 		files: make(map[string]*fileEntry),
 		names: make(map[string][]string),
 		diag:  diag,
@@ -112,16 +123,25 @@ func removePath(s []string, p string) []string {
 	return out
 }
 
-// walkAndIndex populates v.files and v.names by walking v.root.
+// walkAndIndex populates v.files and v.names by walking every root.
 // Per-file parse failures emit a Warn diagnostic and are skipped.
-// A walk-level error (root unreadable) is fatal.
+// A walk-level error (a root unreadable) is fatal.
 func (v *Vault) walkAndIndex() error {
-	return filepath.WalkDir(v.root, func(path string, d os.DirEntry, err error) error {
+	for _, root := range v.roots {
+		if err := v.walkRoot(root); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (v *Vault) walkRoot(root string) error {
+	return filepath.WalkDir(root, func(path string, d os.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
 		if d.IsDir() {
-			if path != v.root && strings.HasPrefix(d.Name(), ".") {
+			if path != root && strings.HasPrefix(d.Name(), ".") {
 				return filepath.SkipDir
 			}
 			return nil

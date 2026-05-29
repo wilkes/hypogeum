@@ -2,7 +2,6 @@ package tui
 
 import (
 	"fmt"
-	"path/filepath"
 	"strings"
 
 	"github.com/charmbracelet/bubbles/viewport"
@@ -63,16 +62,13 @@ var cursorMarkerStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("62")).Bol
 // formatBacklinks renders a slice of vault.Backlink as the two-row-per-
 // entry text used by the backlinks modal. If cursor is in [0, len(links)),
 // the row at that index gets a left-edge marker; pass -1 for no selection.
-func formatBacklinks(links []vault.Backlink, root string, width, cursor int) string {
+func formatBacklinks(links []vault.Backlink, roots []string, width, cursor int) string {
 	if len(links) == 0 {
 		return lipgloss.NewStyle().Faint(true).Render("(no backlinks)")
 	}
 	var b strings.Builder
 	for i, l := range links {
-		rel, err := filepath.Rel(root, l.SourceFile)
-		if err != nil {
-			rel = l.SourceFile
-		}
+		rel := relPathForRoots(roots, l.SourceFile)
 		marker := "  "
 		if i == cursor {
 			marker = cursorMarkerStyle.Render("▌") + " "
@@ -110,7 +106,7 @@ func (m *Model) refreshBacklinksModal(currentPath string) {
 	m.resizeModalVP()
 	links := m.vault.Backlinks(currentPath)
 	m.backlinks.items = links
-	m.modals.vp.SetContent(formatBacklinks(links, m.root, m.modals.vp.Width, m.backlinks.cursor))
+	m.modals.vp.SetContent(formatBacklinks(links, m.roots, m.modals.vp.Width, m.backlinks.cursor))
 }
 
 // ensureCursorVisible adjusts vp's YOffset so the two-row entry at

@@ -24,7 +24,14 @@ Run `hypogeum --version` to confirm which build you're on.
 hypogeum                  # browse the current directory
 hypogeum ~/notes          # browse a specific directory
 hypogeum ~/notes/index.md # open a specific file; tree roots at its directory
+hypogeum ~/notes ~/work   # overlay two or more directories into one merged tree
 ```
+
+Pass more than one directory and hypogeum **superimposes** them: directories
+that share a relative path merge, files that collide are both kept (the tree
+labels each with its source root), and wikilinks, backlinks, search (`^s`), and
+the finder (`^p`) treat the union as a single vault. See
+[docs/multi-directory-index.md](docs/multi-directory-index.md).
 
 ## Keys
 

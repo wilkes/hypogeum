@@ -1,8 +1,6 @@
 package tui
 
 import (
-	"path/filepath"
-
 	"github.com/wilkes/hypogeum/internal/tree"
 )
 
@@ -62,21 +60,47 @@ func (m *Model) toggleFolder(path string) {
 // expandAncestorsOf collapses everything and then expands only the
 // directories on path's ancestor chain. The result is a tree showing the
 // path from root down to path's parent, with all sibling branches closed.
+//
+// It walks the actual node tree rather than doing filepath.Dir string math
+// so it works for both single-root trees (absolute directory keys) and
+// merged overlay trees (relative directory keys), where a file may live
+// under a different real root than the one that first named its merged
+// parent directory.
 func (m *Model) expandAncestorsOf(path string) {
 	for k := range m.tree.expanded {
 		delete(m.tree.expanded, k)
 	}
-	if path == "" {
+	if path == "" || m.rootNode == nil {
 		return
 	}
-	for dir := filepath.Dir(path); ; dir = filepath.Dir(dir) {
-		m.tree.expanded[dir] = true
-		// Stop at the configured root, or at the filesystem root where
-		// filepath.Dir is its own fixed point ("/" on unix, "C:\" on win).
-		if dir == m.root || dir == filepath.Dir(dir) {
-			return
+	chain, ok := nodeChain(m.rootNode, path)
+	if !ok {
+		return
+	}
+	for _, d := range chain {
+		m.tree.expanded[d.Path] = true
+	}
+}
+
+// nodeChain returns the directory nodes from n down to (but excluding) the
+// node whose Path == target, or false if no such node exists in the subtree.
+// For a file target the returned slice is exactly its directory ancestors.
+func nodeChain(n *tree.Node, target string) ([]*tree.Node, bool) {
+	if n == nil {
+		return nil, false
+	}
+	if n.Path == target {
+		return nil, true
+	}
+	if !n.IsDir {
+		return nil, false
+	}
+	for _, c := range n.Children {
+		if sub, ok := nodeChain(c, target); ok {
+			return append([]*tree.Node{n}, sub...), true
 		}
 	}
+	return nil, false
 }
 
 // flattenVisible produces a depth-tagged linear list of rows, skipping
@@ -107,7 +131,7 @@ func (m *Model) flattenVisible() []treeRow {
 // is expanded only if explicitly recorded in m.tree.expanded — either by
 // expandAncestorsOf (current file's chain) or by user toggleFolder.
 func (m *Model) isExpanded(n *tree.Node) bool {
-	if n.Path == m.root {
+	if n == m.rootNode {
 		return true
 	}
 	return m.tree.expanded[n.Path]

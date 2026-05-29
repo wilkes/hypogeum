@@ -30,7 +30,7 @@ type pickerState struct {
 	matches []fuzzy.Match    // parallel to ranked when query non-empty
 	cursor  int
 	vp      viewport.Model
-	root    string // vault root, used to render relative paths
+	roots   []string // vault roots, used to render relative paths
 	input   textinput.Model
 }
 
@@ -47,12 +47,12 @@ func newPicker() pickerState {
 
 // reset populates the picker with a fresh ranked list, resets the cursor
 // and query, and focuses the textinput. Called on every picker open.
-func (p *pickerState) reset(ranked []recent.Ranked, root string) {
+func (p *pickerState) reset(ranked []recent.Ranked, roots []string) {
 	p.all = ranked
 	p.ranked = ranked
 	p.matches = nil
 	p.cursor = 0
-	p.root = root
+	p.roots = roots
 	p.input.SetValue("")
 	p.input.Focus()
 	p.refreshVP()
@@ -74,7 +74,7 @@ func (p *pickerState) refilter() {
 	}
 	src := make([]string, len(p.all))
 	for i, r := range p.all {
-		src[i] = strings.ToLower(relativeTo(p.root, r.Path))
+		src[i] = strings.ToLower(relPathForRoots(p.roots, r.Path))
 	}
 	raw := fuzzy.Find(q, src)
 	sort.SliceStable(raw, func(i, j int) bool {
@@ -118,7 +118,7 @@ func (p *pickerState) renderRows() string {
 	}
 	for i := 0; i < visible; i++ {
 		r := p.ranked[i]
-		rel := relativeTo(p.root, r.Path)
+		rel := relPathForRoots(p.roots, r.Path)
 		recencyLabel, edited := pickRecencyLabel(now, r.MTime, r.Visit)
 		suffix := recencyLabel
 		if edited {
@@ -148,16 +148,29 @@ func (p *pickerState) renderOverflowFooter() string {
 	return ""
 }
 
-// relativeTo returns p relative to root, or the absolute path on failure.
-func relativeTo(root, p string) string {
-	if root == "" {
+// relPathForRoots renders p relative to whichever root yields the shortest
+// relative path (the best containing root), falling back to the absolute path
+// when p lives under none of the roots. With a single root it behaves like a
+// plain filepath.Rel; with overlaid roots it picks the owning one so display
+// paths stay short and unambiguous.
+func relPathForRoots(roots []string, p string) string {
+	best := ""
+	for _, root := range roots {
+		if root == "" {
+			continue
+		}
+		rel, err := filepath.Rel(root, p)
+		if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+			continue
+		}
+		if best == "" || len(rel) < len(best) {
+			best = rel
+		}
+	}
+	if best == "" {
 		return p
 	}
-	rel, err := filepath.Rel(root, p)
-	if err != nil {
-		return p
-	}
-	return rel
+	return best
 }
 
 // pickRecencyLabel returns the human-friendly recency label and a flag

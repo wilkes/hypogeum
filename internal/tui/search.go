@@ -196,7 +196,7 @@ func (m *Model) renderSearchRows() string {
 	case !m.modals.search.inFlight && len(m.modals.search.hits) == 0:
 		return faint.Render(`(no match for "` + q + `")`)
 	default:
-		return formatSearchHits(m.modals.search.hits, m.root, m.modals.search.vp.Width, m.modals.search.cursor)
+		return formatSearchHits(m.modals.search.hits, m.roots, m.modals.search.vp.Width, m.modals.search.cursor)
 	}
 }
 
@@ -304,7 +304,7 @@ type recentStore interface {
 //
 // applyHighlight (internal/tui/backlinks.go) handles the \x11/\x12 →
 // SGR conversion; this function delegates to it for the snippet row.
-func formatSearchHits(hits []search.Hit, root string, width, cursor int) string {
+func formatSearchHits(hits []search.Hit, roots []string, width, cursor int) string {
 	if len(hits) == 0 {
 		return ""
 	}
@@ -314,7 +314,7 @@ func formatSearchHits(hits []search.Hit, root string, width, cursor int) string 
 		if i == cursor {
 			marker = cursorMarkerStyle.Render("▌") + " "
 		}
-		header := marker + relativeTo(root, h.Path) + ":" + strconv.Itoa(h.Line)
+		header := marker + relPathForRoots(roots, h.Path) + ":" + strconv.Itoa(h.Line)
 		snippet := "  " + truncateOneLine(applyHighlight(h.Snippet), width-4)
 		if i == cursor {
 			header = lipgloss.NewStyle().Reverse(true).Render(header)

@@ -2,7 +2,6 @@ package tui
 
 import (
 	"fmt"
-	"path/filepath"
 	"strings"
 
 	"github.com/charmbracelet/bubbles/viewport"
@@ -97,10 +96,8 @@ func (m Model) renderFooter() string {
 
 	loc := m.status
 	if loc != "" {
-		// Show path relative to root for brevity.
-		if rel, err := filepath.Rel(m.root, loc); err == nil {
-			loc = rel
-		}
+		// Show path relative to its owning root for brevity.
+		loc = relPathForRoots(m.roots, loc)
 	}
 
 	transientActive := false
@@ -114,7 +111,7 @@ func (m Model) renderFooter() string {
 
 	hasLink := false
 	if sel := m.selectedLink(); sel != nil {
-		loc = fmt.Sprintf("%s%s [%d/%d] %s", linkFooterMarker, loc, m.content.linkCursor+1, len(m.content.links), linkLabel(*sel, m.root))
+		loc = fmt.Sprintf("%s%s [%d/%d] %s", linkFooterMarker, loc, m.content.linkCursor+1, len(m.content.links), linkLabel(*sel, m.roots))
 		hasLink = true
 	}
 

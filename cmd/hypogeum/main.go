@@ -36,12 +36,12 @@ func run(args []string) error {
 			return nil
 		}
 	}
-	root, initialFile, err := resolveTarget(args)
+	roots, initialFile, err := resolveTarget(args)
 	if err != nil {
 		return err
 	}
 
-	model, err := tui.New(root, initialFile)
+	model, err := tui.NewMulti(roots, initialFile)
 	if err != nil {
 		return err
 	}
@@ -55,25 +55,46 @@ func run(args []string) error {
 //   - no args:       browse the current working directory
 //   - one dir arg:   browse that directory
 //   - one file arg:  open that file, root the tree at its parent directory
-func resolveTarget(args []string) (root, initialFile string, err error) {
+//   - 2+ dir args:   overlay every directory into one merged tree
+//
+// With multiple args every argument must be a directory; a file among them is
+// a usage error (there is no single "initial file" to land on when overlaying).
+func resolveTarget(args []string) (roots []string, initialFile string, err error) {
 	switch len(args) {
 	case 0:
-		root, err = os.Getwd()
-		return root, "", err
+		root, err := os.Getwd()
+		if err != nil {
+			return nil, "", err
+		}
+		return []string{root}, "", nil
 	case 1:
 		target, err := filepath.Abs(args[0])
 		if err != nil {
-			return "", "", err
+			return nil, "", err
 		}
 		info, err := os.Stat(target)
 		if err != nil {
-			return "", "", err
+			return nil, "", err
 		}
 		if info.IsDir() {
-			return target, "", nil
+			return []string{target}, "", nil
 		}
-		return filepath.Dir(target), target, nil
+		return []string{filepath.Dir(target)}, target, nil
 	default:
-		return "", "", fmt.Errorf("usage: hypogeum [path]")
+		for _, a := range args {
+			target, err := filepath.Abs(a)
+			if err != nil {
+				return nil, "", err
+			}
+			info, err := os.Stat(target)
+			if err != nil {
+				return nil, "", err
+			}
+			if !info.IsDir() {
+				return nil, "", fmt.Errorf("%s is not a directory: with multiple paths, every path must be a directory", a)
+			}
+			roots = append(roots, target)
+		}
+		return roots, "", nil
 	}
 }

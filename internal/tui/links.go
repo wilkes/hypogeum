@@ -2,7 +2,6 @@ package tui
 
 import (
 	"os"
-	"path/filepath"
 
 	"github.com/wilkes/hypogeum/internal/markdown"
 )
@@ -130,13 +129,10 @@ func (m Model) selectedLink() *markdown.Link {
 
 // linkLabel formats a link's target for footer display: relative path
 // for local files (against the tree root for brevity), raw href otherwise.
-func linkLabel(l markdown.Link, root string) string {
+func linkLabel(l markdown.Link, roots []string) string {
 	switch l.Resolved.Kind {
 	case markdown.LinkLocalFile:
-		if rel, err := filepath.Rel(root, l.Resolved.Target); err == nil {
-			return rel
-		}
-		return l.Resolved.Target
+		return relPathForRoots(roots, l.Resolved.Target)
 	case markdown.LinkAnchor:
 		return "#" + l.Resolved.Anchor
 	default:

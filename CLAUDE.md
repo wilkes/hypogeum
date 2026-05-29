@@ -4,7 +4,7 @@ Guidance for Claude Code working in this repo. Keep this file short and accurate
 
 ## What this is
 
-`hypogeum` is a terminal markdown browser. Point it at a directory of `.md` files; rendered content fills the screen, `^p` opens a fuzzy file finder, `^s` opens a full-text search modal, `^b` opens the directory tree in a modal, and `h`/`l` navigate browser-style history.
+`hypogeum` is a terminal markdown browser. Point it at a directory of `.md` files (or several — they overlay into one merged tree); rendered content fills the screen, `^p` opens a fuzzy file finder, `^s` opens a full-text search modal, `^b` opens the directory tree in a modal, and `h`/`l` navigate browser-style history.
 
 Built on the Charm stack: Bubble Tea (Elm-style update loop), Bubbles (widgets — viewport, key bindings), Lip Gloss (styling), Glamour (markdown → ANSI).
 
@@ -49,7 +49,7 @@ The packages are layered: `tui` depends on `tree`, `markdown`, `nav`, `watch`, `
 - **Pre-flatten for keystroke performance.** The tree is walked into `[]treeRow` once in `New`; cursor movement just updates an index. Don't re-walk the tree on keystrokes.
 - **Tree is scrolled by `m.tree.vp`, not lipgloss.** `renderTree()` produces all rows; `m.tree.vp.View()` clips them to a visible window and scrolls so `m.tree.cursor` stays in view. Any code path that writes `m.tree.flat` or `m.tree.cursor` must call `m.refreshTreeVP()` afterward; otherwise the rendered viewport stays stale or the cursor can scroll out of frame.
 - **Re-render on resize.** `WindowSizeMsg` rebuilds the Glamour renderer at the new wrap width and re-renders the current file. Anything that changes content width must do the same.
-- **CLI argument shape:** zero args = cwd; one dir = browse it; one file = open it with the tree rooted at its parent. Anything else is a usage error.
+- **CLI argument shape:** zero args = cwd; one dir = browse it; one file = open it with the tree rooted at its parent; two-or-more dirs = overlay them into one merged tree. A file among multiple args is a usage error. `resolveTarget` returns `roots []string`; `main` always calls `tui.NewMulti`.
 - **Tests live next to the code they test** (`internal/nav/history_test.go`, `internal/tui/model_test.go`).
 
 ## Gotchas
@@ -57,6 +57,7 @@ The packages are layered: `tui` depends on `tree`, `markdown`, `nav`, `watch`, `
 - **Empty directories are pruned.** `tree.Walk` drops any directory whose subtree contains zero markdown files (`internal/tree/tree.go`). A user pointing at a folder with only PDFs in it will see an empty tree, not a wall of folders.
 - **Auto-open is top-level only.** When no `initialFile` is given, the model picks the *first root-level* `.md` (`firstTopLevelFile` in `internal/tui/model.go`). It does *not* descend into subdirectories — earlier versions did, and the result was landing on the deepest leaf alphabetically. Don't change this back without a strong reason.
 - **`tree.Walk` returns a synthesized empty root** when nothing matches, instead of nil — callers don't have to special-case nil. Keep that contract.
+- **Multi-root trees key directories by *relative* path, files by *absolute* path.** `tree.Merge(roots)` overlays N roots (one root === `Walk`, so single-dir behavior is untouched). In a merged tree the synthesized virtual root has an empty `Path`; merged directory nodes are keyed by their slash-joined relative path (`"sub/deep"`) because a merged dir backs onto several real directories, while **file nodes keep their real absolute `Path`** so they open/watch/resolve. Colliding files (same relative path) are deduped by absolute path, then both kept with source-root-disambiguated `Name`. Because dir keys can be relative, two pieces of tree logic are **structural, not string-based**: `isExpanded` compares the root *node pointer* (`n == m.rootNode`), and `expandAncestorsOf` walks the node tree via `nodeChain` instead of `filepath.Dir` math. `Model.roots` is the `[]string` of roots; display paths go through `relPathForRoots`. See [multi-directory-index](docs/multi-directory-index.md).
 - **Hidden entries are skipped** (anything starting with `.`) — `.git`, dotfile notes directories, etc. If you ever expose a flag to include them, do it in `tree`, not `tui`.
 - **Glamour renderer is per-width.** It's recreated on every `WindowSizeMsg`. Don't cache it across width changes or wrapping breaks silently.
 - **The watcher is best-effort.** If `watch.New` fails (e.g. inotify limits exhausted), `tui.New` swallows the error and the browser runs without live updates rather than refusing to start. Consumers must tolerate `m.watcher == nil`.

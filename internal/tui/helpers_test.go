@@ -79,10 +79,23 @@ func sized(t *testing.T, root, initialFile string) Model {
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
+	closeWatcherOnCleanup(t, m)
 	updated, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
 	m = updated.(Model)
 	renderAndScan(t, m, zoneContentPane)
 	return m
+}
+
+// closeWatcherOnCleanup releases the model's fsnotify watcher at test end.
+// Tests never use the watcher after their own body returns, and the sandbox's
+// inotify instance limit is low (128), so leaking one watcher per constructed
+// model otherwise exhausts the limit and makes later tests' watchers fail to
+// initialize.
+func closeWatcherOnCleanup(t *testing.T, m Model) {
+	t.Helper()
+	if m.watcher != nil {
+		t.Cleanup(func() { _ = m.watcher.Close() })
+	}
 }
 
 // renderAndScan calls View() and waits for BubbleZone's worker goroutine

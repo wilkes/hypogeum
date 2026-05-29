@@ -84,7 +84,7 @@ func TestFormatBacklinks_HighlightsSelectedRow(t *testing.T) {
 		{SourceFile: "/r/a.md", DisplayText: "x", Snippet: "hello", Line: 1},
 		{SourceFile: "/r/b.md", DisplayText: "x", Snippet: "world", Line: 2},
 	}
-	rendered := formatBacklinks(links, "/r", 80, 1)
+	rendered := formatBacklinks(links, []string{"/r"}, 80, 1)
 	if !strings.Contains(rendered, "▌") {
 		t.Fatalf("expected cursor marker '▌' in output, got %q", rendered)
 	}

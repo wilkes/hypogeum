@@ -168,7 +168,7 @@ func (m *Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			if m.recent != nil {
 				ranked = m.recent.Rank(paths)
 			}
-			m.modals.picker.reset(ranked, m.root)
+			m.modals.picker.reset(ranked, m.roots)
 		})
 	case key.Matches(msg, m.keys.OpenSearch):
 		return *m, m.openModalWith(modalSearch, func() {

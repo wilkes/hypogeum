@@ -53,9 +53,10 @@ type Watcher struct {
 	debounceWindow time.Duration
 }
 
-// New starts watching the tree rooted at root. The returned Watcher emits
+// New starts watching the tree(s) rooted at roots. Multiple roots are watched
+// as one overlaid set, mirroring tree.Merge. The returned Watcher emits
 // debounced events on Events() until Close is called.
-func New(root string) (*Watcher, error) {
+func New(roots ...string) (*Watcher, error) {
 	fsw, err := fsnotify.NewWatcher()
 	if err != nil {
 		return nil, err
@@ -66,9 +67,11 @@ func New(root string) (*Watcher, error) {
 		done:           make(chan struct{}),
 		debounceWindow: 100 * time.Millisecond,
 	}
-	if err := addDirsRecursive(fsw, root); err != nil {
-		fsw.Close()
-		return nil, err
+	for _, root := range roots {
+		if err := addDirsRecursive(fsw, root); err != nil {
+			fsw.Close()
+			return nil, err
+		}
 	}
 	go w.run()
 	return w, nil

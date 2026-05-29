@@ -46,7 +46,7 @@ const (
 
 // Model is the top-level Bubble Tea model.
 type Model struct {
-	root     string
+	roots    []string
 	rootNode *tree.Node
 
 	tree      treeUIState
@@ -126,21 +126,30 @@ func treeRowZoneID(i int) string {
 }
 
 // New constructs a Model rooted at root. If initialFile is non-empty, that
-// file is opened on startup.
+// file is opened on startup. It is a single-root convenience wrapper around
+// NewMulti.
 func New(root, initialFile string) (Model, error) {
+	return NewMulti([]string{root}, initialFile)
+}
+
+// NewMulti constructs a Model overlaying every directory in roots into one
+// merged tree and unified index (see docs/multi-directory-index.md). A single
+// root behaves identically to the old single-directory New. If initialFile is
+// non-empty, that file is opened on startup.
+func NewMulti(roots []string, initialFile string) (Model, error) {
 	// Initialize the global zone manager. Idempotent — calling NewGlobal
 	// on a manager that's already running is a no-op, so it's safe in
 	// tests that construct multiple models in one process.
 	zone.NewGlobal()
 
-	rootNode, err := tree.Walk(root)
+	rootNode, err := tree.Merge(roots)
 	if err != nil {
-		return Model{}, fmt.Errorf("walk %s: %w", root, err)
+		return Model{}, fmt.Errorf("walk %v: %w", roots, err)
 	}
 
 	diag := newDiagnostics(diagOpts{LogPath: defaultLogPath()})
 	var v *vault.Vault
-	if vv, err := vault.Build(root, diag); err == nil {
+	if vv, err := vault.BuildRoots(roots, diag); err == nil {
 		v = vv
 	} else {
 		diag.Warn("vault build failed: " + err.Error())
@@ -167,7 +176,7 @@ func New(root, initialFile string) (Model, error) {
 	cr := code.NewRenderer(80)
 
 	m := Model{
-		root:         root,
+		roots:        roots,
 		rootNode:     rootNode,
 		history:      nav.New(),
 		focus:        focusContent,
@@ -195,7 +204,7 @@ func New(root, initialFile string) (Model, error) {
 	// A watcher is best-effort: if it fails (e.g. inotify limits hit on
 	// Linux), we silently fall back to the previous reload-on-navigate
 	// behavior rather than refusing to start.
-	w, werr := watch.New(root)
+	w, werr := watch.New(roots...)
 	if werr == nil {
 		m.watcher = w
 	} else {

@@ -245,7 +245,7 @@ func (m *Model) handleFSEvent(ev watch.Event) {
 		if m.tree.cursor < len(m.tree.flat) {
 			selectedPath = m.tree.flat[m.tree.cursor].node.Path
 		}
-		newRoot, err := tree.Walk(m.root)
+		newRoot, err := tree.Merge(m.roots)
 		if err != nil {
 			m.status = err.Error()
 			return
