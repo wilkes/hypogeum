@@ -2,7 +2,6 @@ package tui
 
 import (
 	"fmt"
-	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
@@ -15,6 +14,7 @@ import (
 	"github.com/sahilm/fuzzy"
 
 	"github.com/wilkes/hypogeum/internal/recent"
+	"github.com/wilkes/hypogeum/internal/tree"
 )
 
 // pickerMaxVisible caps how many rows render at once. The cursor is
@@ -159,8 +159,8 @@ func relPathForRoots(roots []string, p string) string {
 		if root == "" {
 			continue
 		}
-		rel, err := filepath.Rel(root, p)
-		if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		rel, ok := tree.RelWithin(root, p)
+		if !ok {
 			continue
 		}
 		if best == "" || len(rel) < len(best) {

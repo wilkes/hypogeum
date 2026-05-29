@@ -64,43 +64,35 @@ func mergeDirs(relPath string, dirs []*Node, roots []string) *Node {
 		merged.Name = ""
 	}
 
+	// Group children by name across all contributing directories. Insertion
+	// order doesn't matter here — sortChildren re-sorts the merged result.
 	dirGroups := map[string][]*Node{}
-	var dirOrder []string
 	fileGroups := map[string][]*Node{}
-	var fileOrder []string
-
 	for _, d := range dirs {
 		for _, c := range d.Children {
 			if c.IsDir {
-				if _, ok := dirGroups[c.Name]; !ok {
-					dirOrder = append(dirOrder, c.Name)
-				}
 				dirGroups[c.Name] = append(dirGroups[c.Name], c)
 			} else {
-				if _, ok := fileGroups[c.Name]; !ok {
-					fileOrder = append(fileOrder, c.Name)
-				}
 				fileGroups[c.Name] = append(fileGroups[c.Name], c)
 			}
 		}
 	}
 
-	for _, name := range dirOrder {
+	for name, group := range dirGroups {
 		childRel := name
 		if relPath != "" {
 			childRel = relPath + "/" + name
 		}
-		sub := mergeDirs(childRel, dirGroups[name], roots)
-		// Walk already prunes markdown-empty directories, so a merged
-		// subdir can only be empty if every contributing dir was empty —
-		// keep the guard anyway to mirror Walk's contract.
+		sub := mergeDirs(childRel, group, roots)
+		// Walk already prunes markdown-empty directories, so this guard
+		// mirrors Walk's contract for the merged subtree.
 		if len(sub.Children) > 0 {
 			merged.Children = append(merged.Children, sub)
 		}
 	}
 
-	for _, name := range fileOrder {
-		group := dedupeByPath(fileGroups[name])
+	for name, group := range fileGroups {
+		group = dedupeByPath(group)
 		if len(group) == 1 {
 			merged.Children = append(merged.Children, group[0])
 			continue
@@ -122,8 +114,11 @@ func mergeDirs(relPath string, dirs []*Node, roots []string) *Node {
 // dedupeByPath drops duplicate file nodes that share an absolute Path, which
 // happens when roots overlap or the same directory is passed twice.
 func dedupeByPath(nodes []*Node) []*Node {
+	if len(nodes) < 2 {
+		return nodes
+	}
 	seen := make(map[string]struct{}, len(nodes))
-	out := nodes[:0]
+	out := make([]*Node, 0, len(nodes))
 	for _, n := range nodes {
 		if _, ok := seen[n.Path]; ok {
 			continue
@@ -134,14 +129,24 @@ func dedupeByPath(nodes []*Node) []*Node {
 	return out
 }
 
+// RelWithin returns p expressed relative to root, and true, when p lies inside
+// root; otherwise it returns "", false. It centralizes the filepath.Rel
+// ".."-prefix check that distinguishes an inside path from an outside one.
+func RelWithin(root, p string) (string, bool) {
+	rel, err := filepath.Rel(root, p)
+	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		return "", false
+	}
+	return rel, true
+}
+
 // sourceLabel returns a short label identifying which root p came from,
 // preferring the longest matching root so nested roots still disambiguate.
 // Falls back to the parent directory's base name when no root matches.
 func sourceLabel(p string, roots []string) string {
 	best := ""
 	for _, r := range roots {
-		rel, err := filepath.Rel(r, p)
-		if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		if _, ok := RelWithin(r, p); !ok {
 			continue
 		}
 		if best == "" || len(r) > len(best) {

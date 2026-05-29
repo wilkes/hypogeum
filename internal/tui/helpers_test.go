@@ -24,22 +24,11 @@ func TestMain(m *testing.M) {
 // writeFixture lays down a small markdown directory and returns its root.
 func writeFixture(t *testing.T) string {
 	t.Helper()
-	root := t.TempDir()
-	files := map[string]string{
+	return writeRoot(t, map[string]string{
 		"index.md":          "# Index\n\nSee [first](notes/first.md) and [external](https://x.test).\n",
 		"notes/first.md":    "# First\n\nHello.\n",
 		"notes/sub/deep.md": "# Deep\n\nNested.\n",
-	}
-	for rel, body := range files {
-		full := filepath.Join(root, rel)
-		if err := os.MkdirAll(filepath.Dir(full), 0o755); err != nil {
-			t.Fatal(err)
-		}
-		if err := os.WriteFile(full, []byte(body), 0o644); err != nil {
-			t.Fatal(err)
-		}
-	}
-	return root
+	})
 }
 
 // writeTallFixture lays down n flat markdown files (file000.md, file001.md, …)
