@@ -9,7 +9,7 @@ Rebalance the `^p` finder's recency score so a recently *modified* file outranks
 - **mtime term** — `exp(-hours_since_mtime / 168)` (7-day half-life).
 - **visit term** — `1.5 · exp(-hours_since_visit / 48)` (2-day half-life, weighted ×1.5).
 
-The two terms are summed; higher is better. Today's `visitWeight = 1.5` plus the faster decay of visits combine so that, at equal age, the visit term outranks the mtime term by a large margin. Example at age = 24h: mtime contributes `0.905`; visits contribute `1.060`. So a file opened yesterday but never edited ranks above a file edited yesterday but never opened.
+The two terms are summed; higher is better. Today's `visitWeight = 1.5` plus the faster decay of visits combine so that, at equal age in the near-past window, the visit term outranks the mtime term. Example at age = 1h: mtime contributes `exp(-1/168) ≈ 0.994`; visits contribute `1.5 · exp(-1/48) ≈ 1.469`. So a file opened an hour ago but never edited ranks above a file edited an hour ago but never opened.
 
 The intended behavior is the inverse: edits should be the dominant freshness signal, and visit history should nudge ranking, not steer it.
 
@@ -17,7 +17,7 @@ The intended behavior is the inverse: edits should be the dominant freshness sig
 
 Set `visitWeight = 0.5` (down from `1.5`). Leave both half-lives unchanged.
 
-At age = 24h, the new contributions are mtime `0.905` vs visit `0.353` — mtime wins by ~2.5×. Visits are still positive, so the existing test that asserts "equal mtime + a visit beats equal mtime + no visit" still passes; visits keep their tiebreaker role but no longer dominate.
+At age = 1h, the new contributions are mtime `0.994` vs visit `0.5 · 0.979 ≈ 0.490` — mtime wins by ~2×. The flip holds at all ages where both signals are still meaningful: at age = 1 day, mtime `0.867` vs visit `0.303`; at age = 3 days, mtime `0.643` vs visit `0.106`. Visits are still positive, so the existing test that asserts "equal mtime + a visit beats equal mtime + no visit" still passes; visits keep their tiebreaker role but no longer dominate.
 
 ### Why not other approaches
 
