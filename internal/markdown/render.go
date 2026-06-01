@@ -4,7 +4,6 @@ package markdown
 
 import (
 	"fmt"
-	"os"
 
 	"github.com/charmbracelet/glamour"
 )
@@ -81,15 +80,6 @@ func NewRenderer(width int, opts ...Option) (*Renderer, error) {
 // files; one renderer per goroutine.
 func (r *Renderer) SetFromFile(path string) {
 	r.fromFile = path
-}
-
-// RenderFile reads and renders the markdown file at path.
-func (r *Renderer) RenderFile(path string) (string, error) {
-	src, err := os.ReadFile(path)
-	if err != nil {
-		return "", fmt.Errorf("read %s: %w", path, err)
-	}
-	return r.Render(string(src))
 }
 
 // Render renders a markdown string.
