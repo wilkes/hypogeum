@@ -8,9 +8,16 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
+	"strings"
 
 	"github.com/BurntSushi/toml"
 )
+
+// validDialects is the single source of truth for recognized
+// dialect values. Add new dialects here; Load's validation and
+// warning message both read from this slice.
+var validDialects = []string{"pager", "modern"}
 
 // Config is the parsed user config.
 type Config struct {
@@ -64,14 +71,19 @@ func Load(path string) (Config, []string, error) {
 	}
 
 	var warnings []string
-	switch parsed.Dialect {
-	case "":
+	switch {
+	case parsed.Dialect == "":
 		// Field omitted; keep default.
-	case "pager", "modern":
+	case slices.Contains(validDialects, parsed.Dialect):
 		cfg.Dialect = parsed.Dialect
 	default:
+		quoted := make([]string, len(validDialects))
+		for i, d := range validDialects {
+			quoted[i] = fmt.Sprintf("%q", d)
+		}
 		warnings = append(warnings,
-			fmt.Sprintf(`config: unknown dialect %q (valid options: "pager", "modern"); falling back to "pager"`, parsed.Dialect))
+			fmt.Sprintf("config: unknown dialect %q (valid options: %s); falling back to %q",
+				parsed.Dialect, strings.Join(quoted, ", "), Default().Dialect))
 	}
 
 	return cfg, warnings, nil
