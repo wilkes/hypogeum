@@ -151,6 +151,19 @@ func applyHypogeumOverrides(cfg *ansi.StyleConfig, width int) {
 	// renderer) and the footer.
 	cfg.Link.BlockPrefix = string(urlSuppressStart) + cfg.Link.BlockPrefix
 	cfg.Link.BlockSuffix = cfg.Link.BlockSuffix + string(urlSuppressEnd)
+
+	// Table separators: pin to the U+2502 / U+2500 box-drawing glyphs
+	// across all themes. Glamour 0.10.0's ASCII/NoTTY config started
+	// shipping `|` / `-`, which `isTableBorderByte` (in links_render.go)
+	// doesn't recognize — and that helper is what tells
+	// `urlSuppressStrip` to preserve column width in padding contexts.
+	// Forcing the glyphs keeps width-alignment consistent in both TTY
+	// (dark theme) and NoTTY (tests) paths.
+	tableCol := "│"
+	tableRow := "─"
+	cfg.Table.CenterSeparator = &tableCol
+	cfg.Table.ColumnSeparator = &tableCol
+	cfg.Table.RowSeparator = &tableRow
 }
 
 // defaultStyleConfig mirrors Glamour's WithAutoStyle resolution: pick

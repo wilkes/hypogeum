@@ -45,6 +45,11 @@ func NewRenderer(width int, opts ...Option) (*Renderer, error) {
 		glamour.WithWordWrap(width),
 		glamour.WithEmoji(),
 		glamour.WithStyles(hypogeumStyle(width)),
+		// v0.10.0 added a "links at the bottom of each table" footer
+		// that's incompatible with our URL-hiding + sentinel-driven
+		// link-position recovery. Opt out: render links inline as we
+		// always have.
+		glamour.WithInlineTableLinks(true),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("init glamour: %w", err)
@@ -54,6 +59,7 @@ func NewRenderer(width int, opts ...Option) (*Renderer, error) {
 		glamour.WithWordWrap(width),
 		glamour.WithEmoji(),
 		glamour.WithStyles(linkInstrumentationStyles(width)),
+		glamour.WithInlineTableLinks(true),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("init instrumented glamour: %w", err)
