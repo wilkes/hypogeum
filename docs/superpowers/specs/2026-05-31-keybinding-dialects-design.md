@@ -67,12 +67,12 @@ Per-binding overrides require a binding-name vocabulary, validation, conflict de
 | History back | `Alt+←` / `Backspace` |
 | History forward | `Alt+→` |
 | Quit | `q` / `Ctrl+q` / `Ctrl+c` |
-| Search modal | `Ctrl+Shift+f` / `Ctrl+f` |
+| Search modal | `Ctrl+f` |
 | Next link | `Tab` |
 | Prev link | `Shift+Tab` |
 | Clear link / close modal | `Esc` |
-| Backlinks modal | `Ctrl+Shift+b` |
-| Logs modal | `Ctrl+Shift+l` |
+| Backlinks modal | `Alt+b` |
+| Logs modal | `Alt+l` |
 | Help modal | `?` / `F1` |
 | Tree modal | `Ctrl+b` |
 | Folder toggle (in tree) | `Space` |
@@ -324,7 +324,7 @@ Out:
 
 ## Risks
 
-- **Terminal variance for chord keys.** `Alt+←`, `Ctrl+Shift+f`, `Ctrl+Home`, and `F1` are not uniformly transmitted across terminal emulators. The spec mitigates by always providing a non-chord fallback in modern mode (`Backspace` for back, `Ctrl+f` for search, `?` for help) and by adding a CLAUDE.md note.
+- **Terminal variance for chord keys.** Most terminal protocols can't transmit `Ctrl+Shift+letter` distinctly from `Ctrl+letter` — the byte streams are identical. The spec deliberately avoids `Ctrl+Shift+letter` chords and uses `Alt+letter` instead (which encodes reliably as `ESC <letter>` across emulators). `Alt+←`/`Alt+→`, `Ctrl+Home`/`Ctrl+End`, and `F1` are reliable on xterm-family terminals but vary on legacy ones; modern mode mitigates with non-chord fallbacks where it can (`Backspace` for back, `?` for help). A CLAUDE.md note documents the limitation.
 - **Muscle memory for the `p` → previous-link removal.** Users currently using `p` to step backward through links will hit a no-op. Acceptable cost — `N` is the vim-idiomatic prev key, and the help cheat sheet documents it. We can add a deprecation log message ("`p` is no longer prev-link; use `N`") if the change generates feedback, but the spec doesn't ship that.
 - **Config file path on macOS.** `os.UserConfigDir()` returns `~/Library/Application Support/...` on macOS, which is correct but unfamiliar — Unix users sometimes expect `~/.config/`. We document the path in the README and CLAUDE.md.
 - **TOML lib pinning.** `BurntSushi/toml` is at v1.x and stable, but any new dep is a dep. Acceptable for the value delivered. We won't pin to a specific minor version; standard `go.mod` resolution is sufficient.
