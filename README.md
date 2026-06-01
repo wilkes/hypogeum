@@ -45,6 +45,34 @@ hypogeum ~/notes/index.md # open a specific file; tree roots at its directory
 | `?` | Help (cheat sheet) |
 | `q` | Quit |
 
+## Configuration
+
+Hypogeum reads an optional config file from your platform's user-config
+directory. Missing or malformed configs are not fatal — hypogeum always
+starts with sensible defaults.
+
+| OS      | Path                                                         |
+| ------- | ------------------------------------------------------------ |
+| Linux   | `$XDG_CONFIG_HOME/hypogeum/config.toml` (or `~/.config/...`) |
+| macOS   | `~/Library/Application Support/hypogeum/config.toml`         |
+| Windows | `%AppData%\hypogeum\config.toml`                             |
+
+### Available settings
+
+````toml
+# dialect selects the keybinding preset.
+#   "pager"  (default): vim/less idioms — h/l history, n/N link cycle,
+#                       j/k motion, / for search, g/G top/bottom.
+#   "modern":           browser/editor idioms — Alt+←/→ history,
+#                       Tab/Shift+Tab link cycle, arrows for motion,
+#                       Ctrl+F for search, Alt+b/Alt+l for modals.
+dialect = "pager"
+````
+
+Press `?` in hypogeum to see the active dialect's full keybinding list.
+Errors loading the config file appear in the `^l` log modal (or `Alt+l`
+in modern dialect).
+
 ## Inspiration
 
 The design owes an obvious debt to [Frogmouth](https://github.com/Textualize/frogmouth), which does the same job in Python on top of Textual. hypogeum is a clean-room reimplementation in Go with no shared code, written to feel native in environments where a single static binary beats a Python install.
