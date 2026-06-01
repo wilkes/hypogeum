@@ -80,3 +80,53 @@ func TestLoad_HappyPath(t *testing.T) {
 		})
 	}
 }
+
+func TestLoad_UnknownDialect(t *testing.T) {
+	p := writeConfig(t, `dialect = "vim"`+"\n")
+	cfg, warnings, err := Load(p)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if cfg.Dialect != "pager" {
+		t.Errorf("cfg.Dialect = %q, want fallback %q", cfg.Dialect, "pager")
+	}
+	if len(warnings) != 1 {
+		t.Fatalf("warnings = %v, want exactly one warning", warnings)
+	}
+	if !strings.Contains(warnings[0], `"vim"`) {
+		t.Errorf("warning %q should mention the invalid value", warnings[0])
+	}
+	if !strings.Contains(warnings[0], "pager") || !strings.Contains(warnings[0], "modern") {
+		t.Errorf("warning %q should name valid options", warnings[0])
+	}
+}
+
+func TestLoad_MalformedTOML(t *testing.T) {
+	p := writeConfig(t, "dialect = =\n")
+	cfg, _, err := Load(p)
+	if err == nil {
+		t.Fatal("Load: want error for malformed TOML, got nil")
+	}
+	if cfg != Default() {
+		t.Errorf("cfg = %+v, want defaults on error", cfg)
+	}
+}
+
+func TestLoad_UnreadablePerm(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("root can read 0o000 files")
+	}
+	p := writeConfig(t, `dialect = "modern"`+"\n")
+	if err := os.Chmod(p, 0); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(p, 0o644) })
+
+	cfg, _, err := Load(p)
+	if err == nil {
+		t.Fatal("Load: want error for unreadable file, got nil")
+	}
+	if cfg != Default() {
+		t.Errorf("cfg = %+v, want defaults on error", cfg)
+	}
+}
