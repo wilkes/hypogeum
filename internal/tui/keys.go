@@ -2,8 +2,9 @@ package tui
 
 import "github.com/charmbracelet/bubbles/key"
 
-// keyMap collects every keybinding the model knows about. Centralizing them
-// makes the help cheat sheet trivial to render and the bindings easy to change.
+// keyMap collects every keybinding the model knows about. Centralizing
+// them makes the help cheat sheet trivial to render and dialects easy
+// to define as alternative factory functions.
 type keyMap struct {
 	Up      key.Binding
 	Down    key.Binding
@@ -30,9 +31,14 @@ type keyMap struct {
 	OpenSearch       key.Binding
 	SearchCursorDown key.Binding
 	SearchCursorUp   key.Binding
+
+	Top          key.Binding
+	Bottom       key.Binding
+	HalfPageDown key.Binding
+	HalfPageUp   key.Binding
 }
 
-func defaultKeys() keyMap {
+func pagerKeys() keyMap {
 	return keyMap{
 		Up:      key.NewBinding(key.WithKeys("up", "k"), key.WithHelp("↑/k", "up")),
 		Down:    key.NewBinding(key.WithKeys("down", "j"), key.WithHelp("↓/j", "down")),
@@ -59,5 +65,10 @@ func defaultKeys() keyMap {
 		OpenSearch:       key.NewBinding(key.WithKeys("ctrl+s"), key.WithHelp("^s", "search…")),
 		SearchCursorDown: key.NewBinding(key.WithKeys("ctrl+j"), key.WithHelp("^j", "search: next")),
 		SearchCursorUp:   key.NewBinding(key.WithKeys("ctrl+k"), key.WithHelp("^k", "search: prev")),
+
+		Top:          key.NewBinding(key.WithKeys("g"), key.WithHelp("g", "top")),
+		Bottom:       key.NewBinding(key.WithKeys("G"), key.WithHelp("G", "bottom")),
+		HalfPageDown: key.NewBinding(key.WithKeys("ctrl+d"), key.WithHelp("^d", "half-page down")),
+		HalfPageUp:   key.NewBinding(key.WithKeys("ctrl+u"), key.WithHelp("^u", "half-page up")),
 	}
 }

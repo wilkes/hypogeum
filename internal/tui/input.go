@@ -409,6 +409,18 @@ func (m *Model) handleContentKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.followCurrentLink()
 			return *m, nil
 		}
+	case key.Matches(msg, m.keys.Top):
+		m.content.viewport.GotoTop()
+		return *m, nil
+	case key.Matches(msg, m.keys.Bottom):
+		m.content.viewport.GotoBottom()
+		return *m, nil
+	case key.Matches(msg, m.keys.HalfPageDown):
+		m.content.viewport.HalfViewDown()
+		return *m, nil
+	case key.Matches(msg, m.keys.HalfPageUp):
+		m.content.viewport.HalfViewUp()
+		return *m, nil
 	}
 	var cmd tea.Cmd
 	m.content.viewport, cmd = m.content.viewport.Update(msg)

@@ -171,7 +171,7 @@ func New(root, initialFile string) (Model, error) {
 		rootNode:     rootNode,
 		history:      nav.New(),
 		focus:        focusContent,
-		keys:         defaultKeys(),
+		keys:         pagerKeys(),
 		vault:        v,
 		recent:       rstore,
 		diag:         diag,
