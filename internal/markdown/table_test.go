@@ -251,8 +251,14 @@ func TestRender_TableCellWithInlineCodeWikilinkHidesURL(t *testing.T) {
 	if err != nil {
 		t.Fatalf("RenderWithLinks: %v", err)
 	}
-	if strings.Contains(stripANSI(out), "/Users/wilkes") {
-		t.Fatalf("URL leaked into wrapped table cell:\n%s", stripANSI(out))
+	visible := stripANSI(out)
+	if strings.Contains(visible, "/Users/wilkes") {
+		t.Fatalf("URL leaked into wrapped table cell:\n%s", visible)
+	}
+	for _, want := range []string{"[[markdown]]", "[[link-following]]"} {
+		if !strings.Contains(visible, want) {
+			t.Fatalf("expected literal %q in cell, got:\n%s", want, visible)
+		}
 	}
 }
 

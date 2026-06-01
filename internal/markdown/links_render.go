@@ -109,7 +109,7 @@ var wikilinkRegex = regexp.MustCompile(`\[\[([^\]\n]+)\]\]`)
 // normal markdown. Fenced code blocks and inline-code backtick spans
 // are skipped so wikilink demos written as `[[Name]]` render verbatim.
 func (r *Renderer) preprocessWikilinks(src string) string {
-	if r.resolver == nil {
+	if r.resolver == nil || !strings.Contains(src, "[[") {
 		return src
 	}
 	replace := func(match string) string {
@@ -640,26 +640,34 @@ func inlineCodeSpans(src string) []codeSpanRange {
 			i++
 		}
 		openLen := i - openStart
-		// Search for a same-line run of openLen backticks. If found,
-		// record the span and advance i past the close. If not, i is
-		// already past the opening run so scanning resumes from there.
-		for j := i; j < len(src) && src[j] != '\n'; {
-			if src[j] != '`' {
-				j++
-				continue
-			}
-			closeStart := j
-			for j < len(src) && src[j] == '`' {
-				j++
-			}
-			if j-closeStart == openLen {
-				spans = append(spans, codeSpanRange{openStart, j})
-				i = j
-				break
-			}
+		if end, ok := findClosingRun(src, i, openLen); ok {
+			spans = append(spans, codeSpanRange{openStart, end})
+			i = end
 		}
 	}
 	return spans
+}
+
+// findClosingRun returns the byte index just past a run of exactly n
+// backticks in src starting from start, searching only up to the next
+// newline. Runs of a different length are skipped (they're content
+// inside the span). Returns ok=false if no matching run exists before
+// EOL.
+func findClosingRun(src string, start, n int) (int, bool) {
+	for j := start; j < len(src) && src[j] != '\n'; {
+		if src[j] != '`' {
+			j++
+			continue
+		}
+		closeStart := j
+		for j < len(src) && src[j] == '`' {
+			j++
+		}
+		if j-closeStart == n {
+			return j, true
+		}
+	}
+	return 0, false
 }
 
 // fenceSegment is a chunk of source paired with whether it lies inside
