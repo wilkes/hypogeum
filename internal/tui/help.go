@@ -25,9 +25,10 @@ func formatHelp(k keyMap) string {
 		rows  []key.Binding
 	}{
 		{"Navigation", []key.Binding{k.Back, k.Forward, k.Up, k.Down, k.Open, k.Quit}},
+		{"Scrolling", []key.Binding{k.HalfPageDown, k.HalfPageUp, k.Top, k.Bottom}},
 		{"Tree", []key.Binding{k.ToggleTree, k.ToggleFolder}},
 		{"Links", []key.Binding{k.NextLink, k.PrevLink}},
-		{"Modals", []key.Binding{k.OpenPicker, k.OpenBacklinksModal, k.OpenLogsModal, k.OpenHelpModal, k.ClearLink}},
+		{"Modals", []key.Binding{k.OpenPicker, k.OpenSearch, k.OpenBacklinksModal, k.OpenLogsModal, k.OpenHelpModal, k.ClearLink}},
 	}
 
 	titleStyle := lipgloss.NewStyle().Bold(true).Underline(true)

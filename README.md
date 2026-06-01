@@ -28,19 +28,21 @@ hypogeum ~/notes/index.md # open a specific file; tree roots at its directory
 
 ## Keys
 
+Pager dialect (default) — see [Configuration](#configuration) to switch to modern.
+
 | Key | Action |
 |-----|--------|
 | `↑` / `k`, `↓` / `j` | Move within the focused pane |
 | `Enter` | Open the selected file |
 | `h` / `←` | Back (collapse folder when tree modal is open) |
 | `l` / `→` | Forward (expand folder when tree modal is open) |
-| `n` / `p` | Cycle to next / previous link |
+| `n` / `N` | Cycle to next / previous link |
 | `Enter` | Follow selected link |
 | `Esc` | Clear link selection |
 | `b` | Open backlinks (modal) |
 | `^b` | Open directory tree (modal) |
 | `^p` | Open file finder (type to fuzzy-filter; `^j`/`^k` cursor) |
-| `^s` | Full-text search across vault markdown (type to search; `^j`/`^k` cursor) |
+| `/` | Full-text search across vault markdown (type to search; `^j`/`^k` cursor) |
 | `^l` | Log viewer |
 | `?` | Help (cheat sheet) |
 | `q` | Quit |

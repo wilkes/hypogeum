@@ -40,12 +40,18 @@ func TestHelpModalOpensOnQuestionMark(t *testing.T) {
 	// form a contiguous plain-text substring.
 	plainBody := ansi.Strip(body)
 	wantSubstrings := []string{
-		"Navigation", "Tree", "Links", "Modals", // section headers
+		"Navigation", "Scrolling", "Tree", "Links", "Modals", // section headers
 		"^l", "logs", // moved logs binding
 		"?", "help", // help itself
 		"^p", "open file", // picker
+		"/", "search", // search modal
 		"h/←", "back",
 		"esc", "clear link",
+		// scrolling group (pager defaults)
+		"^d", "half-page down",
+		"^u", "half-page up",
+		"top",
+		"bottom",
 	}
 	for _, s := range wantSubstrings {
 		if !strings.Contains(plainBody, s) {
