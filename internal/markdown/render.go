@@ -45,6 +45,10 @@ func NewRenderer(width int, opts ...Option) (*Renderer, error) {
 		glamour.WithWordWrap(width),
 		glamour.WithEmoji(),
 		glamour.WithStyles(hypogeumStyle(width)),
+		// Inline table links so Glamour doesn't emit a footer list of
+		// per-cell links; the footer breaks our sentinel-driven
+		// link-position recovery.
+		glamour.WithInlineTableLinks(true),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("init glamour: %w", err)
@@ -54,6 +58,7 @@ func NewRenderer(width int, opts ...Option) (*Renderer, error) {
 		glamour.WithWordWrap(width),
 		glamour.WithEmoji(),
 		glamour.WithStyles(linkInstrumentationStyles(width)),
+		glamour.WithInlineTableLinks(true),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("init instrumented glamour: %w", err)

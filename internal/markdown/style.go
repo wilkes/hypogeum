@@ -151,6 +151,17 @@ func applyHypogeumOverrides(cfg *ansi.StyleConfig, width int) {
 	// renderer) and the footer.
 	cfg.Link.BlockPrefix = string(urlSuppressStart) + cfg.Link.BlockPrefix
 	cfg.Link.BlockSuffix = cfg.Link.BlockSuffix + string(urlSuppressEnd)
+
+	// Table separators: pin to the U+2502 / U+2500 box-drawing glyphs
+	// regardless of theme. The URL-suppress cell-width preservation
+	// in this package detects table cells by matching these specific
+	// glyphs, so ASCII-fallback themes that ship `|` / `-` would
+	// render link-bearing tables with ragged right edges.
+	tableCol := "│"
+	tableRow := "─"
+	cfg.Table.CenterSeparator = &tableCol
+	cfg.Table.ColumnSeparator = &tableCol
+	cfg.Table.RowSeparator = &tableRow
 }
 
 // defaultStyleConfig mirrors Glamour's WithAutoStyle resolution: pick
