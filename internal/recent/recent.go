@@ -30,8 +30,10 @@ const (
 	visitHalfLifeHours = 48.0
 
 	// visitWeight scales the visit-history term relative to the mtime
-	// term. >1 means an equally-aged visit outranks an equally-aged edit.
-	visitWeight = 1.5
+	// term. <1 means an equally-aged edit outranks an equally-aged
+	// visit; visits still contribute positively, just at a reduced
+	// weight so they nudge ranking rather than dominate it.
+	visitWeight = 0.5
 )
 
 // score computes the exponential-decay hybrid score from mtime and visit times.
