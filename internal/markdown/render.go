@@ -45,10 +45,9 @@ func NewRenderer(width int, opts ...Option) (*Renderer, error) {
 		glamour.WithWordWrap(width),
 		glamour.WithEmoji(),
 		glamour.WithStyles(hypogeumStyle(width)),
-		// v0.10.0 added a "links at the bottom of each table" footer
-		// that's incompatible with our URL-hiding + sentinel-driven
-		// link-position recovery. Opt out: render links inline as we
-		// always have.
+		// Inline table links so Glamour doesn't emit a footer list of
+		// per-cell links; the footer breaks our sentinel-driven
+		// link-position recovery.
 		glamour.WithInlineTableLinks(true),
 	)
 	if err != nil {
