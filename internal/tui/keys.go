@@ -48,7 +48,7 @@ func pagerKeys() keyMap {
 		Quit:    key.NewBinding(key.WithKeys("q", "ctrl+c"), key.WithHelp("q", "quit")),
 
 		NextLink:  key.NewBinding(key.WithKeys("n"), key.WithHelp("n", "next link")),
-		PrevLink:  key.NewBinding(key.WithKeys("p"), key.WithHelp("p", "prev link")),
+		PrevLink:  key.NewBinding(key.WithKeys("N"), key.WithHelp("N", "prev link")),
 		ClearLink: key.NewBinding(key.WithKeys("esc"), key.WithHelp("esc", "clear link")),
 
 		OpenBacklinksModal: key.NewBinding(key.WithKeys("b"), key.WithHelp("b", "backlinks")),
