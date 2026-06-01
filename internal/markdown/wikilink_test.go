@@ -65,6 +65,54 @@ func TestRenderWithLinks_UnresolvedWikilinkIsBroken(t *testing.T) {
 	}
 }
 
+// TestRenderWithLinks_WikilinkInInlineCodeIsVerbatim guards the rule
+// that `[[Name]]` inside a single-backtick inline-code span renders
+// verbatim instead of being rewritten to a resolved markdown link.
+// Without the skip, the rewritten "[Name](/abs/...)" sits inside a
+// code span and Glamour faithfully prints the URL bytes — the leak
+// shows up most visibly inside wrapped table cells.
+func TestRenderWithLinks_WikilinkInInlineCodeIsVerbatim(t *testing.T) {
+	r, err := NewRenderer(80, WithResolver(fakeResolver{
+		answers: map[string]string{"Foo": "/abs/foo.md"},
+	}))
+	if err != nil {
+		t.Fatalf("NewRenderer: %v", err)
+	}
+	r.SetFromFile("/abs/source.md")
+
+	out, links, _, err := r.RenderWithLinks("see `[[Foo]]` above.", "/abs/source.md", nil)
+	if err != nil {
+		t.Fatalf("RenderWithLinks: %v", err)
+	}
+	visible := stripANSI(out)
+	if strings.Contains(visible, "/abs/foo.md") {
+		t.Fatalf("URL leaked through inline-code span: %q", visible)
+	}
+	if !strings.Contains(visible, "[[Foo]]") {
+		t.Fatalf("expected literal [[Foo]] in inline-code span, got: %q", visible)
+	}
+	if len(links) != 0 {
+		t.Fatalf("inline-code wikilinks must not produce Link entries, got %d", len(links))
+	}
+}
+
+// TestCountUnresolvedWikilinks_SkipsInlineCode mirrors the skip on the
+// broken-link tally: a wikilink the user wrote as code shouldn't count
+// against the document's broken-link score, even when the resolver
+// would otherwise fail to find it.
+func TestCountUnresolvedWikilinks_SkipsInlineCode(t *testing.T) {
+	r, err := NewRenderer(80, WithResolver(fakeResolver{}))
+	if err != nil {
+		t.Fatalf("NewRenderer: %v", err)
+	}
+	if got := r.CountUnresolvedWikilinks("see `[[Missing]]` above"); got != 0 {
+		t.Fatalf("CountUnresolvedWikilinks = %d, want 0", got)
+	}
+	if got := r.CountUnresolvedWikilinks("see [[Missing]] above"); got != 1 {
+		t.Fatalf("CountUnresolvedWikilinks = %d, want 1 (sanity check live form)", got)
+	}
+}
+
 func TestRenderWithLinks_AliasUsedAsDisplayText(t *testing.T) {
 	r, err := NewRenderer(80, WithResolver(fakeResolver{
 		answers: map[string]string{"Foo": "/abs/foo.md"},
