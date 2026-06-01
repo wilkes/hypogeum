@@ -47,9 +47,9 @@ func TestModel_GotoBottom_Pager(t *testing.T) {
 	root, initial := writeTallContentFixture(t)
 	m := sized(t, root, initial)
 	m = pressRune(t, m, 'G')
-	if got := m.content.viewport.YOffset; got != m.content.viewport.TotalLineCount()-m.content.viewport.Height && !m.content.viewport.AtBottom() {
+	if !m.content.viewport.AtBottom() {
 		t.Errorf("not at bottom: YOffset=%d, total=%d, height=%d",
-			got, m.content.viewport.TotalLineCount(), m.content.viewport.Height)
+			m.content.viewport.YOffset, m.content.viewport.TotalLineCount(), m.content.viewport.Height)
 	}
 }
 
@@ -60,9 +60,9 @@ func TestModel_HalfPageDown_Pager(t *testing.T) {
 	startOffset := m.content.viewport.YOffset
 	m = pressKey(t, m, tea.KeyMsg{Type: tea.KeyCtrlD})
 	delta := m.content.viewport.YOffset - startOffset
-	half := m.content.viewport.Height / 2
-	if delta < half-1 || delta > half+1 {
-		t.Errorf("^d advanced by %d lines, want ~%d (height/2)", delta, half)
+	want := m.content.viewport.Height / 2
+	if delta != want {
+		t.Errorf("^d advanced by %d lines, want %d (height/2)", delta, want)
 	}
 }
 
@@ -74,8 +74,8 @@ func TestModel_HalfPageUp_Pager(t *testing.T) {
 	startOffset := m.content.viewport.YOffset
 	m = pressKey(t, m, tea.KeyMsg{Type: tea.KeyCtrlU})
 	delta := startOffset - m.content.viewport.YOffset
-	half := m.content.viewport.Height / 2
-	if delta < half-1 || delta > half+1 {
-		t.Errorf("^u retreated by %d lines, want ~%d (height/2)", delta, half)
+	want := m.content.viewport.Height / 2
+	if delta != want {
+		t.Errorf("^u retreated by %d lines, want %d (height/2)", delta, want)
 	}
 }
