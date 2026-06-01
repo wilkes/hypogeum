@@ -42,6 +42,7 @@ Cross-cutting ideas that show up in multiple specs and packages. Each is its own
 - [Directory listing](superpowers/specs/2026-05-13-directory-listing-design.md) — shipped — directory link targets now render an in-pane listing (header + absolute path + bullet list of every non-hidden entry, dirs first with trailing `/`). Previously surfaced `Error: read /path: is a directory`. [Plan](superpowers/plans/2026-05-13-directory-listing.md).
 - [Multi-segment cursor for wrapped links](superpowers/specs/2026-05-13-multi-segment-cursor-design.md) — shipped — `stripSentinels` closes/reopens the reverse-video marker on every wrapped row so the link cursor stays visible across the whole link. [Plan](superpowers/plans/2026-05-13-multi-segment-cursor.md).
 - [Full-text search](superpowers/specs/2026-05-14-full-text-search-design.md) — shipped — `^s` opens a modal that scans every vault markdown file for the query, renders hits as `path:line` + highlighted snippet, recency-ranks the result list, and on `Enter` opens the file scrolled to the matched line. [Plan](superpowers/plans/2026-05-14-full-text-search.md).
+- [Keybinding dialects](superpowers/specs/2026-05-31-keybinding-dialects-design.md) — two coherent presets: pager (default, vim/less idioms) and modern (VS Code/browser idioms), selected via a TOML config file at the OS-canonical user-config path.
 
 ## Conventions for adding to this folder
 
