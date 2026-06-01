@@ -106,8 +106,8 @@ var wikilinkRegex = regexp.MustCompile(`\[\[([^\]\n]+)\]\]`)
 // preprocessWikilinks rewrites [[...]] occurrences in src into either
 // standard markdown links (resolved) or styled placeholder text
 // (unresolved). The resulting string is then handed to Glamour as
-// normal markdown. Fenced code blocks are skipped (same scanner as
-// preprocessEmbeds) so wikilink demos inside fences render verbatim.
+// normal markdown. Fenced code blocks and inline-code backtick spans
+// are skipped so wikilink demos written as `[[Name]]` render verbatim.
 func (r *Renderer) preprocessWikilinks(src string) string {
 	if r.resolver == nil {
 		return src
@@ -142,7 +142,7 @@ func (r *Renderer) preprocessWikilinks(src string) string {
 			b.WriteString(seg.text)
 			continue
 		}
-		b.WriteString(wikilinkRegex.ReplaceAllStringFunc(seg.text, replace))
+		b.WriteString(replaceOutsideInlineCode(seg.text, wikilinkRegex, replace))
 	}
 	return b.String()
 }
@@ -179,7 +179,7 @@ func (r *Renderer) CountUnresolvedWikilinks(src string) int {
 		if seg.isFence {
 			continue
 		}
-		wikilinkRegex.ReplaceAllStringFunc(seg.text, check)
+		replaceOutsideInlineCode(seg.text, wikilinkRegex, check)
 	}
 	return count
 }
@@ -571,7 +571,7 @@ func (r *Renderer) preprocessEmbeds(src, base string) (string, []string, []Link)
 			b.WriteString(seg.text)
 			continue
 		}
-		b.WriteString(embedTokenRegex.ReplaceAllStringFunc(seg.text, replace))
+		b.WriteString(replaceOutsideInlineCode(seg.text, embedTokenRegex, replace))
 	}
 	out := b.String()
 	return out, deps, links
@@ -581,6 +581,85 @@ func (r *Renderer) preprocessEmbeds(src, base string) (string, []string, []Link)
 // Glamour will style faintly, preserving the surrounding document flow.
 func warningBlock(path, reason string) string {
 	return "> ⚠ `" + path + "`: " + reason + "\n"
+}
+
+// replaceOutsideInlineCode applies pattern.ReplaceAllStringFunc(src, replace)
+// to every region of src that is NOT inside an inline backtick code span.
+// Code spans pass through verbatim so wikilink/embed demos written as
+// `[[Name]]` or `![[file]]` render as code instead of being rewritten.
+//
+// Multi-line spans are out of scope: the wikilink and embed regexes both
+// require their tokens on a single line, and our docs don't use
+// multi-line backtick spans containing wikilink syntax. inlineCodeSpans
+// only matches closing runs on the same line as the opener.
+func replaceOutsideInlineCode(src string, pattern *regexp.Regexp, replace func(string) string) string {
+	spans := inlineCodeSpans(src)
+	if len(spans) == 0 {
+		return pattern.ReplaceAllStringFunc(src, replace)
+	}
+	var b strings.Builder
+	b.Grow(len(src))
+	pos := 0
+	for _, sp := range spans {
+		if pos < sp.start {
+			b.WriteString(pattern.ReplaceAllStringFunc(src[pos:sp.start], replace))
+		}
+		b.WriteString(src[sp.start:sp.end])
+		pos = sp.end
+	}
+	if pos < len(src) {
+		b.WriteString(pattern.ReplaceAllStringFunc(src[pos:], replace))
+	}
+	return b.String()
+}
+
+// codeSpanRange is the byte half-open range [start, end) of one inline
+// code span in the source.
+type codeSpanRange struct {
+	start, end int
+}
+
+// inlineCodeSpans returns the byte ranges of every inline backtick code
+// span in src. CommonMark's rule applies: a span opens with a run of N
+// backticks and closes at the first matching run of N backticks before
+// the next newline. Unclosed runs are treated as literal text. Backtick
+// runs that appear after an already-matched span are scanned fresh.
+func inlineCodeSpans(src string) []codeSpanRange {
+	if !strings.ContainsRune(src, '`') {
+		return nil
+	}
+	var spans []codeSpanRange
+	i := 0
+	for i < len(src) {
+		if src[i] != '`' {
+			i++
+			continue
+		}
+		openStart := i
+		for i < len(src) && src[i] == '`' {
+			i++
+		}
+		openLen := i - openStart
+		// Search for a same-line run of openLen backticks. If found,
+		// record the span and advance i past the close. If not, i is
+		// already past the opening run so scanning resumes from there.
+		for j := i; j < len(src) && src[j] != '\n'; {
+			if src[j] != '`' {
+				j++
+				continue
+			}
+			closeStart := j
+			for j < len(src) && src[j] == '`' {
+				j++
+			}
+			if j-closeStart == openLen {
+				spans = append(spans, codeSpanRange{openStart, j})
+				i = j
+				break
+			}
+		}
+	}
+	return spans
 }
 
 // fenceSegment is a chunk of source paired with whether it lies inside

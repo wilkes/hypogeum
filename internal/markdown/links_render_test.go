@@ -388,3 +388,57 @@ func TestCountUnresolvedWikilinks(t *testing.T) {
 	}
 }
 
+func TestInlineCodeSpans(t *testing.T) {
+	cases := []struct {
+		name string
+		in   string
+		want []codeSpanRange
+	}{
+		{"empty", "", nil},
+		{"no backticks", "plain text", nil},
+		{"single span", "see `code` here", []codeSpanRange{{4, 10}}},
+		{"two spans", "`one` and `two`", []codeSpanRange{{0, 5}, {10, 15}}},
+		{"unclosed", "open `but no close", nil},
+		{"double backticks", "see ``a `b` c`` here", []codeSpanRange{{4, 15}}},
+		{"shorter opener gobbles longer inner runs", "`one ``two`` three`", []codeSpanRange{{0, 19}}},
+		{"close on next line is ignored", "open `still\nopen` later", nil},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			got := inlineCodeSpans(c.in)
+			if len(got) != len(c.want) {
+				t.Fatalf("inlineCodeSpans(%q) = %v, want %v", c.in, got, c.want)
+			}
+			for i, g := range got {
+				if g != c.want[i] {
+					t.Errorf("[%d] = %+v, want %+v", i, g, c.want[i])
+				}
+			}
+		})
+	}
+}
+
+func TestReplaceOutsideInlineCode(t *testing.T) {
+	// Stand-in pattern that uppercases [[X]] tokens — the wikilink path
+	// has its own end-to-end coverage; this test just pins the
+	// outside-code splitter.
+	pat := wikilinkRegex
+	upper := func(m string) string { return strings.ToUpper(m) }
+
+	cases := []struct {
+		name, in, want string
+	}{
+		{"no backticks", "see [[foo]] and [[bar]]", "see [[FOO]] and [[BAR]]"},
+		{"inside backticks skipped", "see `[[foo]]` and [[bar]]", "see `[[foo]]` and [[BAR]]"},
+		{"unclosed run does not protect", "see `[[foo]] still open", "see `[[FOO]] still open"},
+		{"adjacent live+code", "[[a]]`[[b]]`[[c]]", "[[A]]`[[b]]`[[C]]"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			if got := replaceOutsideInlineCode(c.in, pat, upper); got != c.want {
+				t.Errorf("got %q, want %q", got, c.want)
+			}
+		})
+	}
+}
+

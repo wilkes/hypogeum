@@ -226,6 +226,36 @@ func TestRender_TableWithWikilinkAligns(t *testing.T) {
 	assertEqualWidths(t, out)
 }
 
+// TestRender_TableCellWithInlineCodeWikilinkHidesURL is the table-cell
+// shape of TestRenderWithLinks_WikilinkInInlineCodeIsVerbatim: a cell
+// whose content is a comma-separated list of `[[Name]]` tokens (the
+// docs-concept-extraction table pattern) used to leak full absolute
+// paths into the rendered cell once Glamour ≥0.10.0 started wrapping
+// long cells across rows.
+func TestRender_TableCellWithInlineCodeWikilinkHidesURL(t *testing.T) {
+	r, err := NewRenderer(80, WithResolver(fakeResolver{
+		answers: map[string]string{
+			"markdown":       "/Users/wilkes/Projects/wilkes/hypogeum/docs/packages/markdown.md",
+			"link-following": "/Users/wilkes/Projects/wilkes/hypogeum/docs/link-following.md",
+		},
+	}))
+	if err != nil {
+		t.Fatalf("NewRenderer: %v", err)
+	}
+	r.SetFromFile("/abs/source.md")
+	src := "" +
+		"| Concept | Referrers |\n" +
+		"| ------- | --------- |\n" +
+		"| `sentinel-render.md` | `[[markdown]]`, `[[link-following]]` |\n"
+	out, _, _, err := r.RenderWithLinks(src, "/abs/source.md", nil)
+	if err != nil {
+		t.Fatalf("RenderWithLinks: %v", err)
+	}
+	if strings.Contains(stripANSI(out), "/Users/wilkes") {
+		t.Fatalf("URL leaked into wrapped table cell:\n%s", stripANSI(out))
+	}
+}
+
 // TestIsPaddingContextAfter checks the discriminator that decides
 // preserve-width vs strip-cleanly. The cases mirror the three real-world
 // shapes we observed from Glamour: prose mid-sentence, prose EOL, and
