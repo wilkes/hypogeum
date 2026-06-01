@@ -1,5 +1,7 @@
 # Finder mtime weighting
 
+**Status:** shipped on 2026-06-01 (PR #43).
+
 Rebalance the `^p` finder's recency score so a recently *modified* file outranks a recently *visited* file at equal age. One-constant tweak in `internal/recent/recent.go`; no API change, no migration.
 
 ## Background

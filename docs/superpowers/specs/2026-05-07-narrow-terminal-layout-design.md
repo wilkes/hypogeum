@@ -1,6 +1,6 @@
 # Narrow-terminal layout — design
 
-**Status:** spec — not yet implemented.
+**Status:** superseded — the two-pane layout this targeted was replaced by a tree modal on 2026-05-13 (PR #23). The modal clamps to a percentage of terminal size rather than gating on width, so the narrow-terminal threshold no longer exists.
 **Scope:** make the two-pane layout degrade gracefully on terminals narrower than 80 columns. Below the threshold, the tree pane auto-hides and the content pane gets the full width.
 **Out of scope:** modal floor of 40 cells (cosmetic only at this size); footer help wrapping (pre-existing on any sub-100-col terminal); backlinks pane height handling (already correct via `backlinksMinTotalHeight`).
 

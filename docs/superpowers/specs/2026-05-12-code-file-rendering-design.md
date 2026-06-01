@@ -2,7 +2,7 @@
 
 ## Status
 
-Approved 2026-05-12. Implementation plan pending.
+Shipped on 2026-05-13 (PR #29).
 
 ## Problem
 

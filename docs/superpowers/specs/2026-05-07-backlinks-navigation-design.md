@@ -1,6 +1,6 @@
 # Backlinks navigation — design
 
-**Status:** spec — not yet implemented.
+**Status:** shipped on 2026-05-13 — cursor, `Enter`-to-follow, scroll-to-reference, and back-restores-cursor are all live on top of the backlinks modal.
 **Scope:** make the existing backlinks surfaces (persistent pane via `b`, modal via `B`) interactive — cursor, follow, return.
 **Out of scope:** block reference (`^block-id`) position resolution, pre-selecting the matching inline link in the rendered source, broken-links tally view. These belong to the parent spec's Phase 2.
 

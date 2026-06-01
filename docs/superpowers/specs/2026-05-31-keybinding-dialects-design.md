@@ -1,5 +1,7 @@
 # Keybinding dialects
 
+**Status:** shipped on 2026-06-01 (PR #44).
+
 Two coherent keybinding presets — **pager** (default, vim/less idioms) and **modern** (VS Code/browser idioms) — selectable via a forward-growable TOML config file. No per-binding overrides in v1.
 
 ## Background

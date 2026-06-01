@@ -1,5 +1,7 @@
 # Source embeds — follow-up fixes
 
+**Status:** shipped on 2026-05-13 (PR #32).
+
 Four narrow follow-ups to [source-embeds](2026-05-13-source-embeds-design.md), surfaced by post-merge review of PR #30. None are blockers; all are confirmed real bugs or invariant gaps that the test suite doesn't catch.
 
 ## Motivation
