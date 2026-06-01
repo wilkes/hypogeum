@@ -94,8 +94,7 @@ type Model struct {
 	openExternal externalOpener
 }
 
-// Options bundles construction-time settings. Carries forward-growable
-// configuration without ballooning the New signature.
+// Options bundles construction-time settings for New.
 type Options struct {
 	// Dialect selects the keymap factory. Empty or unknown values
 	// fall back to "pager".

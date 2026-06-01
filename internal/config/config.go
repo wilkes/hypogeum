@@ -15,19 +15,27 @@ import (
 	"github.com/BurntSushi/toml"
 )
 
-// validDialects is the single source of truth for recognized
-// dialect values. Add new dialects here; Load's validation and
-// warning message both read from this slice.
-var validDialects = []string{"pager", "modern"}
+// Recognized dialect values. Exported so other packages (tui's keysFor
+// switch, test fixtures) can reference them by name instead of repeating
+// the literal strings, which otherwise drift apart silently.
+const (
+	DialectPager  = "pager"
+	DialectModern = "modern"
+)
+
+// validDialects is the single source of truth for the recognized set.
+// Add new dialects here; Load's validation and warning message both
+// read from this slice.
+var validDialects = []string{DialectPager, DialectModern}
 
 // Config is the parsed user config.
 type Config struct {
-	Dialect string // "pager" (default) | "modern"
+	Dialect string // DialectPager (default) | DialectModern
 }
 
 // Default returns the zero-config defaults.
 func Default() Config {
-	return Config{Dialect: "pager"}
+	return Config{Dialect: DialectPager}
 }
 
 // DefaultPath returns the per-OS expected config location, using

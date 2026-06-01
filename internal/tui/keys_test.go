@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 
@@ -204,13 +205,13 @@ func TestNew_OptionsSelectsDialect(t *testing.T) {
 		t.Fatalf("New default: %v", err)
 	}
 
-	if got := pager.keys.Back.Keys(); !contains(got, "h") {
+	if got := pager.keys.Back.Keys(); !slices.Contains(got, "h") {
 		t.Errorf("pager.keys.Back = %v, want to include %q", got, "h")
 	}
-	if got := modern.keys.Back.Keys(); !contains(got, "alt+left") {
+	if got := modern.keys.Back.Keys(); !slices.Contains(got, "alt+left") {
 		t.Errorf("modern.keys.Back = %v, want to include %q", got, "alt+left")
 	}
-	if got := def.keys.Back.Keys(); !contains(got, "h") {
+	if got := def.keys.Back.Keys(); !slices.Contains(got, "h") {
 		t.Errorf("default opts.keys.Back = %v, want pager default %q", got, "h")
 	}
 }
@@ -240,15 +241,6 @@ func TestNew_OptionsSurfacesStartupWarnings(t *testing.T) {
 	if !found {
 		t.Errorf("startup warning not in diag ring; entries=%+v", entries)
 	}
-}
-
-func contains(haystack []string, needle string) bool {
-	for _, h := range haystack {
-		if h == needle {
-			return true
-		}
-	}
-	return false
 }
 
 // isAllowedKeyOverlap whitelists context-multiplexed bindings: the same

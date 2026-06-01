@@ -1,10 +1,13 @@
 package tui
 
-import "github.com/charmbracelet/bubbles/key"
+import (
+	"github.com/charmbracelet/bubbles/key"
 
-// keyMap collects every keybinding the model knows about. Centralizing
-// them makes the help cheat sheet trivial to render and dialects easy
-// to define as alternative factory functions.
+	"github.com/wilkes/hypogeum/internal/config"
+)
+
+// keyMap collects every keybinding the model knows about, so the help
+// cheat sheet and the dialect factories share one source.
 type keyMap struct {
 	Up      key.Binding
 	Down    key.Binding
@@ -112,7 +115,7 @@ func modernKeys() keyMap {
 // fallback, so the binary stays usable even if a config slipped through.
 func keysFor(dialect string) keyMap {
 	switch dialect {
-	case "modern":
+	case config.DialectModern:
 		return modernKeys()
 	default:
 		return pagerKeys()
