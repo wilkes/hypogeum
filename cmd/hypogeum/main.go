@@ -41,7 +41,7 @@ func run(args []string) error {
 		return err
 	}
 
-	model, err := tui.New(root, initialFile)
+	model, err := tui.New(root, initialFile, tui.Options{})
 	if err != nil {
 		return err
 	}

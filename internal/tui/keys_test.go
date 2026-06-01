@@ -187,6 +187,70 @@ func TestKeys_NoOverlappingActions(t *testing.T) {
 	}
 }
 
+func TestNew_OptionsSelectsDialect(t *testing.T) {
+	root := writeFixture(t)
+	isolatedHome(t)
+
+	pager, err := New(root, "", Options{Dialect: "pager"})
+	if err != nil {
+		t.Fatalf("New pager: %v", err)
+	}
+	modern, err := New(root, "", Options{Dialect: "modern"})
+	if err != nil {
+		t.Fatalf("New modern: %v", err)
+	}
+	def, err := New(root, "", Options{})
+	if err != nil {
+		t.Fatalf("New default: %v", err)
+	}
+
+	if got := pager.keys.Back.Keys(); !contains(got, "h") {
+		t.Errorf("pager.keys.Back = %v, want to include %q", got, "h")
+	}
+	if got := modern.keys.Back.Keys(); !contains(got, "alt+left") {
+		t.Errorf("modern.keys.Back = %v, want to include %q", got, "alt+left")
+	}
+	if got := def.keys.Back.Keys(); !contains(got, "h") {
+		t.Errorf("default opts.keys.Back = %v, want pager default %q", got, "h")
+	}
+}
+
+func TestNew_OptionsSurfacesStartupWarnings(t *testing.T) {
+	root := writeFixture(t)
+	isolatedHome(t)
+
+	m, err := New(root, "", Options{
+		Dialect:         "pager",
+		StartupWarnings: []string{"config: unknown dialect \"vim\""},
+	})
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	entries := m.diag.snapshot()
+	if len(entries) == 0 {
+		t.Fatal("diagnostics ring is empty; want startup warning")
+	}
+	found := false
+	for _, e := range entries {
+		if strings.Contains(e.Message, `unknown dialect "vim"`) {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Errorf("startup warning not in diag ring; entries=%+v", entries)
+	}
+}
+
+func contains(haystack []string, needle string) bool {
+	for _, h := range haystack {
+		if h == needle {
+			return true
+		}
+	}
+	return false
+}
+
 // isAllowedKeyOverlap whitelists context-multiplexed bindings: the same
 // physical key drives different actions in mutually exclusive modal
 // states. Picker and search modals can't be open simultaneously (the

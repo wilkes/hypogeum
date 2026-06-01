@@ -26,7 +26,7 @@ func TestRefreshContent_CodeFile_DispatchesToCodeRenderer(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	m, err := New(dir, "")
+	m, err := New(dir, "", Options{})
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
@@ -77,7 +77,7 @@ func TestRefreshContent_DirectoryPath_RendersListing(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	m, err := New(dir, "")
+	m, err := New(dir, "", Options{})
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
@@ -114,7 +114,7 @@ func TestRefreshContent_CodeFileReadError_ClearsLinksAndReportsStatus(t *testing
 		t.Fatal(err)
 	}
 
-	m, err := New(dir, "")
+	m, err := New(dir, "", Options{})
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
@@ -150,7 +150,7 @@ func TestRefreshContent_MarkdownHonorsRangeHighlight(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	m, err := New(dir, "")
+	m, err := New(dir, "", Options{})
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
@@ -179,7 +179,7 @@ func TestRefreshContent_BrokenCount(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	m, err := New(dir, "")
+	m, err := New(dir, "", Options{})
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}

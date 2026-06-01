@@ -19,7 +19,7 @@ func pressQuestion() tea.KeyMsg {
 func TestHelpModalOpensOnQuestionMark(t *testing.T) {
 	isolatedHome(t)
 	dir := t.TempDir()
-	m, _ := New(dir, "")
+	m, _ := New(dir, "", Options{})
 	mm, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 40})
 	m = mm.(Model)
 
@@ -59,7 +59,7 @@ func TestHelpModalOpensOnQuestionMark(t *testing.T) {
 func TestHelpModalEscCloses(t *testing.T) {
 	isolatedHome(t)
 	dir := t.TempDir()
-	m, _ := New(dir, "")
+	m, _ := New(dir, "", Options{})
 	mm, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 40})
 	m = mm.(Model)
 
@@ -164,7 +164,7 @@ func TestFooterAdvertisesHelp(t *testing.T) {
 func TestHelpModalTogglesClosed(t *testing.T) {
 	isolatedHome(t)
 	dir := t.TempDir()
-	m, _ := New(dir, "")
+	m, _ := New(dir, "", Options{})
 	mm, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 40})
 	m = mm.(Model)
 

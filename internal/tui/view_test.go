@@ -10,7 +10,7 @@ import (
 func TestRenderFooter_AppendsBrokenSuffixWhenNonZero(t *testing.T) {
 	isolatedHome(t)
 	dir := t.TempDir()
-	m, _ := New(dir, "")
+	m, _ := New(dir, "", Options{})
 	mm, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 40})
 	m = mm.(Model)
 
@@ -27,7 +27,7 @@ func TestRenderFooter_AppendsBrokenSuffixWhenNonZero(t *testing.T) {
 func TestRenderFooter_NoSuffixWhenZero(t *testing.T) {
 	isolatedHome(t)
 	dir := t.TempDir()
-	m, _ := New(dir, "")
+	m, _ := New(dir, "", Options{})
 	mm, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 40})
 	m = mm.(Model)
 
@@ -41,7 +41,7 @@ func TestRenderFooter_NoSuffixWhenZero(t *testing.T) {
 func TestRenderFooter_SuffixSuppressedDuringTransient(t *testing.T) {
 	isolatedHome(t)
 	dir := t.TempDir()
-	m, _ := New(dir, "")
+	m, _ := New(dir, "", Options{})
 	mm, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 40})
 	m = mm.(Model)
 

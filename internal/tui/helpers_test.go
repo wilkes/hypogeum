@@ -75,7 +75,22 @@ func isolatedHome(t *testing.T) {
 func sized(t *testing.T, root, initialFile string) Model {
 	t.Helper()
 	isolatedHome(t)
-	m, err := New(root, initialFile)
+	m, err := New(root, initialFile, Options{})
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	updated, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+	m = updated.(Model)
+	renderAndScan(t, m, zoneContentPane)
+	return m
+}
+
+// sizedWithOptions is the dialect-aware variant of sized, used by tests
+// that need to exercise modern bindings.
+func sizedWithOptions(t *testing.T, root, initialFile string, opts Options) Model {
+	t.Helper()
+	isolatedHome(t)
+	m, err := New(root, initialFile, opts)
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}

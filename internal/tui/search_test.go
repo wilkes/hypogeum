@@ -75,7 +75,7 @@ func TestSearch_HitsRenderAsPathPlusSnippet(t *testing.T) {
 	if err := os.WriteFile(p, []byte("line one\nline with foo here\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	m, err := New(dir, "")
+	m, err := New(dir, "", Options{})
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
@@ -102,7 +102,7 @@ func TestSearch_HitsRenderAsPathPlusSnippet(t *testing.T) {
 
 func TestSearch_CursorDownAndUp(t *testing.T) {
 	dir := t.TempDir()
-	m, err := New(dir, "")
+	m, err := New(dir, "", Options{})
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
@@ -135,7 +135,7 @@ func TestSearch_CursorDownAndUp(t *testing.T) {
 
 func TestSearch_EscClearsQueryThenCloses(t *testing.T) {
 	dir := t.TempDir()
-	m, err := New(dir, "")
+	m, err := New(dir, "", Options{})
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
@@ -168,7 +168,7 @@ func TestSearch_EnterNavigatesAndScrolls(t *testing.T) {
 	if err := os.WriteFile(p, []byte(sb.String()), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	m, err := New(dir, "")
+	m, err := New(dir, "", Options{})
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
@@ -204,7 +204,7 @@ func TestSearch_RecencyRerank(t *testing.T) {
 	if err := os.WriteFile(b, []byte("bravo needle\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	m, err := New(dir, "")
+	m, err := New(dir, "", Options{})
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
@@ -326,7 +326,7 @@ func TestSearch_PromptStaysSingleRow(t *testing.T) {
 
 func newTestModelAtSize(t *testing.T, dir, initial string, w, h int) Model {
 	t.Helper()
-	m, err := New(dir, initial)
+	m, err := New(dir, initial, Options{})
 	if err != nil {
 		t.Fatal(err)
 	}

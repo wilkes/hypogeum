@@ -145,7 +145,7 @@ func TestOpenFileRecordsVisit(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	m, err := New(dir, initFile)
+	m, err := New(dir, initFile, Options{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -197,7 +197,7 @@ func TestSearch_EndToEnd(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	m, err := New(dir, "")
+	m, err := New(dir, "", Options{})
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
