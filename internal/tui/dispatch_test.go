@@ -204,8 +204,8 @@ func TestSearch_EndToEnd(t *testing.T) {
 	updated, _ := m.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
 	m = updated.(Model)
 
-	// ^s opens the modal
-	updated, _ = m.handleKey(tea.KeyMsg{Type: tea.KeyCtrlS})
+	// / opens the modal
+	updated, _ = m.handleKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'/'}})
 	mm := updated.(Model)
 	if mm.modals.kind != modalSearch {
 		t.Fatalf("modal not opened, kind = %v", mm.modals.kind)

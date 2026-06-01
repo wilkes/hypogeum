@@ -62,7 +62,7 @@ func pagerKeys() keyMap {
 		PickerCursorDown: key.NewBinding(key.WithKeys("ctrl+j"), key.WithHelp("^j", "picker: next")),
 		PickerCursorUp:   key.NewBinding(key.WithKeys("ctrl+k"), key.WithHelp("^k", "picker: prev")),
 
-		OpenSearch:       key.NewBinding(key.WithKeys("ctrl+s"), key.WithHelp("^s", "search…")),
+		OpenSearch:       key.NewBinding(key.WithKeys("/"), key.WithHelp("/", "search…")),
 		SearchCursorDown: key.NewBinding(key.WithKeys("ctrl+j"), key.WithHelp("^j", "search: next")),
 		SearchCursorUp:   key.NewBinding(key.WithKeys("ctrl+k"), key.WithHelp("^k", "search: prev")),
 

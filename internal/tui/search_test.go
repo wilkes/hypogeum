@@ -13,12 +13,12 @@ import (
 	"github.com/wilkes/hypogeum/internal/search"
 )
 
-// minimal smoke test that ^s opens the modal. Fuller behavior covered in later tasks.
-func TestSearch_CtrlSOpensModal(t *testing.T) {
+// minimal smoke test that / opens the modal. Fuller behavior covered in later tasks.
+func TestSearch_SlashOpensModal(t *testing.T) {
 	dir := t.TempDir()
 	writePickerFile(t, filepath.Join(dir, "a.md"), "# A\n")
 	m := sized(t, dir, "")
-	m = pressKey(t, m, tea.KeyMsg{Type: tea.KeyCtrlS})
+	m = pressRune(t, m, '/')
 	if m.modals.kind != modalSearch {
 		t.Errorf("modals.kind = %v, want modalSearch", m.modals.kind)
 	}
@@ -29,7 +29,7 @@ func TestSearch_TypingShortQueryDoesNotFire(t *testing.T) {
 	writePickerFile(t, filepath.Join(dir, "a.md"), "# A\nfoobar\n")
 	m := sized(t, dir, "")
 	// Open the search modal.
-	m = pressKey(t, m, tea.KeyMsg{Type: tea.KeyCtrlS})
+	m = pressRune(t, m, '/')
 	if m.modals.kind != modalSearch {
 		t.Fatalf("expected modalSearch, got %v", m.modals.kind)
 	}
@@ -52,7 +52,7 @@ func TestSearch_TypingTwoCharsSchedulesTick(t *testing.T) {
 	writePickerFile(t, filepath.Join(dir, "a.md"), "# A\nfoobar\n")
 	m := sized(t, dir, "")
 	// Open the search modal.
-	m = pressKey(t, m, tea.KeyMsg{Type: tea.KeyCtrlS})
+	m = pressRune(t, m, '/')
 	if m.modals.kind != modalSearch {
 		t.Fatalf("expected modalSearch, got %v", m.modals.kind)
 	}
@@ -236,7 +236,7 @@ func TestSearch_InitialOpenShowsEmptyQueryHint(t *testing.T) {
 	dir := t.TempDir()
 	writePickerFile(t, filepath.Join(dir, "a.md"), "# A\n")
 	m := sized(t, dir, "")
-	m = pressKey(t, m, tea.KeyMsg{Type: tea.KeyCtrlS})
+	m = pressRune(t, m, '/')
 	body := m.searchView()
 	if strings.Contains(body, "no markdown files in vault") {
 		t.Errorf("first open showed (no markdown files in vault) despite paths being populated:\n%s", body)
@@ -254,7 +254,7 @@ func TestSearch_BackspaceEditsQuery(t *testing.T) {
 	dir := t.TempDir()
 	writePickerFile(t, filepath.Join(dir, "a.md"), "# A\nfoobar\n")
 	m := sized(t, dir, "")
-	m = pressKey(t, m, tea.KeyMsg{Type: tea.KeyCtrlS})
+	m = pressRune(t, m, '/')
 	m = pressKey(t, m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("fool")})
 	if got := m.modals.search.input.Value(); got != "fool" {
 		t.Fatalf("setup: input=%q want %q", got, "fool")
@@ -281,7 +281,7 @@ func TestSearch_PromptFitsModalInterior(t *testing.T) {
 	}
 	for _, c := range cases {
 		m := newTestModelAtSize(t, dir, "", c.w, c.h)
-		m = pressKey(t, m, tea.KeyMsg{Type: tea.KeyCtrlS})
+		m = pressRune(t, m, '/')
 		m = pressKey(t, m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("xxxxxxxx")})
 		_, _, mw, _ := modalGeometry(c.w, c.h)
 		interior := mw - 2
@@ -308,7 +308,7 @@ func TestSearch_PromptStaysSingleRow(t *testing.T) {
 		strings.Repeat("y", 200)}
 	for _, q := range queries {
 		m := newTestModelAtSize(t, dir, "", 100, 30)
-		m = pressKey(t, m, tea.KeyMsg{Type: tea.KeyCtrlS})
+		m = pressRune(t, m, '/')
 		m = pressKey(t, m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(q)})
 		body := m.searchView()
 		lines := strings.Split(body, "\n")
@@ -362,7 +362,7 @@ func TestSearch_QueryChangeClearsStaleHits(t *testing.T) {
 	p := filepath.Join(dir, "a.md")
 	writePickerFile(t, p, "# A\nfoobar\n")
 	m := sized(t, dir, "")
-	m = pressKey(t, m, tea.KeyMsg{Type: tea.KeyCtrlS})
+	m = pressRune(t, m, '/')
 	m = pressKey(t, m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("fo")})
 	// Inject a result for "fo".
 	updated, _ := m.Update(searchResultsMsg{
