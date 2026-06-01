@@ -4,6 +4,7 @@
 package config
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"os"
@@ -66,7 +67,7 @@ func Load(path string) (Config, []string, error) {
 	var parsed struct {
 		Dialect string `toml:"dialect"`
 	}
-	if _, err := toml.Decode(string(raw), &parsed); err != nil {
+	if _, err := toml.NewDecoder(bytes.NewReader(raw)).Decode(&parsed); err != nil {
 		return Default(), nil, fmt.Errorf("parse %s: %w", path, err)
 	}
 

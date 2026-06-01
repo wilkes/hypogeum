@@ -54,44 +54,29 @@ func TestLoad_Missing(t *testing.T) {
 	}
 }
 
-func TestLoad_DefaultDialect(t *testing.T) {
-	p := writeConfig(t, "")
-	cfg, warnings, err := Load(p)
-	if err != nil {
-		t.Fatalf("Load: %v", err)
+func TestLoad_HappyPath(t *testing.T) {
+	cases := []struct {
+		name        string
+		body        string
+		wantDialect string
+	}{
+		{"empty file uses default", "", "pager"},
+		{"explicit pager", `dialect = "pager"` + "\n", "pager"},
+		{"explicit modern", `dialect = "modern"` + "\n", "modern"},
 	}
-	if len(warnings) != 0 {
-		t.Errorf("warnings = %v, want none", warnings)
-	}
-	if cfg.Dialect != "pager" {
-		t.Errorf("cfg.Dialect = %q, want %q", cfg.Dialect, "pager")
-	}
-}
-
-func TestLoad_ValidPager(t *testing.T) {
-	p := writeConfig(t, `dialect = "pager"`+"\n")
-	cfg, warnings, err := Load(p)
-	if err != nil {
-		t.Fatalf("Load: %v", err)
-	}
-	if len(warnings) != 0 {
-		t.Errorf("warnings = %v, want none", warnings)
-	}
-	if cfg.Dialect != "pager" {
-		t.Errorf("cfg.Dialect = %q, want %q", cfg.Dialect, "pager")
-	}
-}
-
-func TestLoad_ValidModern(t *testing.T) {
-	p := writeConfig(t, `dialect = "modern"`+"\n")
-	cfg, warnings, err := Load(p)
-	if err != nil {
-		t.Fatalf("Load: %v", err)
-	}
-	if len(warnings) != 0 {
-		t.Errorf("warnings = %v, want none", warnings)
-	}
-	if cfg.Dialect != "modern" {
-		t.Errorf("cfg.Dialect = %q, want %q", cfg.Dialect, "modern")
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			p := writeConfig(t, tc.body)
+			cfg, warnings, err := Load(p)
+			if err != nil {
+				t.Fatalf("Load: %v", err)
+			}
+			if len(warnings) != 0 {
+				t.Errorf("warnings = %v, want none", warnings)
+			}
+			if cfg.Dialect != tc.wantDialect {
+				t.Errorf("cfg.Dialect = %q, want %q", cfg.Dialect, tc.wantDialect)
+			}
+		})
 	}
 }
