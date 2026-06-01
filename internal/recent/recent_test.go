@@ -58,9 +58,9 @@ func TestScoreOnlyVisit(t *testing.T) {
 	visit := now.Add(-1 * time.Hour)
 	got := score(now, mtime, visit)
 
-	// mtime term ≈ 0, visit term ≈ 1.5 · exp(-1/48) ≈ 1.469
-	if got < 1.46 || got > 1.5 {
-		t.Errorf("very-old mtime, 1h visit: got %v, want in [1.46, 1.5]", got)
+	// mtime term ≈ 0, visit term ≈ 0.5 · exp(-1/48) ≈ 0.490
+	if got < 0.48 || got > 0.50 {
+		t.Errorf("very-old mtime, 1h visit: got %v, want in [0.48, 0.50]", got)
 	}
 }
 
@@ -87,6 +87,19 @@ func TestScoreRecentVisitBeatsRecentEdit(t *testing.T) {
 
 	if scoreB <= scoreA {
 		t.Errorf("equal-mtime: visited should outrank not-visited: A=%v B=%v", scoreA, scoreB)
+	}
+}
+
+func TestScoreRecentEditBeatsRecentVisit(t *testing.T) {
+	now := time.Date(2026, 5, 12, 12, 0, 0, 0, time.UTC)
+
+	// File A: edited 1 hour ago, never visited.
+	scoreA := score(now, now.Add(-1*time.Hour), time.Time{})
+	// File B: never edited (very old mtime), visited 1 hour ago.
+	scoreB := score(now, now.Add(-10000*time.Hour), now.Add(-1*time.Hour))
+
+	if scoreA <= scoreB {
+		t.Errorf("equal-age: recent edit should outrank recent visit: edit=%v visit=%v", scoreA, scoreB)
 	}
 }
 
