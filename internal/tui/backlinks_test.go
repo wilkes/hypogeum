@@ -30,7 +30,7 @@ func TestBacklinksModalToggleAndEsc(t *testing.T) {
 	writeTUITestFile(t, dir, "a.md", "see [[b]].")
 	writeTUITestFile(t, dir, "b.md", "i am b.")
 
-	m, _ := New(dir, "")
+	m, _ := New(dir, "", Options{})
 	mm, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 40})
 	m = mm.(Model)
 	m.openFile(filepath.Join(dir, "b.md"))
@@ -60,7 +60,7 @@ func TestBacklinksModalShowsLinkers(t *testing.T) {
 	writeTUITestFile(t, dir, "a.md", "see [[b]] for more.")
 	writeTUITestFile(t, dir, "b.md", "i am b.")
 
-	m, err := New(dir, "")
+	m, err := New(dir, "", Options{})
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}

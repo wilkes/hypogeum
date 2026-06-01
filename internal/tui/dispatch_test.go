@@ -145,7 +145,7 @@ func TestOpenFileRecordsVisit(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	m, err := New(dir, initFile)
+	m, err := New(dir, initFile, Options{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -197,15 +197,15 @@ func TestSearch_EndToEnd(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	m, err := New(dir, "")
+	m, err := New(dir, "", Options{})
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
 	updated, _ := m.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
 	m = updated.(Model)
 
-	// ^s opens the modal
-	updated, _ = m.handleKey(tea.KeyMsg{Type: tea.KeyCtrlS})
+	// / opens the modal
+	updated, _ = m.handleKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'/'}})
 	mm := updated.(Model)
 	if mm.modals.kind != modalSearch {
 		t.Fatalf("modal not opened, kind = %v", mm.modals.kind)

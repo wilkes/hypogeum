@@ -19,7 +19,7 @@ func pressQuestion() tea.KeyMsg {
 func TestHelpModalOpensOnQuestionMark(t *testing.T) {
 	isolatedHome(t)
 	dir := t.TempDir()
-	m, _ := New(dir, "")
+	m, _ := New(dir, "", Options{})
 	mm, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 40})
 	m = mm.(Model)
 
@@ -40,12 +40,18 @@ func TestHelpModalOpensOnQuestionMark(t *testing.T) {
 	// form a contiguous plain-text substring.
 	plainBody := ansi.Strip(body)
 	wantSubstrings := []string{
-		"Navigation", "Tree", "Links", "Modals", // section headers
+		"Navigation", "Scrolling", "Tree", "Links", "Modals", // section headers
 		"^l", "logs", // moved logs binding
 		"?", "help", // help itself
 		"^p", "open file", // picker
+		"/", "search", // search modal
 		"h/←", "back",
 		"esc", "clear link",
+		// scrolling group (pager defaults)
+		"^d", "half-page down",
+		"^u", "half-page up",
+		"top",
+		"bottom",
 	}
 	for _, s := range wantSubstrings {
 		if !strings.Contains(plainBody, s) {
@@ -59,7 +65,7 @@ func TestHelpModalOpensOnQuestionMark(t *testing.T) {
 func TestHelpModalEscCloses(t *testing.T) {
 	isolatedHome(t)
 	dir := t.TempDir()
-	m, _ := New(dir, "")
+	m, _ := New(dir, "", Options{})
 	mm, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 40})
 	m = mm.(Model)
 
@@ -164,7 +170,7 @@ func TestFooterAdvertisesHelp(t *testing.T) {
 func TestHelpModalTogglesClosed(t *testing.T) {
 	isolatedHome(t)
 	dir := t.TempDir()
-	m, _ := New(dir, "")
+	m, _ := New(dir, "", Options{})
 	mm, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 40})
 	m = mm.(Model)
 

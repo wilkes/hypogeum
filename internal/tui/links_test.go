@@ -45,11 +45,11 @@ func TestModel_PrevLink_FromUnselectedSelectsLast(t *testing.T) {
 	root := writeFixture(t)
 	m := sized(t, root, "")
 	m = switchToContent(t, m)
-	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'p'}})
+	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'N'}})
 	m = updated.(Model)
 	want := len(m.content.links) - 1
 	if m.content.linkCursor != want {
-		t.Errorf("linkCursor after 'p' from unselected = %d, want %d", m.content.linkCursor, want)
+		t.Errorf("linkCursor after 'N' from unselected = %d, want %d", m.content.linkCursor, want)
 	}
 }
 
