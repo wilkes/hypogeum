@@ -1,6 +1,6 @@
 # Pre-select inline link on navigation — design
 
-**Status:** spec — not yet implemented.
+**Status:** shipped on 2026-05-09 (PR #15).
 **Scope:** when arriving at a file via backlink-follow, Back, or Forward, pre-select the inline link in the rendered content that corresponds to the file we just left, so `n`/`p` cycling resumes from a meaningful position and the user has a visible reverse-video target on the page.
 **Out of scope:** block reference (`^block-id`) position resolution, broken-links tally view. These are the remaining Phase 2 items from [wikilinks-and-backlinks-design](2026-05-07-wikilinks-and-backlinks-design.md).
 

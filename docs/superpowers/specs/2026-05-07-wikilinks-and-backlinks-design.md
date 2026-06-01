@@ -1,6 +1,6 @@
 # Wikilinks and backlinks — design
 
-**Status:** spec — not yet implemented.
+**Status:** Phase 1 shipped (wikilinks resolve via vault index, backlinks modal `b`, log viewer `^l`); Phase 2 partially shipped (auto-scroll, pre-select inline link, broken-link tally). Block-id and heading anchor resolution is in flight on PR #41; configurable vault root and multi-directory overlay remain on separate branches.
 **Scope:** add Obsidian-style `[[wikilinks]]` and a backlinks index to hypogeum, surfaced as a persistent bottom pane and a modal overlay. The backlinks index also covers standard markdown links (`[text](path.md)`) so a vault that uses GitHub-compatible links gets the same backlinks coverage.
 **Out of scope:** tags, frontmatter views, full-text search, graph view, wikilink autocomplete, rename-and-rewrite. These are independent designs.
 

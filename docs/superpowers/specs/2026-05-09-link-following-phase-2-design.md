@@ -1,6 +1,6 @@
 # Link following Phase 2 — inline highlight
 
-**Status:** spec — not yet implemented.
+**Status:** shipped on 2026-05-09 (PR #14).
 **Scope:** when the user cycles links with `n`/`p`, the selected link's text is highlighted inline in the rendered content pane (reverse-video SGR). Phase 1 showed selection only in the footer; Phase 2 closes that gap.
 
 See also: [link-following](../../link-following.md), [docs index](../../index.md), [[sentinel-render]], [[link-cursor]].

@@ -1,6 +1,6 @@
 # Broken-link tally — design
 
-**Status:** approved 2026-05-25.
+**Status:** shipped on 2026-05-25 (PR #40).
 
 **Goal:** surface a count of broken links in the currently rendered document as a faint suffix in the footer's location row. Closes one of the three remaining Wikilinks Phase 2 items from [wikilinks-and-backlinks-design](2026-05-07-wikilinks-and-backlinks-design.md). Block references and configurable vault root remain.
 

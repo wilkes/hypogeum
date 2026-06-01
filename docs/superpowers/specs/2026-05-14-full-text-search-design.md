@@ -1,6 +1,6 @@
 # Full-text search design
 
-Status: approved, ready for implementation plan.
+Status: shipped on 2026-05-16 (PR #39).
 
 `hypogeum` already gets the user to the right file via `^p` (recency-ranked fuzzy filename finder) and `^b` (tree modal). Neither helps when the user remembers a phrase but not the file. This spec adds **`^s`** — a full-text search modal that scans every markdown file in the vault, shows matching lines with surrounding context, and on `Enter` opens the file scrolled to the chosen hit.
 

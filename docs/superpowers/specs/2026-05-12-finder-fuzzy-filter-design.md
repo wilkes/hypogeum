@@ -1,6 +1,6 @@
 # Finder fuzzy filter — design
 
-**Status:** drafted on 2026-05-12.
+**Status:** shipped on 2026-05-13 (PR #18).
 **Scope:** add type-to-filter fuzzy matching to the recency-ranked finder modal (`^p`). Always-on text input, fzf-style subsequence matcher, case-insensitive, match-score-first with recency as tiebreaker. Highlights matched characters in the rendered rows.
 **Out of scope:** content (body-text) search, multi-mode picker (sort cycling), configurable matcher constants, regex queries, query history.
 

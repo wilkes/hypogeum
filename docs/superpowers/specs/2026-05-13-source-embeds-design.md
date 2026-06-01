@@ -1,5 +1,7 @@
 # Source-file embeds and line-range links
 
+**Status:** shipped on 2026-05-13 (PR #30). Follow-up fixes in [source-embeds-followups](2026-05-13-source-embeds-followups-design.md).
+
 ## Summary
 
 Let a markdown file embed a slice of a source file inline (`![[main.go#L42-L58]]`) and link to a specific line range in a source file (`[parser](main.go#L42-L58)`). Embeds re-render automatically when the source changes on disk; `Enter` on an embed or a range link opens the source, scrolled to and highlighting the referenced range.
