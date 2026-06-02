@@ -9,6 +9,50 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 <!-- next-release-here -->
 
+## [v0.3.0] - 2026-06-02
+
+### Features
+* f7c5bf89a5d6488f260c6a5601a63f78f963f717: feat(cli): wire config.Load with graceful degradation (@wilkes)
+* 9f695480f7f70ebc6f98f4822813d0ac2ad6057c: feat(config): add Load with happy-path TOML decoding (@wilkes)
+* 2f2731c7f364bcdd4563883334855185ebb0b8a9: feat(config): bootstrap config package with Default and DefaultPath (@wilkes)
+* 961fe23279bfa067c1beba03c392e54141bda065: feat(markdown): add CountUnresolvedWikilinks helper (@wilkes)
+* 7f3e831921cbe422fe4cbd44adab6a192e716071: feat(markdown): upgrade Glamour to v0.10.0 so table cells wrap (@wilkes)
+* 7bb83fed4cdc31c64de1e1cfae3792df6e27b4de: feat(recent): demote visitWeight from 1.5 to 0.5 (@wilkes)
+* 69314bb06bfdb6cd6d90ec1ecaddc410884fb9fc: feat(tui): add Options struct and dialect-aware New (@wilkes)
+* ce67292ea5986a9a20c88ded2a8b5e475fd51cfc: feat(tui): add brokenCount field to contentUIState (@wilkes)
+* 02ecff9f91668f542c76256a73328b311eae7be2: feat(tui): add g/G/^d/^u and rename defaultKeys to pagerKeys (@wilkes)
+* 4f0497d73c13df99cd06db85ae5e4d0480ee447e: feat(tui): add modernKeys factory and keysFor dispatcher (@wilkes)
+* 23f9e38308331d8738b91bee113429506d27bb44: feat(tui): compute brokenCount in refreshContent (@wilkes)
+* c2fdcfe714039cd77151ea325de019db428acae7: feat(tui): rebind prev-link from p to N in pager dialect (@wilkes)
+* b0b3ec502bb1c02529219ebe761df11bac38c39a: feat(tui): show broken-link tally in footer (@wilkes)
+### Fixes
+* c4b1ef6d130150eabb59c6aa148ecf98c382a849: fix(markdown): skip inline-code backtick spans when rewriting wikilinks (@wilkes)
+* 9c3ed59560aa1bd804ba3feabe42d06fc6ab76dc: fix(tui): bind pager search to / per spec, not ctrl+s (@wilkes)
+* 9d4533c29c7a7b218a931e6e43dd7975ed3a455d: fix: align docs and help cheat sheet with shipped pager bindings (@wilkes)
+### Refactors
+* 48a1b44e06352b38dfe2f88e2c5ac0b00da78dac: refactor(config): extract validDialects to single source of truth (@wilkes)
+* 6cb24b3666dcfa77cdb6b4f0ae8c6c9629c7aa1c: refactor(config): use bytes.Reader for decode and table-drive happy-path tests (@wilkes)
+* 2b6e8fa360bacb8f6fd7eaa5a377581023f9bd4b: refactor(markdown): drop unused RenderFile helper (@wilkes)
+* 77465483bfb421e5f533488b17791580382edaef: refactor(markdown): trim rot-prone comments and redundant assertion (@wilkes)
+* a48f80fa4e537920cb933dabb3ee5cc9ff3199db: refactor(markdown): wikilink fast-path + flatten code-span scanner (@wilkes)
+* 4ddbe862ec3128c9ed24552a918763bfd508f581: refactor: address code-review nits (@wilkes)
+### Docs
+* 1c85ff26b0be5cb5d2166cace814490d804f55e8: docs(changelog): v0.2.0 (@github-actions[bot])
+* 54fcb13e75bca405d2429c1869fbfc0727cdc1a6: docs(claude.md): note visit weight is now 0.5, mtime-dominant (@wilkes)
+* 41202da144acd55e7a2e1f9742d525662077ce7c: docs: explain Glamour table-wrap upgrade contract in CLAUDE.md (@wilkes)
+* 6323e7712a7abc90ec3fc64e5d1a4c6a7581cfee: docs: fix mtime-weighting spec examples to match test ages (@wilkes)
+* e01a436d5f74105da7f248ecb13b7b5edcea779f: docs: implementation plan for broken-link tally (@wilkes)
+* 1f1a0f4ca18b9b4dbd4235d70fe2d5da83d24de4: docs: implementation plan for finder mtime weighting (@wilkes)
+* b417b90db828df2d935b0f885e70faa47829b3f6: docs: keybinding dialects design (@wilkes)
+* 226020da05a8ae02791be9eeb7aa0c87c3e343a3: docs: keybinding dialects user-facing documentation (@wilkes)
+* 5acaffad05ae0501099bdad2c9f89a51a6b115d8: docs: mark shipped specs as shipped (@wilkes)
+* d4bc52add6f10cd1e8412393b585233cc6f24815: docs: note broken-link tally shipped; trim phase-2 remaining list (@wilkes)
+* f26224b4d751482ef887b831f3751c4588ea626b: docs: plan for the Glamour table-wrap upgrade (@wilkes)
+* 6cb8a933f9d943743bacd403e353c1e3718aa442: docs: spec for broken-link tally in footer (@wilkes)
+* def7ab2030b88ee1fd72ff3ab647faa449f61754: docs: spec for finder mtime weighting tweak (@wilkes)
+### Other
+* e327fc583c432eadb99d70fb44e134653db1e879: plan: keybinding dialects implementation (@wilkes)
+
 ## [v0.2.0] - 2026-05-16
 
 ### Features
