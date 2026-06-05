@@ -45,6 +45,12 @@ Cross-cutting ideas that show up in multiple specs and packages. Each is its own
 - [Keybinding dialects](superpowers/specs/2026-05-31-keybinding-dialects-design.md) — two coherent presets: pager (default, vim/less idioms) and modern (VS Code/browser idioms), selected via a TOML config file at the OS-canonical user-config path.
 - [Glamour table wrap](superpowers/plans/2026-06-01-glamour-table-wrap.md) — upgrade Glamour 0.8.0 → 0.10.0 so long table cells wrap to multiple lines instead of being character-truncated mid-word. Pins `│`/`─` separators and disables Glamour's new in-table-links footer to preserve the existing URL-hiding + alignment invariants.
 
+## Ideas / backlog
+
+- [Copy document path to clipboard](copy-document-path.md) — idea — a keybinding
+  to copy the open document's path so it can be pasted into another tool (e.g. a
+  Claude session). Not yet designed.
+
 ## Conventions for adding to this folder
 
 One file per topic. Kebab-case filenames, no date prefix. Update plans in place — strike-through, "Status:" lines, or check-marked steps beat parallel files. Index entries here are one line plus a short hook; the detail lives in the linked file.
