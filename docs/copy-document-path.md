@@ -1,33 +1,42 @@
 # Copy document path to clipboard
 
-Status: idea — not yet designed or built.
+Status: shipped — `y` (pager) / `alt+c` (modern) copies the open document's
+absolute path to the system clipboard.
 
 ## What
 
-Add a keybinding to copy the path of the currently-open document to the system
-clipboard, so it can be pasted into another tool (e.g. a Claude session) to
-point that tool at the file.
+A keybinding copies the absolute path of the currently-open document to the
+system clipboard, so it can be pasted into another tool (e.g. a Claude
+session) to point that tool at the file.
 
-## Why
+- **Pager dialect:** `y` (vim yank idiom).
+- **Modern dialect:** `alt+c` (`ctrl+c` is taken by quit).
+- Path format is **absolute** — directly usable when pasted into a Claude
+  session pointed at the repo.
+- Confirmation is a footer transient ("copied path: …") via the diagnostics
+  stream, so it auto-clears and also lands in the `^l` log. Failures surface
+  as a footer error.
 
-When reading a note in hypogeum and wanting to hand it off to a Claude session
-(or any other tool), there's currently no way to grab the file's path without
-leaving the app and reconstructing it by hand. A one-keystroke "copy path"
-closes that gap.
+## Implementation
 
-## Open questions
+- `internal/tui/clipboard.go` — `clipboardWriter` (injectable, mirrors
+  `externalOpener`) and the default `copyToClipboard`, which shells out to the
+  platform tool: `pbcopy` (macOS), `clip` (Windows), or, on Linux/BSD, the
+  first of `wl-copy` / `xclip` / `xsel` found on `PATH` (actionable error if
+  none). `copyCurrentPath` resolves `m.history.Current()` to an absolute path
+  and writes it, reporting via `m.diag`.
+- `internal/tui/keys.go` — `CopyPath` binding in both dialect factories.
+- `internal/tui/input.go` — dispatched from `handleContentKey`.
+- `internal/tui/help.go` — listed under a new "Clipboard" section in the `?`
+  cheat sheet.
+- `internal/tui/clipboard_test.go` — covers the pager + modern chords, the
+  absolute-path guarantee, writer-error surfacing, and the no-document no-op.
 
-- **Absolute vs. vault-relative path?** Pasting into a Claude session usually
-  wants an absolute path (or one resolvable from the repo root). Possibly offer
-  both — e.g. one key for absolute, another for vault-relative.
-- **Which path is "current"?** The open document is the obvious target. Should
-  the tree-modal cursor row or a selected link also be copyable?
-- **Clipboard mechanism.** No clipboard dependency exists today. Options:
-  pull in a cross-platform clipboard library, or shell out to
-  `pbcopy` / `xclip` / `wl-copy` / `clip.exe` per-platform (matches the
-  existing `open` / `xdg-open` / `cmd start` external-handoff pattern in
-  `internal/tui/external.go`).
-- **Keybinding.** Needs a binding in both `pagerKeys()` and `modernKeys()`
-  dialects (see `internal/tui/keys.go`) plus dispatch wiring.
-- **Feedback.** Show a footer transient ("copied <path>") via the existing
-  diagnostics stream so the user knows it worked.
+## Possible follow-ups
+
+- A second binding for the vault-relative path.
+- Copying the path of the tree-modal cursor row or a selected link, not just
+  the open document.
+- OSC 52 clipboard escape as a fallback when no helper binary is installed
+  (works over SSH); not pursued now since `bubbletea` v1.3.4 exposes no
+  clipboard command and shell-out matches the existing external-open pattern.

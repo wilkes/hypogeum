@@ -20,6 +20,8 @@ type keyMap struct {
 	PrevLink  key.Binding
 	ClearLink key.Binding
 
+	CopyPath key.Binding
+
 	OpenBacklinksModal key.Binding
 	OpenLogsModal      key.Binding
 	OpenHelpModal      key.Binding
@@ -53,6 +55,8 @@ func pagerKeys() keyMap {
 		NextLink:  key.NewBinding(key.WithKeys("n"), key.WithHelp("n", "next link")),
 		PrevLink:  key.NewBinding(key.WithKeys("N"), key.WithHelp("N", "prev link")),
 		ClearLink: key.NewBinding(key.WithKeys("esc"), key.WithHelp("esc", "clear link")),
+
+		CopyPath: key.NewBinding(key.WithKeys("y"), key.WithHelp("y", "copy path")),
 
 		OpenBacklinksModal: key.NewBinding(key.WithKeys("b"), key.WithHelp("b", "backlinks")),
 		OpenLogsModal:      key.NewBinding(key.WithKeys("ctrl+l"), key.WithHelp("^l", "logs")),
@@ -88,6 +92,8 @@ func modernKeys() keyMap {
 		NextLink:  key.NewBinding(key.WithKeys("tab"), key.WithHelp("tab", "next link")),
 		PrevLink:  key.NewBinding(key.WithKeys("shift+tab"), key.WithHelp("⇧⇥", "prev link")),
 		ClearLink: key.NewBinding(key.WithKeys("esc"), key.WithHelp("esc", "clear link")),
+
+		CopyPath: key.NewBinding(key.WithKeys("alt+c"), key.WithHelp("alt+c", "copy path")),
 
 		OpenBacklinksModal: key.NewBinding(key.WithKeys("alt+b"), key.WithHelp("alt+b", "backlinks")),
 		OpenLogsModal:      key.NewBinding(key.WithKeys("alt+l"), key.WithHelp("alt+l", "logs")),

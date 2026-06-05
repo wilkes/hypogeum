@@ -379,6 +379,9 @@ func (m *Model) handleContentKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 
 	switch {
+	case key.Matches(msg, m.keys.CopyPath):
+		m.copyCurrentPath()
+		return *m, nil
 	case key.Matches(msg, m.keys.NextLink):
 		m.cycleLink(+1)
 		return *m, nil
@@ -426,7 +429,6 @@ func (m *Model) handleContentKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	m.content.viewport, cmd = m.content.viewport.Update(msg)
 	return *m, cmd
 }
-
 
 // handleTreeModalKey routes keystrokes while the tree modal is open.
 // Up/Down/k/j move the cursor; Space toggles a folder; Left/h collapses

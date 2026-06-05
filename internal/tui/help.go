@@ -28,6 +28,7 @@ func formatHelp(k keyMap) string {
 		{"Scrolling", []key.Binding{k.HalfPageDown, k.HalfPageUp, k.Top, k.Bottom}},
 		{"Tree", []key.Binding{k.ToggleTree, k.ToggleFolder}},
 		{"Links", []key.Binding{k.NextLink, k.PrevLink}},
+		{"Clipboard", []key.Binding{k.CopyPath}},
 		{"Modals", []key.Binding{k.OpenPicker, k.OpenSearch, k.OpenBacklinksModal, k.OpenLogsModal, k.OpenHelpModal, k.ClearLink}},
 	}
 

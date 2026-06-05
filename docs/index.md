@@ -43,13 +43,8 @@ Cross-cutting ideas that show up in multiple specs and packages. Each is its own
 - [Multi-segment cursor for wrapped links](superpowers/specs/2026-05-13-multi-segment-cursor-design.md) — shipped — `stripSentinels` closes/reopens the reverse-video marker on every wrapped row so the link cursor stays visible across the whole link. [Plan](superpowers/plans/2026-05-13-multi-segment-cursor.md).
 - [Full-text search](superpowers/specs/2026-05-14-full-text-search-design.md) — shipped — `^s` opens a modal that scans every vault markdown file for the query, renders hits as `path:line` + highlighted snippet, recency-ranks the result list, and on `Enter` opens the file scrolled to the matched line. [Plan](superpowers/plans/2026-05-14-full-text-search.md).
 - [Keybinding dialects](superpowers/specs/2026-05-31-keybinding-dialects-design.md) — two coherent presets: pager (default, vim/less idioms) and modern (VS Code/browser idioms), selected via a TOML config file at the OS-canonical user-config path.
+- [Copy document path to clipboard](copy-document-path.md) — shipped — `y` (pager) / `alt+c` (modern) copies the open document's absolute path to the system clipboard for pasting into another tool (e.g. a Claude session).
 - [Glamour table wrap](superpowers/plans/2026-06-01-glamour-table-wrap.md) — upgrade Glamour 0.8.0 → 0.10.0 so long table cells wrap to multiple lines instead of being character-truncated mid-word. Pins `│`/`─` separators and disables Glamour's new in-table-links footer to preserve the existing URL-hiding + alignment invariants.
-
-## Ideas / backlog
-
-- [Copy document path to clipboard](copy-document-path.md) — idea — a keybinding
-  to copy the open document's path so it can be pasted into another tool (e.g. a
-  Claude session). Not yet designed.
 
 ## Conventions for adding to this folder
 
