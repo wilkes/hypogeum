@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/bubbles/viewport"
+	"github.com/charmbracelet/x/ansi"
 	zone "github.com/lrstanley/bubblezone"
 
 	"github.com/wilkes/hypogeum/internal/code"
@@ -106,6 +107,30 @@ func (m *Model) setContent(s string) {
 // contentLines splits the stored base render into display lines.
 func (m *Model) contentLines() []string {
 	return strings.Split(m.content.rendered, "\n")
+}
+
+// screenToContent maps a mouse cell (x, y) to a position in the stored
+// base render. The content pane has a 1-cell border, so text begins at
+// screen (1, 1); the viewport's YOffset accounts for scroll. Out-of-
+// range coordinates clamp to a valid cell so drags that leave the pane
+// or run past end-of-line still resolve.
+func (m *Model) screenToContent(x, y int) cellPos {
+	lines := m.contentLines()
+	line := m.content.viewport.YOffset + (y - 1)
+	if line < 0 {
+		line = 0
+	}
+	if line > len(lines)-1 {
+		line = len(lines) - 1
+	}
+	col := x - 1
+	if col < 0 {
+		col = 0
+	}
+	if w := ansi.StringWidth(lines[line]); col > w {
+		col = w
+	}
+	return cellPos{line: line, col: col}
 }
 
 // openFile records a visit in history and renders the file.
