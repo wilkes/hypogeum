@@ -35,20 +35,23 @@ Follows the "adding a new action" recipe documented in CLAUDE.md
 2. Bind it in **both** dialect factories:
    - `pagerKeys()`: `key.NewBinding(key.WithKeys("y"), key.WithHelp("y", "copy path"))`
    - `modernKeys()`: `key.NewBinding(key.WithKeys("ctrl+y"), key.WithHelp("^y", "copy path"))`
-3. **`internal/tui/input.go`** — dispatch in the global key handler:
-   `key.Matches(msg, m.keys.CopyPath)` → copy `m.history.Current()` (when
-   non-empty) and toast.
+3. **`internal/tui/input.go`** — dispatch in `handleContentKey`'s switch
+   (alongside `NextLink`/`Top`/etc.): `key.Matches(msg, m.keys.CopyPath)`
+   → copy `m.history.Current()` (when non-empty) and toast.
 
 ### Dispatch placement and edge cases
 
-- The handler lives in the **global key block**, not gated on content
-  focus.
-- The picker grabs printable runes *before* the global switch (documented
-  CLAUDE.md invariant), so typing `y` into the picker's fuzzy-filter query
-  still types `y` — copy-path only fires when the picker isn't
-  intercepting runes. `Ctrl+Y` is a non-rune chord and flows through
-  normally.
-- `y` is currently unbound in the pager dialect, so there is no collision.
+- The handler lives in **`handleContentKey`**, which is only reached when
+  no modal is consuming input (the modal-forwarding block returns first).
+  This makes copy-path **disabled while any modal is open**, consistent
+  with how drag-to-select copy is disabled during modals.
+- Because `handleContentKey` runs after the picker/search rune pre-routing
+  *and* the whole modal block, typing `y` into the picker's fuzzy-filter
+  query still types `y` — copy-path can't fire while a modal owns the
+  keystroke.
+- `y` is currently unbound in the pager dialect, so there is no collision;
+  `Ctrl+Y` is likewise free in modern. The existing
+  `TestKeys_NoOverlappingActions` enforces this.
 
 ## Testing
 
