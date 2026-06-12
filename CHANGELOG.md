@@ -9,6 +9,36 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 <!-- next-release-here -->
 
+## [v0.4.0] - 2026-06-12
+
+### Features
+* d9fc9c7bcd3e9fa4c3f636a7e5d3444064eb9473: feat(tui): add CopyPath keybinding (y / ctrl+y) to both dialects (@wilkes)
+* e5596d2f96ad4438c7ef45f1566c54695f10cf27: feat(tui): clear finalized selection on next keystroke (@wilkes)
+* 2cf684abe2247a9a01751fc5bb52e54041b96347: feat(tui): copy current file path on y / ctrl+y (@wilkes)
+* 21b53d855b57f17a087cec449e1732635776d1ef: feat(tui): drag-to-select copies on release, click still follows links (@wilkes)
+* 32263a0e5af3c092572a1f011d5c2e5ad1d2ef55: feat(tui): extract selected text via ANSI-aware column cut (@wilkes)
+* bcd1f9917a15cea07a5fbf5aa9007272fd26f848: feat(tui): inject clipboardWriter seam (OSC 52 via termenv) (@wilkes)
+* 48adf29e293f05ffdcaffbf7ccb8aa6a1cf53359: feat(tui): map mouse cells to content coordinates (@wilkes)
+* 522c7bd47a7384ff497cd02340ef5b180b665727: feat(tui): reverse-video selection overlay with restore-on-clear (@wilkes)
+* 44cb1290a8802cc2b22efd7a37fbd6d627eb3091: feat(tui): store rendered base + selection state via setContent chokepoint (@wilkes)
+### Fixes
+* a4ac607e7d72abba4855edbe334ca8929992eead: fix(tui): copy to OS clipboard, not just OSC 52 (@wilkes)
+* d1c91cb8fb734a8bb6053e6df7b6e450cd8b31ef: fix(tui): keep content.rendered in sync on error pages; trim trailing pad from copies (@wilkes)
+* 75175cb1f165879aaefd751bb8bf2f95ca35fee7: fix(tui): surface copy-path binding in the help cheat sheet (@wilkes)
+### Refactors
+* 1553913176451bb60f5d260db21ff0f629214419: refactor(tui): cache rendered lines and dedup selection helpers (@wilkes)
+### Docs
+* abdd96a43fcea3d63d312fd77c7b739bfd3d99bd: docs(changelog): v0.3.0 (@github-actions[bot])
+* f429f0392409cb533a34077cedff5508156876b6: docs(plan): drag-to-select with auto-copy implementation plan (@wilkes)
+* c59d0f36c537df35769ae3745b666c5b857af100: docs(plan): fix sized() test helper arg order (root is a dir) (@wilkes)
+* 7ae708e25b340349c6341d8e37ffb16d52faa724: docs(spec): correct clipboard backend to OSC 52 via termenv (@wilkes)
+* 493cdfdea4cea30585fd51903ff2eaec37ffec5b: docs(spec): drag-to-select with auto-copy design (@wilkes)
+* c9a6aade99c53ef2657ff57c1ec23c832902ca05: docs: correct index entry to termenv.Copy (not tea.SetClipboard) (@wilkes)
+* 4a46b47c9f7fc061531e3ef3c522f6045752ad49: docs: design for copy-current-file-path keybinding (@wilkes)
+* 45480f29d5df898ce87ad612b455f02f887d0130: docs: drag-to-select gotcha + mark spec shipped (@wilkes)
+* 5abe79028cd21913210821c7cd4d8745d46170c1: docs: implementation plan for copy-current-path; refine spec dispatch note (@wilkes)
+* 928df257cf6291f7598c38d1682dbf1b061ab803: docs: note y / ctrl+y copy-current-path keybinding (@wilkes)
+
 ## [v0.3.0] - 2026-06-02
 
 ### Features
