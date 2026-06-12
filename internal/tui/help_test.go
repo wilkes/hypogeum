@@ -40,7 +40,8 @@ func TestHelpModalOpensOnQuestionMark(t *testing.T) {
 	// form a contiguous plain-text substring.
 	plainBody := ansi.Strip(body)
 	wantSubstrings := []string{
-		"Navigation", "Scrolling", "Tree", "Links", "Modals", // section headers
+		"Navigation", "Scrolling", "Tree", "Links", "Clipboard", "Modals", // section headers
+		"copy path", // copy current file path
 		"^l", "logs", // moved logs binding
 		"?", "help", // help itself
 		"^p", "open file", // picker
