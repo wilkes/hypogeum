@@ -418,6 +418,20 @@ func (m *Model) handlePickerKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return *m, cmd
 }
 
+// copyCurrentPath copies the absolute path of the currently-viewed file
+// (or directory) to the clipboard and toasts the result in the footer.
+// No-op when nothing is open.
+func (m *Model) copyCurrentPath() {
+	path := m.history.Current()
+	if path == "" {
+		return
+	}
+	m.copyToClipboard(path)
+	if m.diag != nil {
+		m.diag.Info("Copied path: " + path)
+	}
+}
+
 // handleContentKey routes keystrokes received while the content pane has
 // focus. Link-cycling bindings (n/p/Esc) and Enter (when a link is
 // selected) are intercepted; everything else falls through to the
@@ -449,6 +463,9 @@ func (m *Model) handleContentKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return *m, nil
 	case key.Matches(msg, m.keys.PrevLink):
 		m.cycleLink(-1)
+		return *m, nil
+	case key.Matches(msg, m.keys.CopyPath):
+		m.copyCurrentPath()
 		return *m, nil
 	case key.Matches(msg, m.keys.ClearLink):
 		// Esc cascade (most-specific to least-specific):
