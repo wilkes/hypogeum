@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/bubbles/viewport"
+	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
 	zone "github.com/lrstanley/bubblezone"
 
@@ -156,7 +157,7 @@ func (m *Model) navigateTo(path string) {
 // touching history. Used by back/forward and on resize. Also refreshes
 // the link list and clears any active link selection.
 func (m *Model) refreshContent(path string) {
-	m.content.selection = selection{pendingLink: -1}
+	m.resetSelectionState()
 	// Single-shot pre-select: clear the fields unconditionally before any
 	// early return, so a read or render failure here can't leak a stale
 	// target into the next refreshContent.
@@ -450,6 +451,53 @@ func (m *Model) extractSelection() string {
 		parts = append(parts, ansi.Strip(ansi.Cut(lines[i], lo, hi)))
 	}
 	return strings.Join(parts, "\n")
+}
+
+// selectionStyle paints the selected span. Reverse-video swaps fg/bg so
+// the selection reads like a GUI highlight regardless of theme.
+var selectionStyle = lipgloss.NewStyle().Reverse(true)
+
+// applySelectionHighlight redraws the base render with the selected span
+// replaced by a uniform reverse-video block, then pushes it to the
+// viewport (preserving scroll). The span is stripped before styling, so
+// there are no inner escapes to cancel the reverse-video mid-span.
+func (m *Model) applySelectionHighlight() {
+	start, end := normalizeSel(m.content.selection.anchor, m.content.selection.cursor)
+	lines := m.contentLines()
+	out := make([]string, len(lines))
+	copy(out, lines)
+	for i := start.line; i <= end.line && i < len(lines); i++ {
+		w := ansi.StringWidth(lines[i])
+		lo, hi := selColBounds(i, start, end, w)
+		if hi <= lo {
+			continue
+		}
+		before := ansi.Cut(lines[i], 0, lo)
+		mid := ansi.Strip(ansi.Cut(lines[i], lo, hi))
+		after := ansi.Cut(lines[i], hi, w)
+		out[i] = before + selectionStyle.Render(mid) + after
+	}
+	offset := m.content.viewport.YOffset
+	m.content.viewport.SetContent(strings.Join(out, "\n"))
+	m.content.viewport.SetYOffset(offset)
+}
+
+// resetSelectionState zeroes the selection without touching the
+// viewport. Used where content is about to be re-set anyway.
+func (m *Model) resetSelectionState() {
+	m.content.selection = selection{pendingLink: -1}
+}
+
+// clearSelection drops the selection and restores the un-highlighted
+// base render (preserving scroll) if a highlight was showing.
+func (m *Model) clearSelection() {
+	had := m.content.selection.moved || m.content.selection.copied
+	m.resetSelectionState()
+	if had {
+		offset := m.content.viewport.YOffset
+		m.content.viewport.SetContent(m.content.rendered)
+		m.content.viewport.SetYOffset(offset)
+	}
 }
 
 // allVaultMarkdownPaths walks m.rootNode and returns every markdown file

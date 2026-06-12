@@ -101,3 +101,27 @@ func TestModel_ExtractSelection_StripsANSI(t *testing.T) {
 		t.Errorf("styled multi-line: got %q, want %q", got, "world\nline")
 	}
 }
+
+func TestModel_SelectionHighlightAppliesAndClears(t *testing.T) {
+	root := writeFixture(t)
+	m := sized(t, root, filepath.Join(root, "index.md"))
+	m.content.rendered = "hello world"
+	m.content.viewport.SetContent(m.content.rendered)
+	before := m.content.viewport.View()
+
+	m.content.selection.anchor = cellPos{0, 0}
+	m.content.selection.cursor = cellPos{0, 5}
+	m.applySelectionHighlight()
+	highlighted := m.content.viewport.View()
+	if highlighted == before {
+		t.Errorf("applySelectionHighlight should change the rendered view; stayed %q", before)
+	}
+
+	// clearSelection only restores when moved||copied; emulate a finished drag.
+	m.content.selection.moved = true
+	m.clearSelection()
+	cleared := m.content.viewport.View()
+	if cleared != before {
+		t.Errorf("clearSelection should restore the base view; got %q want %q", cleared, before)
+	}
+}
