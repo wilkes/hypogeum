@@ -80,6 +80,8 @@ func TestModel_MouseClick_OnContentLinkRow_FollowsLink(t *testing.T) {
 	}
 	updated, _ := m.Update(leftClick(linkZone.StartX, linkZone.StartY))
 	m = updated.(Model)
+	updated, _ = m.Update(tea.MouseMsg{X: linkZone.StartX, Y: linkZone.StartY, Action: tea.MouseActionRelease, Button: tea.MouseButtonLeft})
+	m = updated.(Model)
 
 	if m.focus != focusContent {
 		t.Errorf("focus after content click = %v, want focusContent", m.focus)

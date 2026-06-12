@@ -4,8 +4,11 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/charmbracelet/bubbles/viewport"
+	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/x/ansi"
 	zone "github.com/lrstanley/bubblezone"
 
 	"github.com/wilkes/hypogeum/internal/code"
@@ -13,6 +16,24 @@ import (
 	"github.com/wilkes/hypogeum/internal/tree"
 	"github.com/wilkes/hypogeum/internal/watch"
 )
+
+// cellPos is a position in the rendered content: an absolute line index
+// (independent of viewport scroll) and a visible column (0-based).
+type cellPos struct {
+	line int
+	col  int
+}
+
+// selection tracks an in-progress or finalized text selection in the
+// content pane, in absolute document coordinates.
+type selection struct {
+	anchored    bool    // a left-press landed in the content pane
+	moved       bool    // motion seen since the press (click-vs-drag)
+	copied      bool    // released with text → highlight persists
+	anchor      cellPos // where the drag started
+	cursor      cellPos // current / final drag point
+	pendingLink int     // link index under the press, or -1
+}
 
 // contentUIState bundles the right content pane's render state. viewport
 // scrolls the rendered markdown; renderer is rebuilt at every WindowSizeMsg
@@ -39,6 +60,19 @@ type contentUIState struct {
 	// by Esc, by opening any other file, and by following a different
 	// range link.
 	rangeHighlight *markdown.LineRange
+	// rendered is the last full content string handed to the viewport
+	// (link-highlight included). The selection overlay is drawn on top
+	// of it and recomputed on every motion without re-running Glamour.
+	rendered string
+	// lines and lineWidths cache the split + per-line visible width of
+	// rendered, recomputed once per setContent. The drag-select hot path
+	// repaints the highlight on every mouse-motion event; reading these
+	// caches keeps that path from re-splitting the whole document and
+	// re-scanning each line's ANSI width on every event.
+	lines      []string
+	lineWidths []int
+	// selection is the current content-pane text selection.
+	selection selection
 }
 
 // linkZoneID returns the BubbleZone id used to track the i-th link in
@@ -69,6 +103,50 @@ func linkZoneMarker(i int) (string, string) {
 	return wrapped[:mid], wrapped[mid+len(placeholder):]
 }
 
+// setContent stores s as the selection overlay's base and hands it to
+// the viewport. Every code path that displays real rendered content
+// must go through here so content.rendered stays in sync with what the
+// viewport shows.
+func (m *Model) setContent(s string) {
+	m.content.rendered = s
+	m.content.lines = strings.Split(s, "\n")
+	m.content.lineWidths = make([]int, len(m.content.lines))
+	for i, ln := range m.content.lines {
+		m.content.lineWidths[i] = ansi.StringWidth(ln)
+	}
+	m.content.viewport.SetContent(s)
+}
+
+// contentLines returns the cached split of the stored base render.
+// Populated by setContent; do not mutate the result.
+func (m *Model) contentLines() []string {
+	return m.content.lines
+}
+
+// screenToContent maps a mouse cell (x, y) to a position in the stored
+// base render. The content pane has a 1-cell border, so text begins at
+// screen (1, 1); the viewport's YOffset accounts for scroll. Out-of-
+// range coordinates clamp to a valid cell so drags that leave the pane
+// or run past end-of-line still resolve.
+func (m *Model) screenToContent(x, y int) cellPos {
+	lines := m.contentLines()
+	line := m.content.viewport.YOffset + (y - 1)
+	if line < 0 {
+		line = 0
+	}
+	if line > len(lines)-1 {
+		line = len(lines) - 1
+	}
+	col := x - 1
+	if col < 0 {
+		col = 0
+	}
+	if w := m.content.lineWidths[line]; col > w {
+		col = w
+	}
+	return cellPos{line: line, col: col}
+}
+
 // openFile records a visit in history and renders the file.
 func (m *Model) openFile(path string) {
 	m.history.Visit(path)
@@ -92,6 +170,7 @@ func (m *Model) navigateTo(path string) {
 // touching history. Used by back/forward and on resize. Also refreshes
 // the link list and clears any active link selection.
 func (m *Model) refreshContent(path string) {
+	m.resetSelectionState()
 	// Single-shot pre-select: clear the fields unconditionally before any
 	// early return, so a read or render failure here can't leak a stale
 	// target into the next refreshContent.
@@ -108,7 +187,7 @@ func (m *Model) refreshContent(path string) {
 		listing, dirErr := renderDirListing(path)
 		if dirErr != nil {
 			m.status = dirErr.Error()
-			m.content.viewport.SetContent(fmt.Sprintf("Error: %v", dirErr))
+			m.setContent(fmt.Sprintf("Error: %v", dirErr))
 			m.content.links = nil
 			m.content.linkCursor = -1
 			m.content.brokenCount = 0
@@ -121,7 +200,7 @@ func (m *Model) refreshContent(path string) {
 		src, err = os.ReadFile(path)
 		if err != nil {
 			m.status = err.Error()
-			m.content.viewport.SetContent(fmt.Sprintf("Error: %v", err))
+			m.setContent(fmt.Sprintf("Error: %v", err))
 			m.content.links = nil
 			m.content.linkCursor = -1
 			m.content.brokenCount = 0
@@ -136,10 +215,10 @@ func (m *Model) refreshContent(path string) {
 		})
 		if rerr != nil {
 			m.status = rerr.Error()
-			m.content.viewport.SetContent(fmt.Sprintf("Error: %v", rerr))
+			m.setContent(fmt.Sprintf("Error: %v", rerr))
 		} else {
 			m.status = path
-			m.content.viewport.SetContent(out)
+			m.setContent(out)
 			m.content.viewport.GotoTop()
 			if m.content.rangeHighlight != nil {
 				m.scrollToLine(m.content.rangeHighlight.Start)
@@ -167,7 +246,7 @@ func (m *Model) refreshContent(path string) {
 	out, links, deps, err := m.content.renderer.RenderWithLinks(string(src), path, linkZoneMarker)
 	if err != nil {
 		m.status = err.Error()
-		m.content.viewport.SetContent(fmt.Sprintf("Error: %v", err))
+		m.setContent(fmt.Sprintf("Error: %v", err))
 		m.content.links = nil
 		m.content.linkCursor = -1
 		m.content.embedDeps = nil
@@ -175,7 +254,7 @@ func (m *Model) refreshContent(path string) {
 		return
 	}
 	m.status = path
-	m.content.viewport.SetContent(out)
+	m.setContent(out)
 	m.content.viewport.GotoTop()
 	if pendingScrollLine > 0 {
 		m.scrollToLine(pendingScrollLine)
@@ -338,6 +417,122 @@ func rangesEqual(a, b *markdown.LineRange) bool {
 		return a == nil && b == nil
 	}
 	return a.Start == b.Start && a.End == b.End
+}
+
+// normalizeSel returns a, b ordered so start is at or before end in
+// reading order, regardless of drag direction.
+func normalizeSel(a, b cellPos) (start, end cellPos) {
+	if a.line < b.line || (a.line == b.line && a.col <= b.col) {
+		return a, b
+	}
+	return b, a
+}
+
+// selColBounds returns the [lo, hi) visible-column range selected on
+// line i, given the normalized start/end and the line's visible width.
+// First line starts at start.col; last line ends at end.col; middle
+// lines span the whole line.
+func selColBounds(i int, start, end cellPos, width int) (lo, hi int) {
+	lo, hi = 0, width
+	if i == start.line {
+		lo = start.col
+	}
+	if i == end.line {
+		hi = end.col
+	}
+	return lo, hi
+}
+
+// extractSelection returns the selected text as plain (ANSI-stripped)
+// content, newline-joined across lines. Empty if the span is zero-width.
+func (m *Model) extractSelection() string {
+	start, end := normalizeSel(m.content.selection.anchor, m.content.selection.cursor)
+	lines := m.contentLines()
+	if start.line >= len(lines) {
+		return ""
+	}
+	if end.line >= len(lines) {
+		end.line = len(lines) - 1
+		end.col = m.content.lineWidths[end.line]
+	}
+	var parts []string
+	for i := start.line; i <= end.line; i++ {
+		lo, hi := selColBounds(i, start, end, m.content.lineWidths[i])
+		if hi < lo {
+			hi = lo
+		}
+		parts = append(parts, strings.TrimRight(ansi.Strip(ansi.Cut(lines[i], lo, hi)), " \t"))
+	}
+	return strings.Join(parts, "\n")
+}
+
+// selectionStyle paints the selected span. Reverse-video swaps fg/bg so
+// the selection reads like a GUI highlight regardless of theme.
+var selectionStyle = lipgloss.NewStyle().Reverse(true)
+
+// applySelectionHighlight redraws the base render with the selected span
+// replaced by a uniform reverse-video block, then pushes it to the
+// viewport (preserving scroll). The span is stripped before styling, so
+// there are no inner escapes to cancel the reverse-video mid-span.
+func (m *Model) applySelectionHighlight() {
+	start, end := normalizeSel(m.content.selection.anchor, m.content.selection.cursor)
+	lines := m.contentLines()
+	var b strings.Builder
+	b.Grow(len(m.content.rendered) + 16)
+	for i, ln := range lines {
+		if i > 0 {
+			b.WriteByte('\n')
+		}
+		if i < start.line || i > end.line {
+			b.WriteString(ln)
+			continue
+		}
+		lo, hi := selColBounds(i, start, end, m.content.lineWidths[i])
+		if hi <= lo {
+			b.WriteString(ln)
+			continue
+		}
+		b.WriteString(ansi.Cut(ln, 0, lo))
+		b.WriteString(selectionStyle.Render(ansi.Strip(ansi.Cut(ln, lo, hi))))
+		b.WriteString(ansi.Cut(ln, hi, m.content.lineWidths[i]))
+	}
+	m.setViewportPreservingScroll(b.String())
+}
+
+// setViewportPreservingScroll replaces the viewport content while keeping
+// the current scroll offset. Used by the selection-overlay paths, which
+// push a transient string derived from content.rendered without redefining
+// the base — so they bypass setContent on purpose.
+func (m *Model) setViewportPreservingScroll(s string) {
+	offset := m.content.viewport.YOffset
+	m.content.viewport.SetContent(s)
+	m.content.viewport.SetYOffset(offset)
+}
+
+// resetSelectionState zeroes the selection without touching the
+// viewport. Used where content is about to be re-set anyway.
+func (m *Model) resetSelectionState() {
+	m.content.selection = selection{pendingLink: -1}
+}
+
+// finalizeSelection transitions a just-released drag into the "copied"
+// state: the reverse-video highlight stays on screen until the user's
+// next action, but the gesture is over, so a stray post-release motion
+// event (gated on anchored) no longer extends the span.
+func (m *Model) finalizeSelection() {
+	m.content.selection.copied = true
+	m.content.selection.anchored = false
+	m.content.selection.moved = false
+}
+
+// clearSelection drops the selection and restores the un-highlighted
+// base render (preserving scroll) if a highlight was showing.
+func (m *Model) clearSelection() {
+	had := m.content.selection.moved || m.content.selection.copied
+	m.resetSelectionState()
+	if had {
+		m.setViewportPreservingScroll(m.content.rendered)
+	}
 }
 
 // allVaultMarkdownPaths walks m.rootNode and returns every markdown file

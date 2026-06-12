@@ -92,6 +92,10 @@ type Model struct {
 	// openExternal hands a URL off to the OS browser. Injected so tests
 	// can substitute a fake that records calls instead of exec-ing.
 	openExternal externalOpener
+
+	// copyToClipboard writes selected text to the clipboard. Injected so
+	// tests record calls instead of emitting a real OSC 52 escape.
+	copyToClipboard clipboardWriter
 }
 
 // Options bundles construction-time settings for New.
@@ -185,15 +189,16 @@ func New(root, initialFile string, opts Options) (Model, error) {
 	cr := code.NewRenderer(80)
 
 	m := Model{
-		root:         root,
-		rootNode:     rootNode,
-		history:      nav.New(),
-		focus:        focusContent,
-		keys:         keysFor(opts.Dialect),
-		vault:        v,
-		recent:       rstore,
-		diag:         diag,
-		openExternal: openExternalURL,
+		root:            root,
+		rootNode:        rootNode,
+		history:         nav.New(),
+		focus:           focusContent,
+		keys:            keysFor(opts.Dialect),
+		vault:           v,
+		recent:          rstore,
+		diag:            diag,
+		openExternal:    openExternalURL,
+		copyToClipboard: defaultClipboardWriter,
 		tree: treeUIState{
 			vp:       viewport.New(0, 0),
 			expanded: map[string]bool{},
