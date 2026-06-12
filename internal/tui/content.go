@@ -174,7 +174,7 @@ func (m *Model) refreshContent(path string) {
 		listing, dirErr := renderDirListing(path)
 		if dirErr != nil {
 			m.status = dirErr.Error()
-			m.content.viewport.SetContent(fmt.Sprintf("Error: %v", dirErr))
+			m.setContent(fmt.Sprintf("Error: %v", dirErr))
 			m.content.links = nil
 			m.content.linkCursor = -1
 			m.content.brokenCount = 0
@@ -187,7 +187,7 @@ func (m *Model) refreshContent(path string) {
 		src, err = os.ReadFile(path)
 		if err != nil {
 			m.status = err.Error()
-			m.content.viewport.SetContent(fmt.Sprintf("Error: %v", err))
+			m.setContent(fmt.Sprintf("Error: %v", err))
 			m.content.links = nil
 			m.content.linkCursor = -1
 			m.content.brokenCount = 0
@@ -202,7 +202,7 @@ func (m *Model) refreshContent(path string) {
 		})
 		if rerr != nil {
 			m.status = rerr.Error()
-			m.content.viewport.SetContent(fmt.Sprintf("Error: %v", rerr))
+			m.setContent(fmt.Sprintf("Error: %v", rerr))
 		} else {
 			m.status = path
 			m.setContent(out)
@@ -233,7 +233,7 @@ func (m *Model) refreshContent(path string) {
 	out, links, deps, err := m.content.renderer.RenderWithLinks(string(src), path, linkZoneMarker)
 	if err != nil {
 		m.status = err.Error()
-		m.content.viewport.SetContent(fmt.Sprintf("Error: %v", err))
+		m.setContent(fmt.Sprintf("Error: %v", err))
 		m.content.links = nil
 		m.content.linkCursor = -1
 		m.content.embedDeps = nil
@@ -448,7 +448,7 @@ func (m *Model) extractSelection() string {
 		if hi < lo {
 			hi = lo
 		}
-		parts = append(parts, ansi.Strip(ansi.Cut(lines[i], lo, hi)))
+		parts = append(parts, strings.TrimRight(ansi.Strip(ansi.Cut(lines[i], lo, hi)), " \t"))
 	}
 	return strings.Join(parts, "\n")
 }

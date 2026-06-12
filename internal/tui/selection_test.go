@@ -248,3 +248,33 @@ func TestModel_FooterShowsCopiedCount(t *testing.T) {
 		t.Errorf("footer should show copied count; got %q", m.renderFooter())
 	}
 }
+
+func TestModel_ExtractSelection_TrimsTrailingPad(t *testing.T) {
+	root := writeFixture(t)
+	m := sized(t, root, filepath.Join(root, "index.md"))
+	// Two lines, each with trailing padding spaces (as Glamour emits).
+	m.content.rendered = "alpha     \nbravo  "
+	// Select both lines fully (line0 col0..width, line1 col0..width).
+	m.content.selection.anchor = cellPos{0, 0}
+	m.content.selection.cursor = cellPos{1, ansi.StringWidth("bravo  ")}
+	if got := m.extractSelection(); got != "alpha\nbravo" {
+		t.Errorf("trailing pad should be trimmed; got %q want %q", got, "alpha\nbravo")
+	}
+}
+
+func TestModel_PressWhileModalOpenDoesNotArmSelection(t *testing.T) {
+	root := writeFixture(t)
+	m := sized(t, root, filepath.Join(root, "index.md"))
+	// Open the tree modal.
+	m = pressKey(t, m, tea.KeyMsg{Type: tea.KeyCtrlB})
+	if m.modals.kind != modalTree {
+		t.Fatalf("precondition: ^b should open tree modal, got %v", m.modals.kind)
+	}
+	// A press somewhere in the content region must NOT arm a selection
+	// while a modal is open (selection is content-pane only).
+	updated, _ := m.Update(mouseAt(tea.MouseActionPress, 5, 5))
+	m = updated.(Model)
+	if m.content.selection.anchored {
+		t.Error("press while modal open should not arm a content selection")
+	}
+}
