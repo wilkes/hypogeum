@@ -62,7 +62,7 @@ func TestModel_ScreenToContent_MapsAndClamps(t *testing.T) {
 func TestModel_ExtractSelection(t *testing.T) {
 	root := writeFixture(t)
 	m := sized(t, root, filepath.Join(root, "index.md"))
-	m.content.rendered = "hello world\nsecond line\nthird"
+	m.setContent("hello world\nsecond line\nthird")
 
 	cases := []struct {
 		name           string
@@ -91,7 +91,7 @@ func TestModel_ExtractSelection_StripsANSI(t *testing.T) {
 	root := writeFixture(t)
 	m := sized(t, root, filepath.Join(root, "index.md"))
 	// Bold "hello" + reset, then plain " world"; second line plain.
-	m.content.rendered = "\x1b[1mhello\x1b[0m world\nline two"
+	m.setContent("\x1b[1mhello\x1b[0m world\nline two")
 
 	// Select "hello" (cols 0..5 on line 0) — must come back as plain text.
 	m.content.selection.anchor = cellPos{0, 0}
@@ -111,8 +111,7 @@ func TestModel_ExtractSelection_StripsANSI(t *testing.T) {
 func TestModel_SelectionHighlightAppliesAndClears(t *testing.T) {
 	root := writeFixture(t)
 	m := sized(t, root, filepath.Join(root, "index.md"))
-	m.content.rendered = "hello world"
-	m.content.viewport.SetContent(m.content.rendered)
+	m.setContent("hello world")
 	before := m.content.viewport.View()
 
 	m.content.selection.anchor = cellPos{0, 0}
@@ -140,8 +139,7 @@ func TestModel_DragSelectsAndCopies(t *testing.T) {
 	m.copyToClipboard = func(s string) { copied = s }
 
 	// Force a known base so column math is predictable.
-	m.content.rendered = "hello world"
-	m.content.viewport.SetContent(m.content.rendered)
+	m.setContent("hello world")
 
 	// Press at content (1,1) → doc (0,0); drag to (6,1) → doc (0,5); release.
 	updated, _ := m.Update(mouseAt(tea.MouseActionPress, 1, 1))
@@ -191,8 +189,7 @@ func TestModel_EmptyDragDoesNotCopy(t *testing.T) {
 	m := sized(t, root, filepath.Join(root, "index.md"))
 	var calls int
 	m.copyToClipboard = func(string) { calls++ }
-	m.content.rendered = "hello world"
-	m.content.viewport.SetContent(m.content.rendered)
+	m.setContent("hello world")
 
 	updated, _ := m.Update(mouseAt(tea.MouseActionPress, 3, 1))
 	m = updated.(Model)
@@ -210,8 +207,7 @@ func TestModel_KeystrokeClearsFinalizedSelection(t *testing.T) {
 	root := writeFixture(t)
 	m := sized(t, root, filepath.Join(root, "index.md"))
 	m.copyToClipboard = func(string) {}
-	m.content.rendered = "hello world"
-	m.content.viewport.SetContent(m.content.rendered)
+	m.setContent("hello world")
 
 	updated, _ := m.Update(mouseAt(tea.MouseActionPress, 1, 1))
 	m = updated.(Model)
@@ -234,8 +230,7 @@ func TestModel_FooterShowsCopiedCount(t *testing.T) {
 	root := writeFixture(t)
 	m := sized(t, root, filepath.Join(root, "index.md"))
 	m.copyToClipboard = func(string) {}
-	m.content.rendered = "hello world"
-	m.content.viewport.SetContent(m.content.rendered)
+	m.setContent("hello world")
 
 	updated, _ := m.Update(mouseAt(tea.MouseActionPress, 1, 1))
 	m = updated.(Model)
@@ -253,7 +248,7 @@ func TestModel_ExtractSelection_TrimsTrailingPad(t *testing.T) {
 	root := writeFixture(t)
 	m := sized(t, root, filepath.Join(root, "index.md"))
 	// Two lines, each with trailing padding spaces (as Glamour emits).
-	m.content.rendered = "alpha     \nbravo  "
+	m.setContent("alpha     \nbravo  ")
 	// Select both lines fully (line0 col0..width, line1 col0..width).
 	m.content.selection.anchor = cellPos{0, 0}
 	m.content.selection.cursor = cellPos{1, ansi.StringWidth("bravo  ")}

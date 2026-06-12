@@ -64,6 +64,13 @@ type contentUIState struct {
 	// (link-highlight included). The selection overlay is drawn on top
 	// of it and recomputed on every motion without re-running Glamour.
 	rendered string
+	// lines and lineWidths cache the split + per-line visible width of
+	// rendered, recomputed once per setContent. The drag-select hot path
+	// repaints the highlight on every mouse-motion event; reading these
+	// caches keeps that path from re-splitting the whole document and
+	// re-scanning each line's ANSI width on every event.
+	lines      []string
+	lineWidths []int
 	// selection is the current content-pane text selection.
 	selection selection
 }
@@ -102,12 +109,18 @@ func linkZoneMarker(i int) (string, string) {
 // viewport shows.
 func (m *Model) setContent(s string) {
 	m.content.rendered = s
+	m.content.lines = strings.Split(s, "\n")
+	m.content.lineWidths = make([]int, len(m.content.lines))
+	for i, ln := range m.content.lines {
+		m.content.lineWidths[i] = ansi.StringWidth(ln)
+	}
 	m.content.viewport.SetContent(s)
 }
 
-// contentLines splits the stored base render into display lines.
+// contentLines returns the cached split of the stored base render.
+// Populated by setContent; do not mutate the result.
 func (m *Model) contentLines() []string {
-	return strings.Split(m.content.rendered, "\n")
+	return m.content.lines
 }
 
 // screenToContent maps a mouse cell (x, y) to a position in the stored
@@ -128,7 +141,7 @@ func (m *Model) screenToContent(x, y int) cellPos {
 	if col < 0 {
 		col = 0
 	}
-	if w := ansi.StringWidth(lines[line]); col > w {
+	if w := m.content.lineWidths[line]; col > w {
 		col = w
 	}
 	return cellPos{line: line, col: col}
@@ -440,11 +453,11 @@ func (m *Model) extractSelection() string {
 	}
 	if end.line >= len(lines) {
 		end.line = len(lines) - 1
-		end.col = ansi.StringWidth(lines[end.line])
+		end.col = m.content.lineWidths[end.line]
 	}
 	var parts []string
 	for i := start.line; i <= end.line; i++ {
-		lo, hi := selColBounds(i, start, end, ansi.StringWidth(lines[i]))
+		lo, hi := selColBounds(i, start, end, m.content.lineWidths[i])
 		if hi < lo {
 			hi = lo
 		}
@@ -464,21 +477,35 @@ var selectionStyle = lipgloss.NewStyle().Reverse(true)
 func (m *Model) applySelectionHighlight() {
 	start, end := normalizeSel(m.content.selection.anchor, m.content.selection.cursor)
 	lines := m.contentLines()
-	out := make([]string, len(lines))
-	copy(out, lines)
-	for i := start.line; i <= end.line && i < len(lines); i++ {
-		w := ansi.StringWidth(lines[i])
-		lo, hi := selColBounds(i, start, end, w)
-		if hi <= lo {
+	var b strings.Builder
+	b.Grow(len(m.content.rendered) + 16)
+	for i, ln := range lines {
+		if i > 0 {
+			b.WriteByte('\n')
+		}
+		if i < start.line || i > end.line {
+			b.WriteString(ln)
 			continue
 		}
-		before := ansi.Cut(lines[i], 0, lo)
-		mid := ansi.Strip(ansi.Cut(lines[i], lo, hi))
-		after := ansi.Cut(lines[i], hi, w)
-		out[i] = before + selectionStyle.Render(mid) + after
+		lo, hi := selColBounds(i, start, end, m.content.lineWidths[i])
+		if hi <= lo {
+			b.WriteString(ln)
+			continue
+		}
+		b.WriteString(ansi.Cut(ln, 0, lo))
+		b.WriteString(selectionStyle.Render(ansi.Strip(ansi.Cut(ln, lo, hi))))
+		b.WriteString(ansi.Cut(ln, hi, m.content.lineWidths[i]))
 	}
+	m.setViewportPreservingScroll(b.String())
+}
+
+// setViewportPreservingScroll replaces the viewport content while keeping
+// the current scroll offset. Used by the selection-overlay paths, which
+// push a transient string derived from content.rendered without redefining
+// the base — so they bypass setContent on purpose.
+func (m *Model) setViewportPreservingScroll(s string) {
 	offset := m.content.viewport.YOffset
-	m.content.viewport.SetContent(strings.Join(out, "\n"))
+	m.content.viewport.SetContent(s)
 	m.content.viewport.SetYOffset(offset)
 }
 
@@ -488,15 +515,23 @@ func (m *Model) resetSelectionState() {
 	m.content.selection = selection{pendingLink: -1}
 }
 
+// finalizeSelection transitions a just-released drag into the "copied"
+// state: the reverse-video highlight stays on screen until the user's
+// next action, but the gesture is over, so a stray post-release motion
+// event (gated on anchored) no longer extends the span.
+func (m *Model) finalizeSelection() {
+	m.content.selection.copied = true
+	m.content.selection.anchored = false
+	m.content.selection.moved = false
+}
+
 // clearSelection drops the selection and restores the un-highlighted
 // base render (preserving scroll) if a highlight was showing.
 func (m *Model) clearSelection() {
 	had := m.content.selection.moved || m.content.selection.copied
 	m.resetSelectionState()
 	if had {
-		offset := m.content.viewport.YOffset
-		m.content.viewport.SetContent(m.content.rendered)
-		m.content.viewport.SetYOffset(offset)
+		m.setViewportPreservingScroll(m.content.rendered)
 	}
 }
 

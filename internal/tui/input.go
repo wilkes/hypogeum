@@ -83,7 +83,9 @@ func (m *Model) handleMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 
 	debugMouse(msg, m)
 
-	// Tree row hit (tree modal only). Unchanged.
+	// Tree row hit: dispatch to the first visible row containing the
+	// press. Gated on the tree modal being open — BubbleZone keeps stale
+	// zones across re-renders, so a closed modal mustn't catch clicks.
 	if m.modals.kind == modalTree {
 		for i := range m.tree.flat {
 			if zone.Get(treeRowZoneID(i)).InBounds(msg) {
@@ -124,7 +126,6 @@ func (m *Model) handleMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 func (m *Model) dragSelect(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 	m.content.selection.cursor = m.screenToContent(msg.X, msg.Y)
 	m.content.selection.moved = true
-	m.content.selection.copied = false
 	m.applySelectionHighlight()
 	return *m, nil
 }
@@ -139,9 +140,7 @@ func (m *Model) endSelect() (tea.Model, tea.Cmd) {
 		if n := utf8.RuneCountInString(text); n > 0 {
 			m.copyToClipboard(text)
 			m.diag.Info(fmt.Sprintf("Copied %d chars", n))
-			m.content.selection.copied = true
-			m.content.selection.anchored = false
-			m.content.selection.moved = false
+			m.finalizeSelection()
 			return *m, nil
 		}
 		// Zero-width drag → treat as a click with no link.
