@@ -123,7 +123,7 @@ import "strings" // add to the import block
 
 func TestModel_RenderedBaseIsStored(t *testing.T) {
 	root := writeFixture(t)
-	m := sized(t, filepath.Join(root, "index.md"), "") // open index.md
+	m := sized(t, root, filepath.Join(root, "index.md")) // open index.md
 	if m.content.rendered == "" {
 		t.Fatal("content.rendered should hold the rendered output after open")
 	}
@@ -254,7 +254,7 @@ Append to `internal/tui/selection_test.go`:
 ```go
 func TestModel_ScreenToContent_MapsAndClamps(t *testing.T) {
 	root := writeFixture(t)
-	m := sized(t, filepath.Join(root, "index.md"), "")
+	m := sized(t, root, filepath.Join(root, "index.md"))
 	// Top-left content cell (border at 0,0 → text at 1,1) maps to line 0,col 0.
 	if got := m.screenToContent(1, 1); got != (cellPos{line: 0, col: 0}) {
 		t.Errorf("screenToContent(1,1) = %+v, want {0,0}", got)
@@ -340,7 +340,7 @@ Append to `internal/tui/selection_test.go`. These tests set `m.content.rendered`
 ```go
 func TestModel_ExtractSelection(t *testing.T) {
 	root := writeFixture(t)
-	m := sized(t, filepath.Join(root, "index.md"), "")
+	m := sized(t, root, filepath.Join(root, "index.md"))
 	m.content.rendered = "hello world\nsecond line\nthird"
 
 	cases := []struct {
@@ -453,7 +453,7 @@ Append to `internal/tui/selection_test.go`:
 ```go
 func TestModel_SelectionHighlightAppliesAndClears(t *testing.T) {
 	root := writeFixture(t)
-	m := sized(t, filepath.Join(root, "index.md"), "")
+	m := sized(t, root, filepath.Join(root, "index.md"))
 	m.content.rendered = "hello world"
 	m.content.viewport.SetContent(m.content.rendered)
 	m.content.selection.anchor = cellPos{0, 0}
@@ -578,7 +578,7 @@ Then the integration tests:
 ```go
 func TestModel_DragSelectsAndCopies(t *testing.T) {
 	root := writeFixture(t)
-	m := sized(t, filepath.Join(root, "index.md"), "")
+	m := sized(t, root, filepath.Join(root, "index.md"))
 
 	var copied string
 	m.copyToClipboard = func(s string) { copied = s }
@@ -605,7 +605,7 @@ func TestModel_DragSelectsAndCopies(t *testing.T) {
 
 func TestModel_ClickWithoutDragFollowsLink(t *testing.T) {
 	root := writeFixture(t)
-	m := sized(t, filepath.Join(root, "index.md"), "")
+	m := sized(t, root, filepath.Join(root, "index.md"))
 	var copied string
 	m.copyToClipboard = func(s string) { copied = s }
 
@@ -635,7 +635,7 @@ func TestModel_ClickWithoutDragFollowsLink(t *testing.T) {
 
 func TestModel_EmptyDragDoesNotCopy(t *testing.T) {
 	root := writeFixture(t)
-	m := sized(t, filepath.Join(root, "index.md"), "")
+	m := sized(t, root, filepath.Join(root, "index.md"))
 	var calls int
 	m.copyToClipboard = func(string) { calls++ }
 	m.content.rendered = "hello world"
@@ -808,7 +808,7 @@ Append to `internal/tui/selection_test.go`:
 ```go
 func TestModel_KeystrokeClearsFinalizedSelection(t *testing.T) {
 	root := writeFixture(t)
-	m := sized(t, filepath.Join(root, "index.md"), "")
+	m := sized(t, root, filepath.Join(root, "index.md"))
 	m.copyToClipboard = func(string) {}
 	m.content.rendered = "hello world"
 	m.content.viewport.SetContent(m.content.rendered)
@@ -832,7 +832,7 @@ func TestModel_KeystrokeClearsFinalizedSelection(t *testing.T) {
 
 func TestModel_FooterShowsCopiedCount(t *testing.T) {
 	root := writeFixture(t)
-	m := sized(t, filepath.Join(root, "index.md"), "")
+	m := sized(t, root, filepath.Join(root, "index.md"))
 	m.copyToClipboard = func(string) {}
 	m.content.rendered = "hello world"
 	m.content.viewport.SetContent(m.content.rendered)
