@@ -45,6 +45,7 @@ Cross-cutting ideas that show up in multiple specs and packages. Each is its own
 - [Keybinding dialects](superpowers/specs/2026-05-31-keybinding-dialects-design.md) — two coherent presets: pager (default, vim/less idioms) and modern (VS Code/browser idioms), selected via a TOML config file at the OS-canonical user-config path.
 - [Glamour table wrap](superpowers/plans/2026-06-01-glamour-table-wrap.md) — upgrade Glamour 0.8.0 → 0.10.0 so long table cells wrap to multiple lines instead of being character-truncated mid-word. Pins `│`/`─` separators and disables Glamour's new in-table-links footer to preserve the existing URL-hiding + alignment invariants.
 - [Drag-to-select with auto-copy](superpowers/specs/2026-06-12-drag-to-select-copy-design.md) — shipped — app-drawn character-level mouse selection in the content pane; copies to the clipboard on mouse-release (OS clipboard via `atotto` + OSC 52 via `termenv.Copy` — covers local terminals incl. Terminal.app *and* SSH), persists the highlight, and shows a "Copied N chars" footer toast. Uses `charmbracelet/x/ansi` `Cut`/`Strip` for column-accurate extraction over ANSI-styled lines.
+- [Copy current file path](superpowers/specs/2026-06-12-copy-current-path-design.md) — `y` (pager) / `^y` (modern) copies the absolute path of the current view (`m.history.Current()`) via the existing `copyToClipboard`, toasting `Copied path: <path>`. No-op when nothing is open.
 
 ## Conventions for adding to this folder
 

@@ -4,7 +4,7 @@ Guidance for Claude Code working in this repo. Keep this file short and accurate
 
 ## What this is
 
-`hypogeum` is a terminal markdown browser. Point it at a directory of `.md` files; rendered content fills the screen, `^p` opens a fuzzy file finder, `/` (pager) / `Ctrl+F` (modern) opens a full-text search modal, `^b` opens the directory tree in a modal, and `h`/`l` navigate browser-style history (pager dialect; modern uses `Alt+←/→`).
+`hypogeum` is a terminal markdown browser. Point it at a directory of `.md` files; rendered content fills the screen, `^p` opens a fuzzy file finder, `/` (pager) / `Ctrl+F` (modern) opens a full-text search modal, `^b` opens the directory tree in a modal, `h`/`l` navigate browser-style history (pager dialect; modern uses `Alt+←/→`), and `y` (pager) / `^y` (modern) copies the current file's absolute path to the clipboard.
 
 Built on the Charm stack: Bubble Tea (Elm-style update loop), Bubbles (widgets — viewport, key bindings), Lip Gloss (styling), Glamour (markdown → ANSI).
 
