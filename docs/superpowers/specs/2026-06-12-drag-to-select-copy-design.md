@@ -1,6 +1,6 @@
 # Drag-to-select with auto-copy — design
 
-Status: design approved, spec under review.
+Status: shipped.
 
 ## Goal
 
