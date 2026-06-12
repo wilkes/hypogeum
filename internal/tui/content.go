@@ -405,6 +405,53 @@ func rangesEqual(a, b *markdown.LineRange) bool {
 	return a.Start == b.Start && a.End == b.End
 }
 
+// normalizeSel returns a, b ordered so start is at or before end in
+// reading order, regardless of drag direction.
+func normalizeSel(a, b cellPos) (start, end cellPos) {
+	if a.line < b.line || (a.line == b.line && a.col <= b.col) {
+		return a, b
+	}
+	return b, a
+}
+
+// selColBounds returns the [lo, hi) visible-column range selected on
+// line i, given the normalized start/end and the line's visible width.
+// First line starts at start.col; last line ends at end.col; middle
+// lines span the whole line.
+func selColBounds(i int, start, end cellPos, width int) (lo, hi int) {
+	lo, hi = 0, width
+	if i == start.line {
+		lo = start.col
+	}
+	if i == end.line {
+		hi = end.col
+	}
+	return lo, hi
+}
+
+// extractSelection returns the selected text as plain (ANSI-stripped)
+// content, newline-joined across lines. Empty if the span is zero-width.
+func (m *Model) extractSelection() string {
+	start, end := normalizeSel(m.content.selection.anchor, m.content.selection.cursor)
+	lines := m.contentLines()
+	if start.line >= len(lines) {
+		return ""
+	}
+	if end.line >= len(lines) {
+		end.line = len(lines) - 1
+		end.col = ansi.StringWidth(lines[end.line])
+	}
+	var parts []string
+	for i := start.line; i <= end.line; i++ {
+		lo, hi := selColBounds(i, start, end, ansi.StringWidth(lines[i]))
+		if hi < lo {
+			hi = lo
+		}
+		parts = append(parts, ansi.Strip(ansi.Cut(lines[i], lo, hi)))
+	}
+	return strings.Join(parts, "\n")
+}
+
 // allVaultMarkdownPaths walks m.rootNode and returns every markdown file
 // as an absolute path. Tree was already pruned to markdown-only by tree.Walk.
 func (m *Model) allVaultMarkdownPaths() []string {
