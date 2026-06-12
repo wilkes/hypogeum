@@ -3,6 +3,7 @@ package tui
 import (
 	"fmt"
 	"os"
+	"unicode/utf8"
 
 	"github.com/charmbracelet/bubbles/key"
 	tea "github.com/charmbracelet/bubbletea"
@@ -45,28 +46,44 @@ func debugMouse(msg tea.MouseMsg, m *Model) {
 // dispatching here. This keeps mutation sites unambiguous: if a method
 // changes m, it's a *Model method, and the returned tea.Model is *m.
 
-// handleMouse routes a mouse event to the pane (or link) it lands in
-// using BubbleZone hit-testing. Wheel events go straight to the viewport
-// (it scrolls regardless of click position). Left-button presses are
-// dispatched in priority order: tree row first, then link in content,
-// then content pane fall-through to viewport.
+// handleMouse routes a mouse event using BubbleZone hit-testing. Wheel
+// events scroll the viewport regardless of position. A left-press inside
+// the content pane (no modal open) arms a text selection, remembering any
+// link under the press but not following it yet. Motion while armed
+// extends the selection and repaints the highlight; release either copies
+// the selected text (if the pointer moved) or, on a no-motion click,
+// follows the remembered link. While the tree modal is open, a press on a
+// tree row is dispatched to clickTree instead.
 func (m *Model) handleMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 	if tea.MouseEvent(msg).IsWheel() {
 		var cmd tea.Cmd
 		m.content.viewport, cmd = m.content.viewport.Update(msg)
 		return *m, cmd
 	}
+
+	// Motion / release only matter while a content-pane selection is
+	// being tracked. Gating on `anchored` (not the button, which some
+	// terminals report as None on release) keeps this robust.
+	switch msg.Action {
+	case tea.MouseActionMotion:
+		if m.content.selection.anchored {
+			return m.dragSelect(msg)
+		}
+		return *m, nil
+	case tea.MouseActionRelease:
+		if m.content.selection.anchored {
+			return m.endSelect()
+		}
+		return *m, nil
+	}
+
 	if msg.Action != tea.MouseActionPress || msg.Button != tea.MouseButtonLeft {
 		return *m, nil
 	}
 
 	debugMouse(msg, m)
 
-	// Tree row hit. Iterate visible rows; the first that contains the
-	// click wins. Stops at len(m.tree.flat) so out-of-range zones from a
-	// previous longer document don't match. Active only when the tree
-	// modal is open — BubbleZone keeps stale zones across re-renders,
-	// so a closed modal mustn't catch clicks.
+	// Tree row hit (tree modal only). Unchanged.
 	if m.modals.kind == modalTree {
 		for i := range m.tree.flat {
 			if zone.Get(treeRowZoneID(i)).InBounds(msg) {
@@ -75,27 +92,70 @@ func (m *Model) handleMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 		}
 	}
 
-	// Content link hit. Each link's visible text is a separate zone so a
-	// click on any cell of (possibly word-wrapped) link text follows it.
-	for i, l := range m.content.links {
-		if zone.Get(linkZoneID(i)).InBounds(msg) {
-			m.focus = focusContent
-			m.content.linkCursor = i
-			m.followLink(l)
+	// Content-pane press: start a potential selection. Only when no modal
+	// is open (modals keep their own click behavior). Remember a link
+	// under the press so a no-motion release still follows it; do NOT
+	// follow it here — the first motion event turns this into a drag.
+	if m.modals.kind == modalNone && zone.Get(zoneContentPane).InBounds(msg) {
+		m.clearSelection() // drop any prior finalized highlight
+		m.focus = focusContent
+		pos := m.screenToContent(msg.X, msg.Y)
+		link := -1
+		for i := range m.content.links {
+			if zone.Get(linkZoneID(i)).InBounds(msg) {
+				link = i
+				break
+			}
+		}
+		m.content.selection = selection{
+			anchored:    true,
+			anchor:      pos,
+			cursor:      pos,
+			pendingLink: link,
+		}
+		return *m, nil
+	}
+
+	return *m, nil
+}
+
+// dragSelect extends the in-progress selection to the motion point and
+// repaints the highlight.
+func (m *Model) dragSelect(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
+	m.content.selection.cursor = m.screenToContent(msg.X, msg.Y)
+	m.content.selection.moved = true
+	m.content.selection.copied = false
+	m.applySelectionHighlight()
+	return *m, nil
+}
+
+// endSelect finalizes the selection on button release. With motion, it
+// copies the selected text (keeping the highlight) and toasts. Without
+// motion, it was a click: follow the remembered link if any.
+func (m *Model) endSelect() (tea.Model, tea.Cmd) {
+	sel := m.content.selection
+	if sel.moved {
+		text := m.extractSelection()
+		if n := utf8.RuneCountInString(text); n > 0 {
+			m.copyToClipboard(text)
+			m.diag.Info(fmt.Sprintf("Copied %d chars", n))
+			m.content.selection.copied = true
+			m.content.selection.anchored = false
+			m.content.selection.moved = false
 			return *m, nil
 		}
+		// Zero-width drag → treat as a click with no link.
+		m.clearSelection()
+		return *m, nil
 	}
 
-	// Content pane fall-through: any click inside the content pane that
-	// missed a link gives focus and forwards to the viewport (so future
-	// viewport features like text selection keep working).
-	if zone.Get(zoneContentPane).InBounds(msg) {
+	link := sel.pendingLink
+	m.clearSelection()
+	if link >= 0 && link < len(m.content.links) {
 		m.focus = focusContent
-		var cmd tea.Cmd
-		m.content.viewport, cmd = m.content.viewport.Update(msg)
-		return *m, cmd
+		m.content.linkCursor = link
+		m.followLink(m.content.links[link])
 	}
-
 	return *m, nil
 }
 
@@ -426,7 +486,6 @@ func (m *Model) handleContentKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	m.content.viewport, cmd = m.content.viewport.Update(msg)
 	return *m, cmd
 }
-
 
 // handleTreeModalKey routes keystrokes while the tree modal is open.
 // Up/Down/k/j move the cursor; Space toggles a folder; Left/h collapses

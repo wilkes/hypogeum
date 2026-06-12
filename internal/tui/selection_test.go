@@ -5,10 +5,16 @@ import (
 	"strings"
 	"testing"
 
+	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/x/ansi"
+	zone "github.com/lrstanley/bubblezone"
 )
 
 func stripANSItest(s string) string { return ansi.Strip(s) }
+
+func mouseAt(action tea.MouseAction, x, y int) tea.MouseMsg {
+	return tea.MouseMsg{X: x, Y: y, Action: action, Button: tea.MouseButtonLeft}
+}
 
 func TestModel_CopyToClipboard_DefaultIsSet(t *testing.T) {
 	root := writeFixture(t)
@@ -123,5 +129,79 @@ func TestModel_SelectionHighlightAppliesAndClears(t *testing.T) {
 	cleared := m.content.viewport.View()
 	if cleared != before {
 		t.Errorf("clearSelection should restore the base view; got %q want %q", cleared, before)
+	}
+}
+
+func TestModel_DragSelectsAndCopies(t *testing.T) {
+	root := writeFixture(t)
+	m := sized(t, root, filepath.Join(root, "index.md"))
+
+	var copied string
+	m.copyToClipboard = func(s string) { copied = s }
+
+	// Force a known base so column math is predictable.
+	m.content.rendered = "hello world"
+	m.content.viewport.SetContent(m.content.rendered)
+
+	// Press at content (1,1) → doc (0,0); drag to (6,1) → doc (0,5); release.
+	updated, _ := m.Update(mouseAt(tea.MouseActionPress, 1, 1))
+	m = updated.(Model)
+	updated, _ = m.Update(mouseAt(tea.MouseActionMotion, 6, 1))
+	m = updated.(Model)
+	updated, _ = m.Update(mouseAt(tea.MouseActionRelease, 6, 1))
+	m = updated.(Model)
+
+	if copied != "hello" {
+		t.Errorf("clipboard got %q, want %q", copied, "hello")
+	}
+	if !m.content.selection.copied {
+		t.Error("selection.copied should be true after release with text")
+	}
+}
+
+func TestModel_ClickWithoutDragFollowsLink(t *testing.T) {
+	root := writeFixture(t)
+	m := sized(t, root, filepath.Join(root, "index.md"))
+	var copied string
+	m.copyToClipboard = func(s string) { copied = s }
+
+	if len(m.content.links) == 0 {
+		t.Fatal("expected at least one link in index.md")
+	}
+	renderAndScan(t, m, zoneContentPane)
+	lz := zone.Get(linkZoneID(0))
+	if lz.IsZero() {
+		t.Fatal("link zone 0 not registered")
+	}
+	updated, _ := m.Update(mouseAt(tea.MouseActionPress, lz.StartX, lz.StartY))
+	m = updated.(Model)
+	updated, _ = m.Update(mouseAt(tea.MouseActionRelease, lz.StartX, lz.StartY))
+	m = updated.(Model)
+
+	if copied != "" {
+		t.Errorf("a click should not copy; got %q", copied)
+	}
+	if got := m.history.Current(); filepath.Base(got) != "first.md" {
+		t.Errorf("click should follow link to first.md; current=%q", got)
+	}
+}
+
+func TestModel_EmptyDragDoesNotCopy(t *testing.T) {
+	root := writeFixture(t)
+	m := sized(t, root, filepath.Join(root, "index.md"))
+	var calls int
+	m.copyToClipboard = func(string) { calls++ }
+	m.content.rendered = "hello world"
+	m.content.viewport.SetContent(m.content.rendered)
+
+	updated, _ := m.Update(mouseAt(tea.MouseActionPress, 3, 1))
+	m = updated.(Model)
+	updated, _ = m.Update(mouseAt(tea.MouseActionMotion, 3, 1)) // same cell
+	m = updated.(Model)
+	updated, _ = m.Update(mouseAt(tea.MouseActionRelease, 3, 1))
+	m = updated.(Model)
+
+	if calls != 0 {
+		t.Errorf("zero-width drag should not copy; got %d calls", calls)
 	}
 }
