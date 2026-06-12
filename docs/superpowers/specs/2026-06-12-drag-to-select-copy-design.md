@@ -173,41 +173,56 @@ selection can sit on top of a highlighted link without conflict.
 
 ## Clipboard
 
-> **Spec correction (2026-06-12):** the originally-named
-> `tea.SetClipboard` does **not** exist in the pinned Bubble Tea
-> v1.3.4. Backend chosen: **OSC 52 via `termenv.Copy`**.
+> **Spec corrections (2026-06-12):**
+> 1. The originally-named `tea.SetClipboard` does **not** exist in the
+>    pinned Bubble Tea v1.3.4.
+> 2. Pure OSC 52 (`termenv.Copy`) was the first backend, but **macOS
+>    Terminal.app has no OSC 52 support** and silently drops the escape
+>    — verified by a real-PTY drag whose `pbpaste` showed the clipboard
+>    unchanged while the escape was emitted. Final backend: **dual
+>    transport — OS clipboard (`atotto/clipboard`) *plus* OSC 52
+>    (`termenv.Copy`)**.
 
-`github.com/muesli/termenv` (already a *direct* dependency) exposes
-`termenv.Copy(text string)` (and `Output.Copy`), which emits an **OSC
-52** escape. OSC 52 copies *through the terminal*, so it works over SSH
-and inside tmux with no `pbcopy`/`xclip` platform binary, and adds no
-new dependency.
+The default writer does both:
 
-The write is injected behind a function seam so tests stay TTY-free,
-mirroring the existing `openExternal externalOpener` pattern
-(`internal/tui/external.go`):
+- `github.com/atotto/clipboard` (now a *direct* dependency; already in
+  the module graph transitively) writes the **OS clipboard** via
+  `pbcopy` on macOS, `xclip`/`xsel`/`wl-copy` on Linux. This is the
+  reliable path for a *local* terminal, including Terminal.app.
+- `github.com/muesli/termenv` `termenv.Copy(text string)` emits an
+  **OSC 52** escape, which carries the copy *through the terminal* over
+  SSH/tmux, where the OS-clipboard call would target the wrong (remote)
+  machine.
+
+The write is injected behind a function seam so tests stay TTY-free and
+never touch a real clipboard, mirroring the existing `openExternal
+externalOpener` pattern (`internal/tui/external.go`):
 
 ```go
-// clipboardWriter copies text to the system clipboard. Injected so
-// tests can record calls instead of emitting a real OSC 52 escape.
+// clipboardWriter copies text to the clipboard. Injected so tests
+// record calls instead of touching a real clipboard.
 type clipboardWriter func(text string)
 
-// defaultClipboardWriter is termenv.Copy (OSC 52). Real terminals copy;
-// tests substitute a recorder.
-func defaultClipboardWriter(text string) { termenv.Copy(text) }
+// defaultClipboardWriter writes the OS clipboard (atotto) AND emits
+// OSC 52 (termenv). Local terminals get the former; SSH/tmux the latter.
+func defaultClipboardWriter(text string) {
+	_ = clipboard.WriteAll(text) // best-effort; errs on headless SSH
+	termenv.Copy(text)
+}
 ```
 
 `Model` gains a `copyToClipboard clipboardWriter` field, defaulted in
 `New` to `defaultClipboardWriter` and overridable in tests.
 
-**Caveat (accepted):** `termenv.Copy` writes the escape to stdout
-outside Bubble Tea's render mutex. In practice this is safe — OSC 52 is
-an invisible sequence that does not move the cursor or alter cells, and
-emitting it this way is a widely-used pattern. It requires terminal OSC
-52 support (most modern terminals; a few need it enabled). `termenv.Copy`
-returns no error, so there is nothing to surface on failure; the
-persistent highlight + toast are the user-visible confirmation that a
-copy was attempted.
+**Caveat (accepted):** both transports are best-effort. `atotto`
+returns an error when no clipboard utility is reachable (e.g. a headless
+Linux box over SSH); we ignore it and rely on OSC 52 there. `termenv.Copy`
+writes the escape to stdout outside Bubble Tea's render mutex — safe in
+practice (OSC 52 is invisible and does not move the cursor) — and is a
+no-op on terminals that don't honor OSC 52 (Terminal.app), where atotto
+covers it. Neither returns a surfaced error; the persistent highlight +
+"Copied N chars" toast are the user-visible confirmation that a copy was
+attempted.
 
 ## Footer toast
 
