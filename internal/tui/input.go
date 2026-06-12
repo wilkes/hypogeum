@@ -179,6 +179,12 @@ func (m *Model) clickTree(row int) (tea.Model, tea.Cmd) {
 }
 
 func (m *Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	// A finalized selection keeps its highlight until the user acts.
+	// Any keystroke drops it; the key still performs its normal action.
+	if m.content.selection.copied {
+		m.clearSelection()
+	}
+
 	// The picker's text input claims every printable keystroke. Route
 	// printable keys to it first so global modal-toggle keys that are
 	// plain letters (b, ?) don't swap the picker out when the user

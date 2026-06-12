@@ -205,3 +205,46 @@ func TestModel_EmptyDragDoesNotCopy(t *testing.T) {
 		t.Errorf("zero-width drag should not copy; got %d calls", calls)
 	}
 }
+
+func TestModel_KeystrokeClearsFinalizedSelection(t *testing.T) {
+	root := writeFixture(t)
+	m := sized(t, root, filepath.Join(root, "index.md"))
+	m.copyToClipboard = func(string) {}
+	m.content.rendered = "hello world"
+	m.content.viewport.SetContent(m.content.rendered)
+
+	updated, _ := m.Update(mouseAt(tea.MouseActionPress, 1, 1))
+	m = updated.(Model)
+	updated, _ = m.Update(mouseAt(tea.MouseActionMotion, 6, 1))
+	m = updated.(Model)
+	updated, _ = m.Update(mouseAt(tea.MouseActionRelease, 6, 1))
+	m = updated.(Model)
+	if !m.content.selection.copied {
+		t.Fatal("precondition: selection should be copied")
+	}
+
+	// Any key clears it (use 'j', a harmless scroll key).
+	m = pressKey(t, m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'j'}})
+	if m.content.selection.copied {
+		t.Error("keystroke should clear the finalized selection")
+	}
+}
+
+func TestModel_FooterShowsCopiedCount(t *testing.T) {
+	root := writeFixture(t)
+	m := sized(t, root, filepath.Join(root, "index.md"))
+	m.copyToClipboard = func(string) {}
+	m.content.rendered = "hello world"
+	m.content.viewport.SetContent(m.content.rendered)
+
+	updated, _ := m.Update(mouseAt(tea.MouseActionPress, 1, 1))
+	m = updated.(Model)
+	updated, _ = m.Update(mouseAt(tea.MouseActionMotion, 6, 1))
+	m = updated.(Model)
+	updated, _ = m.Update(mouseAt(tea.MouseActionRelease, 6, 1))
+	m = updated.(Model)
+
+	if !strings.Contains(m.renderFooter(), "Copied 5 chars") {
+		t.Errorf("footer should show copied count; got %q", m.renderFooter())
+	}
+}
