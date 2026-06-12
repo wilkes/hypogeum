@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/charmbracelet/bubbles/viewport"
 	zone "github.com/lrstanley/bubblezone"
@@ -13,6 +14,24 @@ import (
 	"github.com/wilkes/hypogeum/internal/tree"
 	"github.com/wilkes/hypogeum/internal/watch"
 )
+
+// cellPos is a position in the rendered content: an absolute line index
+// (independent of viewport scroll) and a visible column (0-based).
+type cellPos struct {
+	line int
+	col  int
+}
+
+// selection tracks an in-progress or finalized text selection in the
+// content pane, in absolute document coordinates.
+type selection struct {
+	anchored    bool    // a left-press landed in the content pane
+	moved       bool    // motion seen since the press (click-vs-drag)
+	copied      bool    // released with text → highlight persists
+	anchor      cellPos // where the drag started
+	cursor      cellPos // current / final drag point
+	pendingLink int     // link index under the press, or -1
+}
 
 // contentUIState bundles the right content pane's render state. viewport
 // scrolls the rendered markdown; renderer is rebuilt at every WindowSizeMsg
@@ -39,6 +58,12 @@ type contentUIState struct {
 	// by Esc, by opening any other file, and by following a different
 	// range link.
 	rangeHighlight *markdown.LineRange
+	// rendered is the last full content string handed to the viewport
+	// (link-highlight included). The selection overlay is drawn on top
+	// of it and recomputed on every motion without re-running Glamour.
+	rendered string
+	// selection is the current content-pane text selection.
+	selection selection
 }
 
 // linkZoneID returns the BubbleZone id used to track the i-th link in
@@ -69,6 +94,20 @@ func linkZoneMarker(i int) (string, string) {
 	return wrapped[:mid], wrapped[mid+len(placeholder):]
 }
 
+// setContent stores s as the selection overlay's base and hands it to
+// the viewport. Every code path that displays real rendered content
+// must go through here so content.rendered stays in sync with what the
+// viewport shows.
+func (m *Model) setContent(s string) {
+	m.content.rendered = s
+	m.content.viewport.SetContent(s)
+}
+
+// contentLines splits the stored base render into display lines.
+func (m *Model) contentLines() []string {
+	return strings.Split(m.content.rendered, "\n")
+}
+
 // openFile records a visit in history and renders the file.
 func (m *Model) openFile(path string) {
 	m.history.Visit(path)
@@ -92,6 +131,7 @@ func (m *Model) navigateTo(path string) {
 // touching history. Used by back/forward and on resize. Also refreshes
 // the link list and clears any active link selection.
 func (m *Model) refreshContent(path string) {
+	m.content.selection = selection{pendingLink: -1}
 	// Single-shot pre-select: clear the fields unconditionally before any
 	// early return, so a read or render failure here can't leak a stale
 	// target into the next refreshContent.
@@ -139,7 +179,7 @@ func (m *Model) refreshContent(path string) {
 			m.content.viewport.SetContent(fmt.Sprintf("Error: %v", rerr))
 		} else {
 			m.status = path
-			m.content.viewport.SetContent(out)
+			m.setContent(out)
 			m.content.viewport.GotoTop()
 			if m.content.rangeHighlight != nil {
 				m.scrollToLine(m.content.rangeHighlight.Start)
@@ -175,7 +215,7 @@ func (m *Model) refreshContent(path string) {
 		return
 	}
 	m.status = path
-	m.content.viewport.SetContent(out)
+	m.setContent(out)
 	m.content.viewport.GotoTop()
 	if pendingScrollLine > 0 {
 		m.scrollToLine(pendingScrollLine)

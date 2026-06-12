@@ -59,7 +59,7 @@ func (m *Model) applyLinkHighlight() {
 		return
 	}
 	offset := m.content.viewport.YOffset
-	m.content.viewport.SetContent(out)
+	m.setContent(out)
 	m.content.viewport.SetYOffset(offset)
 }
 
