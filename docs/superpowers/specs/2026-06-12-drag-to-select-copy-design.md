@@ -101,7 +101,7 @@ Extends the content-pane branch of `handleMouse`
   press is **not** followed.
 - **Release**: if `!moved` → it was a click; follow the remembered link
   or fall through to the viewport exactly as today. If `moved` →
-  finalize: extract text, emit the clipboard `tea.Cmd`, push the footer
+  finalize: extract text, call `m.copyToClipboard(text)`, push the footer
   toast, set `copied = true` (`active` stays true so the highlight
   persists), clear `moved`.
 
@@ -173,13 +173,41 @@ selection can sit on top of a highlighted link without conflict.
 
 ## Clipboard
 
-Primary path: `tea.SetClipboard(text)`, which emits an **OSC 52**
-escape. It copies *through the terminal*, so it works over SSH with no
-`pbcopy`/`xclip` platform binary. It returns a `tea.Cmd`, which fits
-cleanly — `handleMouse` already returns `(tea.Model, tea.Cmd)`.
+> **Spec correction (2026-06-12):** the originally-named
+> `tea.SetClipboard` does **not** exist in the pinned Bubble Tea
+> v1.3.4. Backend chosen: **OSC 52 via `termenv.Copy`**.
 
-`atotto/clipboard` and `go-osc52` are already in the module graph
-transitively; no new direct dependency beyond what Bubble Tea exposes.
+`github.com/muesli/termenv` (already a *direct* dependency) exposes
+`termenv.Copy(text string)` (and `Output.Copy`), which emits an **OSC
+52** escape. OSC 52 copies *through the terminal*, so it works over SSH
+and inside tmux with no `pbcopy`/`xclip` platform binary, and adds no
+new dependency.
+
+The write is injected behind a function seam so tests stay TTY-free,
+mirroring the existing `openExternal externalOpener` pattern
+(`internal/tui/external.go`):
+
+```go
+// clipboardWriter copies text to the system clipboard. Injected so
+// tests can record calls instead of emitting a real OSC 52 escape.
+type clipboardWriter func(text string)
+
+// defaultClipboardWriter is termenv.Copy (OSC 52). Real terminals copy;
+// tests substitute a recorder.
+func defaultClipboardWriter(text string) { termenv.Copy(text) }
+```
+
+`Model` gains a `copyToClipboard clipboardWriter` field, defaulted in
+`New` to `defaultClipboardWriter` and overridable in tests.
+
+**Caveat (accepted):** `termenv.Copy` writes the escape to stdout
+outside Bubble Tea's render mutex. In practice this is safe — OSC 52 is
+an invisible sequence that does not move the cursor or alter cells, and
+emitting it this way is a widely-used pattern. It requires terminal OSC
+52 support (most modern terminals; a few need it enabled). `termenv.Copy`
+returns no error, so there is nothing to surface on failure; the
+persistent highlight + toast are the user-visible confirmation that a
+copy was attempted.
 
 ## Footer toast
 
@@ -218,8 +246,8 @@ following `internal/tui/model_test.go` conventions:
 - Highlight overlay appears after motion and clears on the next
   press / keystroke / navigation.
 - Footer shows "Copied N chars" after a real selection.
-- The returned `tea.Cmd` carries the clipboard payload (assert on the
-  command, keeping the test TTY-free).
+- The injected `copyToClipboard` recorder receives the expected payload
+  (keeps the test TTY-free; no real OSC 52 emission).
 
 ## Out of scope
 
@@ -236,6 +264,10 @@ following `internal/tui/model_test.go` conventions:
   extraction + overlay helpers.
 - `internal/tui/input.go` — mouse lifecycle (press/motion/release) in
   the content-pane branch of `handleMouse`.
+- `internal/tui/model.go` — `copyToClipboard clipboardWriter` field on
+  `Model`, defaulted in `New`.
+- `internal/tui/external.go` or a new `internal/tui/clipboard.go` — the
+  `clipboardWriter` type + `defaultClipboardWriter` (termenv.Copy).
 - `internal/tui/view.go` — none expected (overlay goes through
   `SetContent`; footer reuses the diagnostics transient).
 - Tests alongside in `internal/tui/`.
