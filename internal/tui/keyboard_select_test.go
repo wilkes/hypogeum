@@ -283,3 +283,45 @@ func TestVisual_RegressionCopyPathOutsideVisual(t *testing.T) {
 		t.Errorf("y outside visual should copy the path; got %q", copied)
 	}
 }
+
+func TestVisual_GJumpsToTopFromMidDoc(t *testing.T) {
+	root := writeFixture(t)
+	m := sized(t, root, "")
+	m.setContent(tallContent(100))
+
+	m = pressRune(t, m, 'v')
+	m = pressRune(t, m, 'G') // caret to end of last line (bottom)
+	if m.content.selection.cursor.line == 0 {
+		t.Fatal("precondition: G should have moved the caret off line 0")
+	}
+	m = pressRune(t, m, 'g') // jump back to top-left
+	if got := m.content.selection.cursor; got != (cellPos{line: 0, col: 0}) {
+		t.Errorf("g should jump the caret to {0,0}; got %+v", got)
+	}
+}
+
+func TestVisual_BackwardSelectionYanks(t *testing.T) {
+	root := writeFixture(t)
+	m := sized(t, root, "")
+	var copied string
+	m.copyToClipboard = func(s string) { copied = s }
+	m.setContent("hello world")
+
+	// Position the caret at col 5, drop the anchor, then extend BACKWARD to col 0.
+	m = pressRune(t, m, 'v')
+	for i := 0; i < 5; i++ {
+		m = pressRune(t, m, 'l') // caret → {0,5}
+	}
+	m = pressKey(t, m, tea.KeyMsg{Type: tea.KeySpace}) // anchor at {0,5}
+	for i := 0; i < 5; i++ {
+		m = pressRune(t, m, 'h') // cursor → {0,0}, before the anchor
+	}
+	// extractSelection should normalize direction → "hello".
+	if got := m.extractSelection(); got != "hello" {
+		t.Errorf("backward selection extract = %q, want %q", got, "hello")
+	}
+	m = pressRune(t, m, 'y')
+	if copied != "hello" {
+		t.Errorf("backward selection yank = %q, want %q", copied, "hello")
+	}
+}
