@@ -3,13 +3,13 @@ package markdown
 import (
 	"errors"
 	"fmt"
-	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
 
 	"github.com/charmbracelet/x/ansi"
 	"github.com/wilkes/hypogeum/internal/embed"
+	"github.com/wilkes/hypogeum/internal/pathutil"
 	"github.com/wilkes/hypogeum/internal/wikilink"
 )
 
@@ -503,11 +503,7 @@ func (r *Renderer) preprocessEmbeds(src, base string) (string, []string, []Link)
 			return warningBlock(body, perr.Error())
 		}
 
-		absPath := em.Path
-		if !filepath.IsAbs(absPath) {
-			absPath = filepath.Join(filepath.Dir(base), absPath)
-		}
-		absPath, _ = filepath.Abs(absPath)
+		absPath, _ := pathutil.ResolveRelativeTo(base, em.Path)
 
 		lines, startLine, serr := embed.SliceFile(absPath, em.Range, em.ContextLines)
 		soft := ""
