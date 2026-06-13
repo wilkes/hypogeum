@@ -325,3 +325,41 @@ func TestVisual_BackwardSelectionYanks(t *testing.T) {
 		t.Errorf("backward selection yank = %q, want %q", copied, "hello")
 	}
 }
+
+func TestVisual_EscCancelsFromExtendPhase(t *testing.T) {
+	root := writeFixture(t)
+	m := sized(t, root, "")
+	m.setContent("hello world")
+
+	m = pressRune(t, m, 'v')
+	m = pressKey(t, m, tea.KeyMsg{Type: tea.KeySpace}) // drop anchor → extend phase
+	m = pressRune(t, m, 'l')
+	m = pressRune(t, m, 'l')
+	if !m.content.selection.selecting {
+		t.Fatal("precondition: should be in the extend phase")
+	}
+	m = pressKey(t, m, tea.KeyMsg{Type: tea.KeyEsc})
+
+	if m.content.selection.visual || m.content.selection.selecting {
+		t.Error("Esc should exit visual mode from the extend phase")
+	}
+	if hasReverseVideo(m.content.viewport.View()) {
+		t.Error("Esc should restore the clean (un-highlighted) render")
+	}
+}
+
+func TestVisual_CtrlCQuitsFromVisual(t *testing.T) {
+	root := writeFixture(t)
+	m := sized(t, root, "")
+	m.setContent("hello world")
+
+	m = pressRune(t, m, 'v')
+	updated, cmd := m.Update(tea.KeyMsg{Type: tea.KeyCtrlC})
+	_ = updated
+	if cmd == nil {
+		t.Fatal("^c in visual mode should return a command (Quit)")
+	}
+	if _, ok := cmd().(tea.QuitMsg); !ok {
+		t.Errorf("^c in visual mode should return tea.Quit; got %T", cmd())
+	}
+}

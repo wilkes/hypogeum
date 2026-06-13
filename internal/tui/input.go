@@ -538,6 +538,8 @@ func (m *Model) handleVisualKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	last := len(m.contentLines()) - 1
 
 	switch {
+	case key.Matches(msg, m.keys.Quit): // ^c / q exits the app from visual mode too
+		return *m, tea.Quit
 	case key.Matches(msg, m.keys.ClearLink): // Esc
 		m.clearSelection()
 		return *m, nil
