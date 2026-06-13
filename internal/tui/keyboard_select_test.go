@@ -48,10 +48,10 @@ func TestVisual_PositioningMovesCaretNoSpan(t *testing.T) {
 	m := sized(t, root, "")
 	m.setContent("hello world\nsecond line")
 
-	m = pressRune(t, m, 'v')         // caret at {0,0}
-	m = pressRune(t, m, 'l')         // → {0,1}
-	m = pressRune(t, m, 'l')         // → {0,2}
-	m = pressRune(t, m, 'j')         // → {1,2}
+	m = pressRune(t, m, 'v') // caret at {0,0}
+	m = pressRune(t, m, 'l') // → {0,1}
+	m = pressRune(t, m, 'l') // → {0,2}
+	m = pressRune(t, m, 'j') // → {1,2}
 
 	if got := m.content.selection.cursor; got != (cellPos{line: 1, col: 2}) {
 		t.Fatalf("caret = %+v, want {1,2}", got)
@@ -86,9 +86,9 @@ func TestVisual_CaretClampsAtEdges(t *testing.T) {
 	m := sized(t, root, "")
 	m.setContent("ab\ncd")
 
-	m = pressRune(t, m, 'v')         // {0,0}
-	m = pressRune(t, m, 'h')         // clamp col → {0,0}
-	m = pressRune(t, m, 'k')         // clamp line → {0,0}
+	m = pressRune(t, m, 'v') // {0,0}
+	m = pressRune(t, m, 'h') // clamp col → {0,0}
+	m = pressRune(t, m, 'k') // clamp line → {0,0}
 	if got := m.content.selection.cursor; got != (cellPos{0, 0}) {
 		t.Errorf("caret after clamp = %+v, want {0,0}", got)
 	}
@@ -99,9 +99,9 @@ func TestVisual_SpaceAnchorsThenExtends(t *testing.T) {
 	m := sized(t, root, "")
 	m.setContent("hello world")
 
-	m = pressRune(t, m, 'v')                            // caret {0,0}
-	m = pressRune(t, m, 'l')                            // {0,1} (positioning, no span)
-	m = pressKey(t, m, tea.KeyMsg{Type: tea.KeySpace})  // drop anchor at {0,1}
+	m = pressRune(t, m, 'v')                           // caret {0,0}
+	m = pressRune(t, m, 'l')                           // {0,1} (positioning, no span)
+	m = pressKey(t, m, tea.KeyMsg{Type: tea.KeySpace}) // drop anchor at {0,1}
 	if !m.content.selection.selecting {
 		t.Fatal("Space should enter the extend phase")
 	}
@@ -153,8 +153,8 @@ func TestVisual_YankCopiesAndPersists(t *testing.T) {
 	m = pressRune(t, m, 'l')
 	m = pressRune(t, m, 'l')
 	m = pressRune(t, m, 'l')
-	m = pressRune(t, m, 'l')                            // cursor {0,5} → "hello"
-	m = pressRune(t, m, 'y')                            // yank
+	m = pressRune(t, m, 'l') // cursor {0,5} → "hello"
+	m = pressRune(t, m, 'y') // yank
 
 	if copied != "hello" {
 		t.Errorf("clipboard = %q, want %q", copied, "hello")

@@ -140,7 +140,7 @@ func TestPreselect_FollowBacklink_NoMatchFallsThroughToScrollToLine(t *testing.T
 	bAbs := filepath.Join(root, "b.md")
 
 	m := sized(t, root, bAbs) // start on b.md
-	m = pressRune(t, m, 'b')   // open backlinks modal (a.md links to b.md)
+	m = pressRune(t, m, 'b')  // open backlinks modal (a.md links to b.md)
 	if len(m.backlinks.items) != 1 {
 		t.Fatalf("expected 1 backlink (a.md → b.md), got %d", len(m.backlinks.items))
 	}
@@ -258,7 +258,7 @@ func TestPreselect_ClearedAfterConsumption(t *testing.T) {
 	m = switchToContent(t, m)
 	m = pressRune(t, m, 'n')
 	m = pressKey(t, m, tea.KeyMsg{Type: tea.KeyEnter}) // a → b
-	m = pressRune(t, m, 'h')                            // back to a
+	m = pressRune(t, m, 'h')                           // back to a
 	if m.pending.preselectTarget != "" {
 		t.Fatalf("expected field cleared after Back consumed it, got %q", m.pending.preselectTarget)
 	}

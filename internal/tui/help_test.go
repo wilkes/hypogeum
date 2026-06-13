@@ -41,7 +41,7 @@ func TestHelpModalOpensOnQuestionMark(t *testing.T) {
 	plainBody := ansi.Strip(body)
 	wantSubstrings := []string{
 		"Navigation", "Scrolling", "Tree", "Links", "Clipboard", "Modals", // section headers
-		"copy path", // copy current file path
+		"copy path",  // copy current file path
 		"^l", "logs", // moved logs binding
 		"?", "help", // help itself
 		"^p/o", "open file", // picker

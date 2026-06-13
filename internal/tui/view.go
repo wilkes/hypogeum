@@ -153,4 +153,3 @@ func (m *Model) resizeTreeModalVP() {
 		m.tree.vp.Height = 1
 	}
 }
-

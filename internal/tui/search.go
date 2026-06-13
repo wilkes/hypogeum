@@ -61,7 +61,7 @@ type searchState struct {
 // newSearch returns a zero-valued search state with a fresh textinput.
 func newSearch() searchState {
 	ti := textinput.New()
-	ti.Prompt = ""      // we render our own "> " prefix
+	ti.Prompt = "" // we render our own "> " prefix
 	ti.Placeholder = ""
 	ti.CharLimit = 256
 	return searchState{

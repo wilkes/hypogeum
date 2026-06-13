@@ -11,11 +11,15 @@ import (
 // lines          — the actual source-line content (no trailing newlines).
 // startLine      — 1-indexed line number of lines[0] in the original file.
 // displayRange   — the range the user *asked for*, formatted for the header
-//                  (e.g. "42–58" or "42"). Distinct from len(lines)/startLine
-//                  because context-line padding expands the body but not the
-//                  header.
+//
+//	(e.g. "42–58" or "42"). Distinct from len(lines)/startLine
+//	because context-line padding expands the body but not the
+//	header.
+//
 // leadContext    — count of lines at the head of `lines` that are context
-//                  (rendered with the ~ gutter).
+//
+//	(rendered with the ~ gutter).
+//
 // tailContext    — count of lines at the tail that are context.
 // softWarning    — optional header annotation, e.g. "file ends at line 50".
 func RenderToFence(absPath string, lines []string, startLine int, displayRange string, leadContext, tailContext int, softWarning string) string {
