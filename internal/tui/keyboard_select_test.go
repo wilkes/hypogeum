@@ -104,6 +104,9 @@ func TestVisual_SpaceAnchorsThenExtends(t *testing.T) {
 	if !m.content.selection.selecting {
 		t.Fatal("Space should enter the extend phase")
 	}
+	if got := m.content.selection.anchor; got != (cellPos{line: 0, col: 1}) {
+		t.Errorf("anchor after Space = %+v, want {0,1}", got)
+	}
 	m = pressRune(t, m, 'l') // {0,2}
 	m = pressRune(t, m, 'l') // {0,3}
 	m = pressRune(t, m, 'l') // {0,4}
@@ -111,6 +114,28 @@ func TestVisual_SpaceAnchorsThenExtends(t *testing.T) {
 	// Anchor frozen at col 1; cursor at col 4 → "ell".
 	if got := m.extractSelection(); got != "ell" {
 		t.Errorf("extractSelection = %q, want %q", got, "ell")
+	}
+}
+
+func TestVisual_YankBeforeAnchorExitsCleanly(t *testing.T) {
+	root := writeFixture(t)
+	m := sized(t, root, "")
+	var copied string
+	m.copyToClipboard = func(s string) { copied = s }
+	m.setContent("hello world")
+
+	m = pressRune(t, m, 'v') // caret {0,0}, positioning (not selecting)
+	m = pressRune(t, m, 'l') // {0,1}, still positioning → zero-width span
+	m = pressRune(t, m, 'y') // yank with nothing selected
+
+	if copied != "" {
+		t.Errorf("zero-width yank should copy nothing; clipboard = %q", copied)
+	}
+	if m.content.selection.visual {
+		t.Error("zero-width yank should exit visual mode")
+	}
+	if hasReverseVideo(m.content.viewport.View()) {
+		t.Error("zero-width yank should restore the clean render (no caret left)")
 	}
 }
 

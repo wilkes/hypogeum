@@ -541,10 +541,12 @@ func (m *Model) resetSelectionState() {
 	m.content.selection = selection{pendingLink: -1}
 }
 
-// finalizeSelection transitions a just-released drag into the "copied"
-// state: the reverse-video highlight stays on screen until the user's
-// next action, but the gesture is over, so a stray post-release motion
-// event (gated on anchored) no longer extends the span.
+// finalizeSelection transitions a completed selection into the "copied"
+// state: the reverse-video highlight stays on screen until the user's next
+// action, but the gesture is over. Called from both the mouse drag-release
+// path (endSelect) and the keyboard yank path (yankVisual); it clears the
+// mouse gesture flags (anchored/moved) and the keyboard visual-mode flags
+// (visual/selecting) alike, so a stray later event can't extend the span.
 func (m *Model) finalizeSelection() {
 	m.content.selection.copied = true
 	m.content.selection.anchored = false
