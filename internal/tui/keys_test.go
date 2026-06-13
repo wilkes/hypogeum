@@ -95,8 +95,6 @@ func TestDefaultKeys_AllActionsBound(t *testing.T) {
 	}
 }
 
-
-
 func TestKeys_HelpTextNonEmpty(t *testing.T) {
 	km := defaultKeys()
 	v := reflect.ValueOf(km)
@@ -130,7 +128,6 @@ func TestKeys_NoOverlappingActions(t *testing.T) {
 		}
 	}
 }
-
 
 func TestNew_OptionsSurfacesStartupWarnings(t *testing.T) {
 	root := writeFixture(t)

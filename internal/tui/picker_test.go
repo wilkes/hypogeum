@@ -40,7 +40,7 @@ func TestPickerOpenPopulatesRanked(t *testing.T) {
 }
 
 // TestPickerOpensOnO verifies the pager `o` alias opens the same picker
-// modal as `^p`. Both keys are bound to OpenPicker in pagerKeys().
+// modal as `^p`. Both keys are bound to OpenPicker in defaultKeys().
 func TestPickerOpensOnO(t *testing.T) {
 	dir := t.TempDir()
 	writePickerFile(t, filepath.Join(dir, "a.md"), "# A")

@@ -5,7 +5,7 @@ import (
 )
 
 // keyMap collects every keybinding the model knows about, so the help
-// cheat sheet and the dialect factories share one source.
+// cheat sheet and the keybinding definitions share one source.
 type keyMap struct {
 	Up      key.Binding
 	Down    key.Binding
@@ -81,4 +81,3 @@ func defaultKeys() keyMap {
 		HalfPageUp:   key.NewBinding(key.WithKeys("ctrl+u"), key.WithHelp("^u", "half-page up")),
 	}
 }
-

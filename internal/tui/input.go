@@ -520,12 +520,11 @@ func (m *Model) handleContentKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 }
 
 // handleVisualKey routes every keystroke while keyboard visual mode is
-// active. Char/line motions are matched on the raw key (h/j/k/l + arrows)
-// rather than the Back/Forward/Up/Down keyMap fields, because the modern
-// dialect binds Back/Forward to alt+arrows — plain arrows must still move
-// the caret. Jumps (g/G, ^d/^u) reuse the dialect-aware Top/Bottom/HalfPage
-// fields. Yank reuses the dialect's copy key; Space drops the anchor; Esc
-// cancels. Any other key is inert.
+// active. Char/line motions are matched on the raw key (h/j/k/l + arrows) so the
+// caret responds to both vim letters and arrows directly, independent of
+// the history Back/Forward bindings. Jumps (g/G, ^d/^u) reuse the
+// Top/Bottom/HalfPage keyMap fields. Yank reuses the copy key; Space drops
+// the anchor; Esc cancels. Any other key is inert.
 func (m *Model) handleVisualKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if len(m.contentLines()) == 0 {
 		return *m, nil
