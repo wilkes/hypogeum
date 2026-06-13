@@ -12,6 +12,7 @@ Index of everything in `docs/`. Browse this folder by running `hypogeum docs/` f
   - [`internal/watch`](packages/watch.md) — fsnotify-backed live-update watcher, debounced and tree-aware
   - `internal/vault` — wikilink/backlink index over the markdown set; see [[vault-index]]
   - `internal/wikilink` — shared `[[Name#Heading^Block|Alias]]` body parser used by `vault` and `markdown`
+- [Architecture review (DDD lens)](architecture-review.md) — verified findings + prioritized refactorings: path-resolution triplication, the `Model` god-object, duplicated highlight markers, splitting `links_render.go`
 
 ## Concepts
 
