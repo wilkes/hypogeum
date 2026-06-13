@@ -87,22 +87,28 @@ and a finalized copy (`copied`). `selecting` splits the two keyboard phases:
 - **While `visual` is active:** a new `handleVisualKey(msg)` runs *first* in
   `handleKey` — before the global Back/Forward switch — the same precedence
   trick the tree modal uses to shadow history keys, so `h`/`l` don't trigger
-  Back/Forward and `j`/`k` don't fall through to the viewport. It reuses
-  existing keyMap fields for movement:
+  Back/Forward and `j`/`k` don't fall through to the viewport. Inside it:
 
-| Key (pager / modern) | keyMap field reused | Action                              |
-| -------------------- | ------------------- | ----------------------------------- |
-| `h j k l` / arrows   | `Back Down Up Forward` | move caret by char / line        |
-| `g` / `G`            | `Top` / `Bottom`    | caret to doc top / bottom           |
-| `^d` / `^u`          | `HalfPageDown/Up`   | caret ± half-page                   |
-| `Space`              | `BeginSelect`       | drop anchor → enter extend phase    |
-| `y` / `^y`           | `CopyPath`          | **yank** selection, then exit       |
-| `Esc`                | `ClearLink`         | cancel, exit (from either phase)    |
+| Key                  | Matched via                | Action                              |
+| -------------------- | -------------------------- | ----------------------------------- |
+| `h j k l` + `←↑↓→`   | raw `msg.String()`         | move caret by char / line           |
+| `g` / `G`            | `Top` / `Bottom`           | caret to doc top / bottom           |
+| `^d` / `^u`          | `HalfPageDown/Up`          | caret ± half-page                   |
+| `Space`              | `BeginSelect`              | drop anchor → enter extend phase    |
+| `y` / `^y`           | `CopyPath`                 | **yank** selection, then exit       |
+| `Esc`                | `ClearLink`                | cancel, exit (from either phase)    |
 
-The only genuinely new bindings are `v` and `Space`. Yank reuses the dialect's
-copy key: in visual mode it copies the *selection*; outside visual mode it
-still copies the file path. Keys not listed (e.g. `n`/`p`/`Enter`) are inert
-while visual mode is active.
+Char/line motions are matched on the **raw key** (`h`/`j`/`k`/`l` plus the four
+arrows) rather than the `Back`/`Forward`/`Up`/`Down` keyMap fields, because the
+`modern` dialect binds `Back`/`Forward` to `alt+←`/`alt+→` — so reusing them
+would leave modern users unable to move the caret horizontally with plain
+arrows. Visual mode is a self-contained modal sub-language, so explicit motion
+keys (vim letters + arrows, working in both dialects) are clearer and correct.
+Jumps (`g`/`G`, `^d`/`^u`) *do* reuse the dialect-aware `Top`/`Bottom`/
+`HalfPageDown`/`HalfPageUp` fields. The only genuinely new bindings are `v` and
+`Space`. Yank reuses the dialect's copy key: in visual mode it copies the
+*selection*; outside visual mode it still copies the file path. Keys not
+matched (e.g. `n`/`p`/`Enter`) are inert while visual mode is active.
 
 ## Caret movement + scrolling
 
