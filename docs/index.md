@@ -28,6 +28,7 @@ Cross-cutting ideas that show up in multiple specs and packages. Each is its own
 ## Diary
 
 - [Development diary](diary/index.md) — chronological log of how the project was built, reconstructed from commits and merged PRs (2026-05-05 → 2026-06-13).
+- [The Big Render](diary/noir.md) — the same history retold in Raymond Chandler's hardboiled voice, for fun.
 
 ## Active feature work
 
