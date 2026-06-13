@@ -1,6 +1,6 @@
 # Remove keybinding dialects — single default keymap
 
-**Status:** designed, not yet implemented.
+**Status:** shipped.
 
 ## Goal
 

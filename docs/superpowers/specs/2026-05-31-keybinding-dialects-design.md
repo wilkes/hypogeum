@@ -1,6 +1,8 @@
 # Keybinding dialects
 
-**Status:** shipped on 2026-06-01 (PR #44).
+**Status:** superseded — dialects removed 2026-06-13 in favor of a single default keymap. See [remove-keybinding-dialects](2026-06-13-remove-keybinding-dialects-design.md).
+
+~~**Status:** shipped on 2026-06-01 (PR #44).~~
 
 Two coherent keybinding presets — **pager** (default, vim/less idioms) and **modern** (VS Code/browser idioms) — selectable via a forward-growable TOML config file. No per-binding overrides in v1.
 
