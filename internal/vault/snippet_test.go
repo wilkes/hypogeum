@@ -3,6 +3,8 @@ package vault
 import (
 	"strings"
 	"testing"
+
+	"github.com/wilkes/hypogeum/internal/highlight"
 )
 
 func TestSnippet_ParagraphContext(t *testing.T) {
@@ -43,7 +45,7 @@ func TestSnippet_HighlightWrapping(t *testing.T) {
 		t.Fatalf("refs: got %d want 1", len(refs))
 	}
 	// The snippet wraps the display text in the snippet highlight markers.
-	if !strings.Contains(refs[0].snippet, snippetHighlightOpen+"Foo"+snippetHighlightClose) {
+	if !strings.Contains(refs[0].snippet, highlight.Open+"Foo"+highlight.Close) {
 		t.Fatalf("snippet not wrapped with highlight markers: %q", refs[0].snippet)
 	}
 }

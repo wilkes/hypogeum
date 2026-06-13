@@ -16,6 +16,8 @@ import (
 	"os"
 	"strings"
 	"sync"
+
+	"github.com/wilkes/hypogeum/internal/highlight"
 )
 
 // Hit is one match: a path, a 1-indexed line number, and a display
@@ -23,26 +25,20 @@ import (
 // leading/trailing "…" to fit a ~60-char display budget, with the
 // matched substring wrapped in highlight markers.
 //
-// Highlight markers are \x11 (DC1, open) and \x12 (DC2, close). The
-// TUI's snippet renderer (internal/tui/backlinks.go applyHighlight)
-// turns these into bold yellow SGR. Using ASCII control chars keeps
-// the markers invisible to plain-text processing.
+// Highlight markers are highlight.Open (\x11 / DC1) and highlight.Close
+// (\x12 / DC2), defined in internal/highlight as the single source of
+// truth for the wire format. The TUI's snippet renderer
+// (internal/tui/backlinks.go applyHighlight) turns these into bold
+// yellow SGR. Using ASCII control chars keeps the markers invisible to
+// plain-text processing.
 type Hit struct {
 	Path    string // absolute path
 	Line    int    // 1-indexed line number in the source file
 	Snippet string // see package doc
 }
 
-// snippetHighlightOpen / Close mirror the convention defined in
-// internal/vault/snippet.go. They are the data contract between this
-// package and the TUI's snippet renderer.
-const (
-	snippetHighlightOpen  = "\x11" // DC1
-	snippetHighlightClose = "\x12" // DC2
-)
-
 // buildSnippet wraps the match in line at byte offset matchAt..matchAt+matchLen
-// with snippetHighlightOpen/Close. If the resulting display would exceed
+// with highlight.Open/Close. If the resulting display would exceed
 // budget runes (markers excluded), it trims with leading/trailing "…"
 // biased so the match stays centered.
 //
@@ -51,7 +47,7 @@ const (
 // expense of any context.
 func buildSnippet(line string, matchAt, matchLen, budget int) string {
 	marked := line[:matchAt] +
-		snippetHighlightOpen + line[matchAt:matchAt+matchLen] + snippetHighlightClose +
+		highlight.Open + line[matchAt:matchAt+matchLen] + highlight.Close +
 		line[matchAt+matchLen:]
 	visibleLen := len(line) // markers add no visible width
 	if visibleLen <= budget {
@@ -93,9 +89,9 @@ func buildSnippet(line string, matchAt, matchLen, budget int) string {
 		b.WriteString("…")
 	}
 	b.WriteString(line[matchAt-leftTake : matchAt])
-	b.WriteString(snippetHighlightOpen)
+	b.WriteString(highlight.Open)
 	b.WriteString(line[matchAt : matchAt+matchLen])
-	b.WriteString(snippetHighlightClose)
+	b.WriteString(highlight.Close)
 	b.WriteString(line[matchAt+matchLen : matchAt+matchLen+rightTake])
 	if rightTake < rightAvail {
 		b.WriteString("…")
