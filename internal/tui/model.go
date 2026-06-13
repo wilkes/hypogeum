@@ -117,18 +117,6 @@ type Model struct {
 	copyToClipboard clipboardWriter
 }
 
-// Options bundles construction-time settings for New.
-type Options struct {
-	// Dialect selects the keymap factory. Empty or unknown values
-	// fall back to "pager".
-	Dialect string
-
-	// StartupWarnings are non-fatal messages surfaced into the in-app
-	// log modal (^l or alt+l) at model construction. Typically
-	// populated by main.go from config.Load's warnings slice.
-	StartupWarnings []string
-}
-
 // linkFooterMarker is rendered into the footer when a link is selected.
 // Defined as a constant so tests can assert on its presence/absence.
 const linkFooterMarker = "→ "
@@ -156,7 +144,7 @@ func treeRowZoneID(i int) string {
 
 // New constructs a Model rooted at root. If initialFile is non-empty, that
 // file is opened on startup.
-func New(root, initialFile string, opts Options) (Model, error) {
+func New(root, initialFile string) (Model, error) {
 	// Initialize the global zone manager. Idempotent — calling NewGlobal
 	// on a manager that's already running is a no-op, so it's safe in
 	// tests that construct multiple models in one process.
@@ -168,12 +156,6 @@ func New(root, initialFile string, opts Options) (Model, error) {
 	}
 
 	diag := newDiagnostics(diagOpts{LogPath: defaultLogPath()})
-	// Surface any non-fatal warnings collected by the caller (typically
-	// config.Load) into the diagnostics ring before subsystem init, so
-	// they appear in chronological order in the log modal.
-	for _, w := range opts.StartupWarnings {
-		diag.Warn(w)
-	}
 	var v *vault.Vault
 	if vv, err := vault.Build(root, diag); err == nil {
 		v = vv

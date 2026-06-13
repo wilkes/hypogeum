@@ -93,7 +93,7 @@ func TestModel_OpensInitialFile(t *testing.T) {
 func TestNewBuildsVault(t *testing.T) {
 	isolatedHome(t)
 	dir := t.TempDir()
-	m, err := New(dir, "", Options{})
+	m, err := New(dir, "")
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
@@ -105,7 +105,7 @@ func TestNewBuildsVault(t *testing.T) {
 func TestKeyBTogglesBacklinksModal(t *testing.T) {
 	isolatedHome(t)
 	dir := t.TempDir()
-	m, err := New(dir, "", Options{})
+	m, err := New(dir, "")
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
@@ -130,7 +130,7 @@ func TestNewInitializesRecentStore(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	m, err := New(dir, "", Options{})
+	m, err := New(dir, "")
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
@@ -156,7 +156,7 @@ func TestAllVaultMarkdownPaths(t *testing.T) {
 	mustWrite(filepath.Join(dir, "sub", "sub2", "c.md"))
 	mustWrite(filepath.Join(dir, "d.txt"))
 
-	m, err := New(dir, "", Options{})
+	m, err := New(dir, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -186,7 +186,7 @@ func TestModel_EmbedDepsPopulatedOnOpen(t *testing.T) {
 		t.Fatalf("write md: %v", err)
 	}
 
-	m, err := New(dir, mdPath, Options{})
+	m, err := New(dir, mdPath)
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}

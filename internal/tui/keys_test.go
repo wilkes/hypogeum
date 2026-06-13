@@ -129,33 +129,6 @@ func TestKeys_NoOverlappingActions(t *testing.T) {
 	}
 }
 
-func TestNew_OptionsSurfacesStartupWarnings(t *testing.T) {
-	root := writeFixture(t)
-	isolatedHome(t)
-
-	m, err := New(root, "", Options{
-		Dialect:         "pager",
-		StartupWarnings: []string{"config: unknown dialect \"vim\""},
-	})
-	if err != nil {
-		t.Fatalf("New: %v", err)
-	}
-	entries := m.diag.snapshot()
-	if len(entries) == 0 {
-		t.Fatal("diagnostics ring is empty; want startup warning")
-	}
-	found := false
-	for _, e := range entries {
-		if strings.Contains(e.Message, `unknown dialect "vim"`) {
-			found = true
-			break
-		}
-	}
-	if !found {
-		t.Errorf("startup warning not in diag ring; entries=%+v", entries)
-	}
-}
-
 func TestVisualModeBindingsPresent(t *testing.T) {
 	km := defaultKeys()
 	if !slices.Contains(km.EnterVisual.Keys(), "v") {

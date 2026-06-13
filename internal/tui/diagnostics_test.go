@@ -150,7 +150,7 @@ func TestDefaultLogPathMacOS(t *testing.T) {
 func TestFooterShowsTransientDiagnostic(t *testing.T) {
 	isolatedHome(t)
 	dir := t.TempDir()
-	m, _ := New(dir, "", Options{})
+	m, _ := New(dir, "")
 	mm, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 40})
 	m = mm.(Model)
 	m.diag.Warn("transient warning here")

@@ -14,7 +14,7 @@ func ctrlL() tea.KeyMsg { return tea.KeyMsg{Type: tea.KeyCtrlL} }
 func TestLogsModalShowsRingBuffer(t *testing.T) {
 	isolatedHome(t)
 	dir := t.TempDir()
-	m, _ := New(dir, "", Options{})
+	m, _ := New(dir, "")
 	mm, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 40})
 	m = mm.(Model)
 
@@ -37,7 +37,7 @@ func TestLogsModalShowsRingBuffer(t *testing.T) {
 func TestLogsModalReplacesBacklinksModal(t *testing.T) {
 	isolatedHome(t)
 	dir := t.TempDir()
-	m, _ := New(dir, "", Options{})
+	m, _ := New(dir, "")
 	mm, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 40})
 	m = mm.(Model)
 
