@@ -5,8 +5,6 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
-
-	tea "github.com/charmbracelet/bubbletea"
 )
 
 func TestModel_CopyPath_CopiesCurrentAbsolutePath(t *testing.T) {
@@ -64,17 +62,3 @@ func writeNoTopLevelFixture(t *testing.T) string {
 	return root
 }
 
-func TestModel_CopyPath_ModernChord(t *testing.T) {
-	root := writeFixture(t)
-	want := filepath.Join(root, "index.md")
-	m := sizedWithOptions(t, root, want, Options{Dialect: "modern"})
-
-	var copied string
-	m.copyToClipboard = func(s string) { copied = s }
-
-	m = pressKey(t, m, tea.KeyMsg{Type: tea.KeyCtrlY})
-
-	if copied != want {
-		t.Errorf("ctrl+y copyToClipboard got %q, want %q", copied, want)
-	}
-}

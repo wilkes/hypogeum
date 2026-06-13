@@ -206,7 +206,7 @@ func New(root, initialFile string, opts Options) (Model, error) {
 		rootNode:        rootNode,
 		history:         nav.New(),
 		focus:           focusContent,
-		keys:            keysFor(opts.Dialect),
+		keys:            defaultKeys(),
 		vault:           v,
 		recent:          rstore,
 		diag:            diag,
