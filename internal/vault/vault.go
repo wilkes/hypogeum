@@ -7,6 +7,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/wilkes/hypogeum/internal/pathutil"
 	"github.com/wilkes/hypogeum/internal/tree"
 )
 
@@ -197,10 +198,7 @@ func resolveStdLink(fromPath, href string) string {
 	if u != nil && u.Path != "" {
 		target = u.Path
 	}
-	if !filepath.IsAbs(target) {
-		target = filepath.Join(filepath.Dir(fromPath), target)
-	}
-	abs, err := filepath.Abs(target)
+	abs, err := pathutil.ResolveRelativeTo(fromPath, target)
 	if err != nil {
 		return ""
 	}

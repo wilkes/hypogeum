@@ -2,7 +2,6 @@ package markdown
 
 import (
 	"net/url"
-	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
@@ -12,6 +11,7 @@ import (
 	"github.com/yuin/goldmark/text"
 
 	"github.com/wilkes/hypogeum/internal/embed"
+	"github.com/wilkes/hypogeum/internal/pathutil"
 )
 
 // LinkKind classifies a markdown link target so the navigation layer can
@@ -73,10 +73,7 @@ func ResolveLink(base, href string) ResolvedLink {
 		anchor = u.Fragment
 	}
 
-	if !filepath.IsAbs(target) {
-		target = filepath.Join(filepath.Dir(base), target)
-	}
-	abs, err := filepath.Abs(target)
+	abs, err := pathutil.ResolveRelativeTo(base, target)
 	if err != nil {
 		return ResolvedLink{Kind: LinkInvalid}
 	}
