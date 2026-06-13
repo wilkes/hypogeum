@@ -25,9 +25,9 @@ const pickerMaxVisible = 200
 // pickerState is the flat, recency-ranked file finder rendered as a modal.
 // Replaces the previous tree-rooted picker; cursor indexes into ranked.
 type pickerState struct {
-	all     []recent.Ranked  // full ranked list captured at open time
-	ranked  []recent.Ranked  // currently visible (filtered or all)
-	matches []fuzzy.Match    // parallel to ranked when query non-empty
+	all     []recent.Ranked // full ranked list captured at open time
+	ranked  []recent.Ranked // currently visible (filtered or all)
+	matches []fuzzy.Match   // parallel to ranked when query non-empty
 	cursor  int
 	vp      viewport.Model
 	root    string // vault root, used to render relative paths
@@ -36,7 +36,7 @@ type pickerState struct {
 
 func newPicker() pickerState {
 	ti := textinput.New()
-	ti.Prompt = ""      // we render our own "> " prefix
+	ti.Prompt = "" // we render our own "> " prefix
 	ti.Placeholder = ""
 	ti.CharLimit = 256
 	return pickerState{

@@ -61,4 +61,3 @@ func writeNoTopLevelFixture(t *testing.T) string {
 	}
 	return root
 }
-

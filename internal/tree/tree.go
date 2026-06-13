@@ -15,8 +15,8 @@ import (
 // Directories carry their children sorted alphabetically with directories
 // listed before files.
 type Node struct {
-	Path     string  // absolute path
-	Name     string  // basename for display
+	Path     string // absolute path
+	Name     string // basename for display
 	IsDir    bool
 	Children []*Node // populated for directories only
 }
