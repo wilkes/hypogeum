@@ -184,6 +184,13 @@ func (m *Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.clearSelection()
 	}
 
+	// Keyboard visual mode intercepts every key while active — before any
+	// modal-toggle or global binding. Visual mode is content-pane only and
+	// never coexists with an open modal.
+	if m.content.selection.visual {
+		return m.handleVisualKey(msg)
+	}
+
 	// The picker's text input claims every printable keystroke. Route
 	// printable keys to it first so global modal-toggle keys that are
 	// plain letters (b, ?) don't swap the picker out when the user
@@ -510,6 +517,64 @@ func (m *Model) handleContentKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
 	m.content.viewport, cmd = m.content.viewport.Update(msg)
 	return *m, cmd
+}
+
+// handleVisualKey routes every keystroke while keyboard visual mode is
+// active. Char/line motions are matched on the raw key (h/j/k/l + arrows)
+// rather than the Back/Forward/Up/Down keyMap fields, because the modern
+// dialect binds Back/Forward to alt+arrows — plain arrows must still move
+// the caret. Jumps (g/G, ^d/^u) reuse the dialect-aware Top/Bottom/HalfPage
+// fields. Yank reuses the dialect's copy key; Space drops the anchor; Esc
+// cancels. Any other key is inert.
+func (m *Model) handleVisualKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	cur := m.content.selection.cursor
+	half := m.content.viewport.Height / 2
+	if half < 1 {
+		half = 1
+	}
+	last := len(m.contentLines()) - 1
+
+	switch {
+	case key.Matches(msg, m.keys.ClearLink): // Esc
+		m.clearSelection()
+		return *m, nil
+	case key.Matches(msg, m.keys.CopyPath): // y / ^y → yank
+		m.yankVisual()
+		return *m, nil
+	case key.Matches(msg, m.keys.BeginSelect): // Space → drop anchor
+		m.content.selection.selecting = true
+		return *m, nil
+	case key.Matches(msg, m.keys.Top): // g
+		m.placeCaret(0, 0)
+		return *m, nil
+	case key.Matches(msg, m.keys.Bottom): // G
+		m.placeCaret(last, 0)
+		return *m, nil
+	case key.Matches(msg, m.keys.HalfPageDown): // ^d
+		m.placeCaret(cur.line+half, cur.col)
+		return *m, nil
+	case key.Matches(msg, m.keys.HalfPageUp): // ^u
+		m.placeCaret(cur.line-half, cur.col)
+		return *m, nil
+	}
+
+	switch msg.String() {
+	case "h", "left":
+		m.placeCaret(cur.line, cur.col-1)
+	case "l", "right":
+		m.placeCaret(cur.line, cur.col+1)
+	case "k", "up":
+		m.placeCaret(cur.line-1, cur.col)
+	case "j", "down":
+		m.placeCaret(cur.line+1, cur.col)
+	}
+	return *m, nil
+}
+
+// yankVisual copies the current selection to the clipboard and exits visual
+// mode. Body filled in Task 4.
+func (m *Model) yankVisual() {
+	m.clearSelection()
 }
 
 // handleTreeModalKey routes keystrokes while the tree modal is open.

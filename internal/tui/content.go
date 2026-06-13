@@ -554,10 +554,56 @@ func (m *Model) finalizeSelection() {
 // clearSelection drops the selection and restores the un-highlighted
 // base render (preserving scroll) if a highlight was showing.
 func (m *Model) clearSelection() {
-	had := m.content.selection.moved || m.content.selection.copied
+	had := m.content.selection.moved || m.content.selection.copied || m.content.selection.visual
 	m.resetSelectionState()
 	if had {
 		m.setViewportPreservingScroll(m.content.rendered)
+	}
+}
+
+// placeCaret moves the visual-mode caret to (line, col), clamped to valid
+// cells. In the positioning phase (!selecting) the anchor tracks the caret
+// so there is no span; in the extend phase only the cursor moves, growing
+// the selection. Scrolls the caret into view and repaints.
+func (m *Model) placeCaret(line, col int) {
+	lines := m.contentLines()
+	if len(lines) == 0 {
+		return
+	}
+	if line < 0 {
+		line = 0
+	}
+	if line > len(lines)-1 {
+		line = len(lines) - 1
+	}
+	if col < 0 {
+		col = 0
+	}
+	if w := m.content.lineWidths[line]; col > w {
+		col = w
+	}
+	m.content.selection.cursor = cellPos{line: line, col: col}
+	if !m.content.selection.selecting {
+		m.content.selection.anchor = m.content.selection.cursor
+	}
+	m.scrollCaretIntoView()
+	m.applySelectionHighlight()
+}
+
+// scrollCaretIntoView adjusts the viewport's YOffset so the caret's line is
+// within the visible window. applySelectionHighlight (called right after)
+// preserves whatever offset this sets.
+func (m *Model) scrollCaretIntoView() {
+	line := m.content.selection.cursor.line
+	top := m.content.viewport.YOffset
+	h := m.content.viewport.Height
+	if h < 1 {
+		return
+	}
+	if line < top {
+		m.content.viewport.SetYOffset(line)
+	} else if line >= top+h {
+		m.content.viewport.SetYOffset(line - h + 1)
 	}
 }
 
