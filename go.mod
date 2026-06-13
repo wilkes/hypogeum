@@ -3,7 +3,6 @@ module github.com/wilkes/hypogeum
 go 1.24.5
 
 require (
-	github.com/BurntSushi/toml v1.6.0
 	github.com/alecthomas/chroma/v2 v2.14.0
 	github.com/atotto/clipboard v0.1.4
 	github.com/charmbracelet/bubbles v0.20.0

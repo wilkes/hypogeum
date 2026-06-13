@@ -232,30 +232,22 @@ func TestVisual_HalfPageDownScrolls(t *testing.T) {
 	}
 }
 
-func TestVisual_ModernDialectEntersAndYanks(t *testing.T) {
+func TestVisual_ArrowKeysMoveCaret(t *testing.T) {
 	root := writeFixture(t)
-	isolatedHome(t)
-	m, err := New(root, "", Options{Dialect: "modern"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	mm, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 40})
-	m = mm.(Model)
+	m := sized(t, root, "")
 	var copied string
 	m.copyToClipboard = func(s string) { copied = s }
 	m.setContent("hello world")
 
-	m = pressRune(t, m, 'v')                           // enter (v, both dialects)
-	m = pressKey(t, m, tea.KeyMsg{Type: tea.KeySpace}) // anchor
-	m = pressKey(t, m, tea.KeyMsg{Type: tea.KeyRight})
-	m = pressKey(t, m, tea.KeyMsg{Type: tea.KeyRight})
-	m = pressKey(t, m, tea.KeyMsg{Type: tea.KeyRight})
-	m = pressKey(t, m, tea.KeyMsg{Type: tea.KeyRight})
-	m = pressKey(t, m, tea.KeyMsg{Type: tea.KeyRight})    // cursor {0,5} → "hello"
-	m = pressKey(t, m, tea.KeyMsg{Type: tea.KeyCtrlY})    // modern yank = ^y
+	m = pressRune(t, m, 'v')                           // enter visual
+	m = pressKey(t, m, tea.KeyMsg{Type: tea.KeySpace}) // anchor at {0,0}
+	for i := 0; i < 5; i++ {
+		m = pressKey(t, m, tea.KeyMsg{Type: tea.KeyRight}) // extend with plain arrows
+	}
+	m = pressRune(t, m, 'y') // yank
 
 	if copied != "hello" {
-		t.Errorf("modern dialect yank: clipboard = %q, want %q", copied, "hello")
+		t.Errorf("arrow-key selection yank = %q, want %q", copied, "hello")
 	}
 }
 

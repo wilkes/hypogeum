@@ -10,7 +10,6 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	"github.com/wilkes/hypogeum/internal/config"
 	"github.com/wilkes/hypogeum/internal/tui"
 )
 
@@ -42,12 +41,7 @@ func run(args []string) error {
 		return err
 	}
 
-	cfg, warnings := loadConfig()
-
-	model, err := tui.New(root, initialFile, tui.Options{
-		Dialect:         cfg.Dialect,
-		StartupWarnings: warnings,
-	})
+	model, err := tui.New(root, initialFile)
 	if err != nil {
 		return err
 	}
@@ -55,24 +49,6 @@ func run(args []string) error {
 	p := tea.NewProgram(model, tea.WithAltScreen(), tea.WithMouseCellMotion())
 	_, err = p.Run()
 	return err
-}
-
-// loadConfig reads the user config and translates any error into a
-// startup warning the TUI will surface via the log modal. A parse error
-// also goes to stderr (visible before the alt-screen takes over and again
-// after exit). loadConfig never returns an error; hypogeum always starts.
-func loadConfig() (config.Config, []string) {
-	cfgPath, pathErr := config.DefaultPath()
-	if pathErr != nil {
-		return config.Default(), []string{"config: " + pathErr.Error() + "; using defaults"}
-	}
-	cfg, warnings, err := config.Load(cfgPath)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "hypogeum: %s: %v (using defaults)\n", cfgPath, err)
-		warnings = append(warnings, fmt.Sprintf("config %s: %v; using defaults", cfgPath, err))
-		return config.Default(), warnings
-	}
-	return cfg, warnings
 }
 
 // resolveTarget interprets the CLI args per the README:

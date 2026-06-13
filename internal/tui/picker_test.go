@@ -40,7 +40,7 @@ func TestPickerOpenPopulatesRanked(t *testing.T) {
 }
 
 // TestPickerOpensOnO verifies the pager `o` alias opens the same picker
-// modal as `^p`. Both keys are bound to OpenPicker in pagerKeys().
+// modal as `^p`. Both keys are bound to OpenPicker in defaultKeys().
 func TestPickerOpensOnO(t *testing.T) {
 	dir := t.TempDir()
 	writePickerFile(t, filepath.Join(dir, "a.md"), "# A")
@@ -124,7 +124,7 @@ func TestPickerEmptyVault(t *testing.T) {
 	isolatedHome(t)
 	dir := t.TempDir()
 	// No markdown files. New may fail because there's nothing to open.
-	mRaw, err := New(dir, "", Options{})
+	mRaw, err := New(dir, "")
 	if err != nil {
 		t.Skip("New on empty dir failed; not the picker's concern: " + err.Error())
 	}

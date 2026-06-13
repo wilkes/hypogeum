@@ -2,12 +2,10 @@ package tui
 
 import (
 	"github.com/charmbracelet/bubbles/key"
-
-	"github.com/wilkes/hypogeum/internal/config"
 )
 
 // keyMap collects every keybinding the model knows about, so the help
-// cheat sheet and the dialect factories share one source.
+// cheat sheet and the keybinding definitions share one source.
 type keyMap struct {
 	Up      key.Binding
 	Down    key.Binding
@@ -45,7 +43,7 @@ type keyMap struct {
 	HalfPageUp   key.Binding
 }
 
-func pagerKeys() keyMap {
+func defaultKeys() keyMap {
 	return keyMap{
 		Up:      key.NewBinding(key.WithKeys("up", "k"), key.WithHelp("↑/k", "up")),
 		Down:    key.NewBinding(key.WithKeys("down", "j"), key.WithHelp("↓/j", "down")),
@@ -81,55 +79,5 @@ func pagerKeys() keyMap {
 		Bottom:       key.NewBinding(key.WithKeys("G"), key.WithHelp("G", "bottom")),
 		HalfPageDown: key.NewBinding(key.WithKeys("ctrl+d"), key.WithHelp("^d", "half-page down")),
 		HalfPageUp:   key.NewBinding(key.WithKeys("ctrl+u"), key.WithHelp("^u", "half-page up")),
-	}
-}
-
-func modernKeys() keyMap {
-	return keyMap{
-		Up:      key.NewBinding(key.WithKeys("up"), key.WithHelp("↑", "up")),
-		Down:    key.NewBinding(key.WithKeys("down"), key.WithHelp("↓", "down")),
-		Open:    key.NewBinding(key.WithKeys("enter"), key.WithHelp("enter", "open")),
-		Back:    key.NewBinding(key.WithKeys("alt+left", "backspace"), key.WithHelp("alt+←/⌫", "back")),
-		Forward: key.NewBinding(key.WithKeys("alt+right"), key.WithHelp("alt+→", "forward")),
-		Quit:    key.NewBinding(key.WithKeys("q", "ctrl+q", "ctrl+c"), key.WithHelp("q/^q", "quit")),
-
-		NextLink:  key.NewBinding(key.WithKeys("tab"), key.WithHelp("tab", "next link")),
-		PrevLink:  key.NewBinding(key.WithKeys("shift+tab"), key.WithHelp("⇧⇥", "prev link")),
-		ClearLink: key.NewBinding(key.WithKeys("esc"), key.WithHelp("esc", "clear link")),
-
-		CopyPath: key.NewBinding(key.WithKeys("ctrl+y"), key.WithHelp("^y", "copy path")),
-
-		OpenBacklinksModal: key.NewBinding(key.WithKeys("alt+b"), key.WithHelp("alt+b", "backlinks")),
-		OpenLogsModal:      key.NewBinding(key.WithKeys("alt+l"), key.WithHelp("alt+l", "logs")),
-		OpenHelpModal:      key.NewBinding(key.WithKeys("?", "f1"), key.WithHelp("?/F1", "help")),
-
-		ToggleTree:   key.NewBinding(key.WithKeys("ctrl+b"), key.WithHelp("^b", "open tree")),
-		ToggleFolder: key.NewBinding(key.WithKeys(" "), key.WithHelp("space", "expand/collapse")),
-		EnterVisual:  key.NewBinding(key.WithKeys("v"), key.WithHelp("v", "select mode")),
-		BeginSelect:  key.NewBinding(key.WithKeys(" "), key.WithHelp("space", "start selection")),
-
-		OpenPicker: key.NewBinding(key.WithKeys("ctrl+p"), key.WithHelp("^p", "open file…")),
-		// Picker/SearchCursor fields intentionally zero-valued so the
-		// dispatcher falls through to Up/Down (arrow-only in modern).
-		// See TestModernKeys_AllActionsBound.
-
-		OpenSearch: key.NewBinding(key.WithKeys("ctrl+f"), key.WithHelp("^f", "search…")),
-
-		Top:          key.NewBinding(key.WithKeys("ctrl+home"), key.WithHelp("^home", "top")),
-		Bottom:       key.NewBinding(key.WithKeys("ctrl+end"), key.WithHelp("^end", "bottom")),
-		HalfPageDown: key.NewBinding(key.WithKeys("pgdown"), key.WithHelp("pgdn", "page down")),
-		HalfPageUp:   key.NewBinding(key.WithKeys("pgup"), key.WithHelp("pgup", "page up")),
-	}
-}
-
-// keysFor returns the keyMap for the named dialect. Unknown values fall
-// back to pager — this is the runtime mirror of config.Load's validation
-// fallback, so the binary stays usable even if a config slipped through.
-func keysFor(dialect string) keyMap {
-	switch dialect {
-	case config.DialectModern:
-		return modernKeys()
-	default:
-		return pagerKeys()
 	}
 }
