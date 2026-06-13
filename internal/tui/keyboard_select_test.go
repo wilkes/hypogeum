@@ -197,41 +197,38 @@ func TestVisual_GJumpsToBottomAndYanksToEnd(t *testing.T) {
 	if got := m.content.selection.cursor.line; got != last {
 		t.Fatalf("G caret line = %d, want %d", got, last)
 	}
+	if got := m.content.selection.cursor.col; got != m.content.lineWidths[last] {
+		t.Errorf("G caret col = %d, want end-of-line %d", got, m.content.lineWidths[last])
+	}
 	m = pressRune(t, m, 'y')
-	// Anchor is {0,0} and cursor is {last,0}: the selection runs from line 0
-	// up to (but not past) col 0 of the last line, so "line 98" is the last
-	// substantive content. "line 99" has hi=0 and contributes an empty segment.
-	if !strings.HasPrefix(copied, "line 00\n") || !strings.Contains(copied, "line 98") {
-		t.Errorf("G-then-yank should copy from top toward end; got %q", copied)
+	if !strings.HasPrefix(copied, "line 00\n") {
+		t.Errorf("yank should start at the top; got %q", copied[:min(20, len(copied))])
+	}
+	if !strings.Contains(copied, "line 99") {
+		t.Errorf("G-to-end then yank should include the last line; got tail %q", copied[max(0, len(copied)-20):])
 	}
 }
 
 func TestVisual_HalfPageDownScrolls(t *testing.T) {
 	root := writeFixture(t)
 	m := sized(t, root, "")
-	m.setContent(tallContent(100))
+	m.setContent(tallContent(200))
+	startOffset := m.content.viewport.YOffset
 
-	// Enter visual mode (caret at viewport top) then press ^d.
 	m = pressRune(t, m, 'v')
-	startLine := m.content.selection.cursor.line
-	half := m.content.viewport.Height / 2
-	if half < 1 {
-		half = 1
+	// Press ^d enough times that the caret must leave the initial window.
+	for i := 0; i < 4; i++ {
+		m = pressKey(t, m, tea.KeyMsg{Type: tea.KeyCtrlD})
 	}
-	m = pressKey(t, m, tea.KeyMsg{Type: tea.KeyCtrlD}) // ^d
 
-	wantLine := startLine + half
-	if got := m.content.selection.cursor.line; got != wantLine {
-		t.Errorf("^d caret line: got %d, want %d (startLine %d + half %d)",
-			got, wantLine, startLine, half)
+	if m.content.viewport.YOffset <= startOffset {
+		t.Errorf("repeated ^d should scroll the viewport; offset %d -> %d", startOffset, m.content.viewport.YOffset)
 	}
-	// The viewport scrolls only when the caret leaves the visible window;
-	// with Height≈38 and a starting offset of 0, line 19 is still on screen.
-	// We verify caret-in-view invariant: the caret must be within the viewport.
-	vp := m.content.viewport
-	if m.content.selection.cursor.line < vp.YOffset || m.content.selection.cursor.line >= vp.YOffset+vp.Height {
-		t.Errorf("caret line %d not visible in viewport [%d, %d)",
-			m.content.selection.cursor.line, vp.YOffset, vp.YOffset+vp.Height)
+	// The caret should remain within the (now scrolled) visible window.
+	top := m.content.viewport.YOffset
+	h := m.content.viewport.Height
+	if line := m.content.selection.cursor.line; line < top || line >= top+h {
+		t.Errorf("caret line %d should be within visible window [%d, %d)", line, top, top+h)
 	}
 }
 

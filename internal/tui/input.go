@@ -550,8 +550,8 @@ func (m *Model) handleVisualKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case key.Matches(msg, m.keys.Top): // g
 		m.placeCaret(0, 0)
 		return *m, nil
-	case key.Matches(msg, m.keys.Bottom): // G
-		m.placeCaret(last, 0)
+	case key.Matches(msg, m.keys.Bottom): // G → end of the last line (doc bottom)
+		m.placeCaret(last, m.content.lineWidths[last])
 		return *m, nil
 	case key.Matches(msg, m.keys.HalfPageDown): // ^d
 		m.placeCaret(cur.line+half, cur.col)
