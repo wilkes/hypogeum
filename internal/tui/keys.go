@@ -28,6 +28,8 @@ type keyMap struct {
 
 	ToggleTree   key.Binding
 	ToggleFolder key.Binding
+	EnterVisual  key.Binding
+	BeginSelect  key.Binding
 
 	OpenPicker       key.Binding
 	PickerCursorDown key.Binding
@@ -64,6 +66,8 @@ func pagerKeys() keyMap {
 
 		ToggleTree:   key.NewBinding(key.WithKeys("t"), key.WithHelp("t", "open tree")),
 		ToggleFolder: key.NewBinding(key.WithKeys(" "), key.WithHelp("space", "expand/collapse")),
+		EnterVisual:  key.NewBinding(key.WithKeys("v"), key.WithHelp("v", "select mode")),
+		BeginSelect:  key.NewBinding(key.WithKeys(" "), key.WithHelp("space", "start selection")),
 
 		OpenPicker:       key.NewBinding(key.WithKeys("ctrl+p", "o"), key.WithHelp("^p/o", "open file…")),
 		PickerCursorDown: key.NewBinding(key.WithKeys("ctrl+j"), key.WithHelp("^j", "picker: next")),
@@ -101,6 +105,8 @@ func modernKeys() keyMap {
 
 		ToggleTree:   key.NewBinding(key.WithKeys("ctrl+b"), key.WithHelp("^b", "open tree")),
 		ToggleFolder: key.NewBinding(key.WithKeys(" "), key.WithHelp("space", "expand/collapse")),
+		EnterVisual:  key.NewBinding(key.WithKeys("v"), key.WithHelp("v", "select mode")),
+		BeginSelect:  key.NewBinding(key.WithKeys(" "), key.WithHelp("space", "start selection")),
 
 		OpenPicker: key.NewBinding(key.WithKeys("ctrl+p"), key.WithHelp("^p", "open file…")),
 		// Picker/SearchCursor fields intentionally zero-valued so the

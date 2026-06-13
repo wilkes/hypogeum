@@ -99,7 +99,7 @@ func (m *Model) handleMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 	// under the press so a no-motion release still follows it; do NOT
 	// follow it here — the first motion event turns this into a drag.
 	if m.modals.kind == modalNone && zone.Get(zoneContentPane).InBounds(msg) {
-		m.clearSelection() // drop any prior finalized highlight
+		m.clearSelection() // drop any prior finalized highlight or visual-mode caret
 		m.focus = focusContent
 		pos := m.screenToContent(msg.X, msg.Y)
 		link := -1
@@ -182,6 +182,13 @@ func (m *Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	// Any keystroke drops it; the key still performs its normal action.
 	if m.content.selection.copied {
 		m.clearSelection()
+	}
+
+	// Keyboard visual mode intercepts every key while active — before any
+	// modal-toggle or global binding. Visual mode is content-pane only and
+	// never coexists with an open modal.
+	if m.content.selection.visual {
+		return m.handleVisualKey(msg)
 	}
 
 	// The picker's text input claims every printable keystroke. Route
@@ -464,6 +471,9 @@ func (m *Model) handleContentKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case key.Matches(msg, m.keys.PrevLink):
 		m.cycleLink(-1)
 		return *m, nil
+	case key.Matches(msg, m.keys.EnterVisual):
+		m.enterVisual()
+		return *m, nil
 	case key.Matches(msg, m.keys.CopyPath):
 		m.copyCurrentPath()
 		return *m, nil
@@ -507,6 +517,78 @@ func (m *Model) handleContentKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
 	m.content.viewport, cmd = m.content.viewport.Update(msg)
 	return *m, cmd
+}
+
+// handleVisualKey routes every keystroke while keyboard visual mode is
+// active. Char/line motions are matched on the raw key (h/j/k/l + arrows)
+// rather than the Back/Forward/Up/Down keyMap fields, because the modern
+// dialect binds Back/Forward to alt+arrows — plain arrows must still move
+// the caret. Jumps (g/G, ^d/^u) reuse the dialect-aware Top/Bottom/HalfPage
+// fields. Yank reuses the dialect's copy key; Space drops the anchor; Esc
+// cancels. Any other key is inert.
+func (m *Model) handleVisualKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	if len(m.contentLines()) == 0 {
+		return *m, nil
+	}
+	cur := m.content.selection.cursor
+	half := m.content.viewport.Height / 2
+	if half < 1 {
+		half = 1
+	}
+	last := len(m.contentLines()) - 1
+
+	switch {
+	case key.Matches(msg, m.keys.Quit): // ^c / q exits the app from visual mode too
+		return *m, tea.Quit
+	case key.Matches(msg, m.keys.ClearLink): // Esc
+		m.clearSelection()
+		return *m, nil
+	case key.Matches(msg, m.keys.CopyPath): // y / ^y → yank
+		m.yankVisual()
+		return *m, nil
+	case key.Matches(msg, m.keys.BeginSelect): // Space → drop anchor
+		m.content.selection.selecting = true
+		return *m, nil
+	case key.Matches(msg, m.keys.Top): // g
+		m.placeCaret(0, 0)
+		return *m, nil
+	case key.Matches(msg, m.keys.Bottom): // G → end of the last line (doc bottom)
+		m.placeCaret(last, m.content.lineWidths[last])
+		return *m, nil
+	case key.Matches(msg, m.keys.HalfPageDown): // ^d
+		m.placeCaret(cur.line+half, cur.col)
+		return *m, nil
+	case key.Matches(msg, m.keys.HalfPageUp): // ^u
+		m.placeCaret(cur.line-half, cur.col)
+		return *m, nil
+	}
+
+	switch msg.String() {
+	case "h", "left":
+		m.placeCaret(cur.line, cur.col-1)
+	case "l", "right":
+		m.placeCaret(cur.line, cur.col+1)
+	case "k", "up":
+		m.placeCaret(cur.line-1, cur.col)
+	case "j", "down":
+		m.placeCaret(cur.line+1, cur.col)
+	}
+	return *m, nil
+}
+
+// yankVisual copies the current selection to the clipboard, toasts the
+// count, and finalizes the selection so its highlight persists until the
+// user's next action. A zero-width selection (still positioning, or a
+// collapsed span) copies nothing and just exits.
+func (m *Model) yankVisual() {
+	text := m.extractSelection()
+	if n := utf8.RuneCountInString(text); n > 0 {
+		m.copyToClipboard(text)
+		m.diag.Info(fmt.Sprintf("Copied %d chars", n))
+		m.finalizeSelection()
+		return
+	}
+	m.clearSelection()
 }
 
 // handleTreeModalKey routes keystrokes while the tree modal is open.

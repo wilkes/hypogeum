@@ -27,12 +27,15 @@ type cellPos struct {
 // selection tracks an in-progress or finalized text selection in the
 // content pane, in absolute document coordinates.
 type selection struct {
-	anchored    bool    // a left-press landed in the content pane
-	moved       bool    // motion seen since the press (click-vs-drag)
-	copied      bool    // released with text → highlight persists
-	anchor      cellPos // where the drag started
-	cursor      cellPos // current / final drag point
-	pendingLink int     // link index under the press, or -1
+	anchored    bool    // a left-press landed in the content pane (mouse)
+	moved       bool    // motion seen since press (mouse click-vs-drag)
+	copied      bool    // released/yanked with text → highlight persists
+
+	visual      bool    // keyboard visual mode is active (either phase)
+	selecting   bool    // anchor dropped (Space) → caret movement extends
+	anchor      cellPos // where the selection started
+	cursor      cellPos // current end / caret position
+	pendingLink int     // link index under a mouse press, or -1
 }
 
 // contentUIState bundles the right content pane's render state. viewport
@@ -491,7 +494,14 @@ func (m *Model) applySelectionHighlight() {
 		}
 		lo, hi := selColBounds(i, start, end, m.content.lineWidths[i])
 		if hi <= lo {
-			b.WriteString(ln)
+			// Zero-width: in keyboard visual mode draw a one-cell caret on
+			// the caret's line so the user can see where they are; mouse
+			// selections (visual=false) show nothing for a zero-width span.
+			if m.content.selection.visual && i == m.content.selection.cursor.line {
+				b.WriteString(renderCaretLine(ln, m.content.selection.cursor.col, m.content.lineWidths[i]))
+			} else {
+				b.WriteString(ln)
+			}
 			continue
 		}
 		b.WriteString(ansi.Cut(ln, 0, lo))
@@ -499,6 +509,20 @@ func (m *Model) applySelectionHighlight() {
 		b.WriteString(ansi.Cut(ln, hi, m.content.lineWidths[i]))
 	}
 	m.setViewportPreservingScroll(b.String())
+}
+
+// renderCaretLine returns ln with a single reverse-video caret cell at
+// visible column col. If col is at or past the line's content width, a
+// reverse-video space is appended (caret on a blank or end-of-line).
+func renderCaretLine(ln string, col, width int) string {
+	if col >= width {
+		return ln + selectionStyle.Render(" ")
+	}
+	var b strings.Builder
+	b.WriteString(ansi.Cut(ln, 0, col))
+	b.WriteString(selectionStyle.Render(ansi.Strip(ansi.Cut(ln, col, col+1))))
+	b.WriteString(ansi.Cut(ln, col+1, width))
+	return b.String()
 }
 
 // setViewportPreservingScroll replaces the viewport content while keeping
@@ -517,24 +541,90 @@ func (m *Model) resetSelectionState() {
 	m.content.selection = selection{pendingLink: -1}
 }
 
-// finalizeSelection transitions a just-released drag into the "copied"
-// state: the reverse-video highlight stays on screen until the user's
-// next action, but the gesture is over, so a stray post-release motion
-// event (gated on anchored) no longer extends the span.
+// finalizeSelection transitions a completed selection into the "copied"
+// state: the reverse-video highlight stays on screen until the user's next
+// action, but the gesture is over. Called from both the mouse drag-release
+// path (endSelect) and the keyboard yank path (yankVisual); it clears the
+// mouse gesture flags (anchored/moved) and the keyboard visual-mode flags
+// (visual/selecting) alike, so a stray later event can't extend the span.
 func (m *Model) finalizeSelection() {
 	m.content.selection.copied = true
 	m.content.selection.anchored = false
 	m.content.selection.moved = false
+	m.content.selection.visual = false
+	m.content.selection.selecting = false
 }
 
 // clearSelection drops the selection and restores the un-highlighted
 // base render (preserving scroll) if a highlight was showing.
 func (m *Model) clearSelection() {
-	had := m.content.selection.moved || m.content.selection.copied
+	had := m.content.selection.moved || m.content.selection.copied || m.content.selection.visual
 	m.resetSelectionState()
 	if had {
 		m.setViewportPreservingScroll(m.content.rendered)
 	}
+}
+
+// placeCaret moves the visual-mode caret to (line, col), clamped to valid
+// cells. In the positioning phase (!selecting) the anchor tracks the caret
+// so there is no span; in the extend phase only the cursor moves, growing
+// the selection. Scrolls the caret into view and repaints.
+func (m *Model) placeCaret(line, col int) {
+	lines := m.contentLines()
+	if len(lines) == 0 {
+		return
+	}
+	if line < 0 {
+		line = 0
+	}
+	if line > len(lines)-1 {
+		line = len(lines) - 1
+	}
+	if col < 0 {
+		col = 0
+	}
+	if w := m.content.lineWidths[line]; col > w {
+		col = w
+	}
+	m.content.selection.cursor = cellPos{line: line, col: col}
+	if !m.content.selection.selecting {
+		m.content.selection.anchor = m.content.selection.cursor
+	}
+	m.scrollCaretIntoView()
+	m.applySelectionHighlight()
+}
+
+// scrollCaretIntoView adjusts the viewport's YOffset so the caret's line is
+// within the visible window. applySelectionHighlight (called right after)
+// preserves whatever offset this sets.
+func (m *Model) scrollCaretIntoView() {
+	line := m.content.selection.cursor.line
+	top := m.content.viewport.YOffset
+	h := m.content.viewport.Height
+	if h < 1 {
+		return
+	}
+	if line < top {
+		m.content.viewport.SetYOffset(line)
+	} else if line >= top+h {
+		m.content.viewport.SetYOffset(line - h + 1)
+	}
+}
+
+// enterVisual starts keyboard visual mode in the positioning phase: a
+// movable caret at the top-left of the visible area, no span yet. The
+// caret is selection.cursor; anchor tracks it until Space drops the anchor.
+func (m *Model) enterVisual() {
+	line := m.content.viewport.YOffset
+	if n := len(m.contentLines()); line > n-1 {
+		line = n - 1
+	}
+	if line < 0 {
+		line = 0
+	}
+	at := cellPos{line: line, col: 0}
+	m.content.selection = selection{visual: true, anchor: at, cursor: at, pendingLink: -1}
+	m.applySelectionHighlight()
 }
 
 // allVaultMarkdownPaths walks m.rootNode and returns every markdown file
