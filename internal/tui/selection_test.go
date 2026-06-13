@@ -261,9 +261,9 @@ func TestModel_PressWhileModalOpenDoesNotArmSelection(t *testing.T) {
 	root := writeFixture(t)
 	m := sized(t, root, filepath.Join(root, "index.md"))
 	// Open the tree modal.
-	m = pressKey(t, m, tea.KeyMsg{Type: tea.KeyCtrlB})
+	m = pressKey(t, m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'t'}})
 	if m.modals.kind != modalTree {
-		t.Fatalf("precondition: ^b should open tree modal, got %v", m.modals.kind)
+		t.Fatalf("precondition: t should open tree modal, got %v", m.modals.kind)
 	}
 	// A press somewhere in the content region must NOT arm a selection
 	// while a modal is open (selection is content-pane only).

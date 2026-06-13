@@ -14,9 +14,9 @@ func TestModel_MouseClick_OnTreeRow_OpensFileAndClosesModal(t *testing.T) {
 	root := writeFixture(t)
 	m := sized(t, root, "")
 	// Open the tree modal so the row zones get registered.
-	m = pressKey(t, m, tea.KeyMsg{Type: tea.KeyCtrlB})
+	m = pressKey(t, m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'t'}})
 	if m.modals.kind != modalTree {
-		t.Fatalf("^b should open tree modal, got kind=%v", m.modals.kind)
+		t.Fatalf("t should open tree modal, got kind=%v", m.modals.kind)
 	}
 	// Expand notes/ so its children are visible (default-collapsed).
 	m.tree.expanded[filepath.Join(root, "notes")] = true

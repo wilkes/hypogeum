@@ -119,7 +119,7 @@ func TestModel_LinkKeysIgnoredWhenTreeModalOpen(t *testing.T) {
 	m := sized(t, root, "")
 	// Open the tree modal so 'n' is captured by the modal-key block,
 	// not routed to the content link-cycler.
-	m = pressKey(t, m, tea.KeyMsg{Type: tea.KeyCtrlB})
+	m = pressKey(t, m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'t'}})
 	if m.modals.kind != modalTree {
 		t.Fatalf("setup: expected tree modal open, got kind=%v", m.modals.kind)
 	}

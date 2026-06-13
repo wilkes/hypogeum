@@ -48,8 +48,8 @@ func pagerKeys() keyMap {
 		Up:      key.NewBinding(key.WithKeys("up", "k"), key.WithHelp("↑/k", "up")),
 		Down:    key.NewBinding(key.WithKeys("down", "j"), key.WithHelp("↓/j", "down")),
 		Open:    key.NewBinding(key.WithKeys("enter"), key.WithHelp("enter", "open")),
-		Back:    key.NewBinding(key.WithKeys("h", "left"), key.WithHelp("h/←", "back")),
-		Forward: key.NewBinding(key.WithKeys("l", "right"), key.WithHelp("l/→", "forward")),
+		Back:    key.NewBinding(key.WithKeys("h", "left"), key.WithHelp("←/h", "back")),
+		Forward: key.NewBinding(key.WithKeys("l", "right"), key.WithHelp("→/l", "forward")),
 		Quit:    key.NewBinding(key.WithKeys("q", "ctrl+c"), key.WithHelp("q", "quit")),
 
 		NextLink:  key.NewBinding(key.WithKeys("n"), key.WithHelp("n", "next link")),
@@ -62,10 +62,10 @@ func pagerKeys() keyMap {
 		OpenLogsModal:      key.NewBinding(key.WithKeys("ctrl+l"), key.WithHelp("^l", "logs")),
 		OpenHelpModal:      key.NewBinding(key.WithKeys("?"), key.WithHelp("?", "help")),
 
-		ToggleTree:   key.NewBinding(key.WithKeys("ctrl+b"), key.WithHelp("^b", "open tree")),
+		ToggleTree:   key.NewBinding(key.WithKeys("t"), key.WithHelp("t", "open tree")),
 		ToggleFolder: key.NewBinding(key.WithKeys(" "), key.WithHelp("space", "expand/collapse")),
 
-		OpenPicker:       key.NewBinding(key.WithKeys("ctrl+p"), key.WithHelp("^p", "open file…")),
+		OpenPicker:       key.NewBinding(key.WithKeys("ctrl+p", "o"), key.WithHelp("^p/o", "open file…")),
 		PickerCursorDown: key.NewBinding(key.WithKeys("ctrl+j"), key.WithHelp("^j", "picker: next")),
 		PickerCursorUp:   key.NewBinding(key.WithKeys("ctrl+k"), key.WithHelp("^k", "picker: prev")),
 

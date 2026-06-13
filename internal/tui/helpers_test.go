@@ -165,11 +165,11 @@ func pressRune(t *testing.T, m Model, r rune) Model {
 func driveCursorTo(t *testing.T, m Model, target int) Model {
 	t.Helper()
 	if m.modals.kind != modalTree {
-		updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyCtrlB})
+		updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'t'}})
 		m = updated.(Model)
 	}
 	if m.modals.kind != modalTree {
-		t.Fatalf("driveCursorTo: ^b should open tree modal, got kind=%v", m.modals.kind)
+		t.Fatalf("driveCursorTo: t should open tree modal, got kind=%v", m.modals.kind)
 	}
 	for m.tree.cursor != target {
 		key := tea.KeyMsg{Type: tea.KeyDown}

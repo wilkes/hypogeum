@@ -32,7 +32,7 @@ The lower layers know nothing about Bubble Tea or terminals; they're testable as
 
 1. Bubble Tea delivers a `tea.KeyMsg` to `Model.Update`.
 2. Global bindings (quit, focus toggle, back/forward) match first.
-3. Modal-toggle keys (`^b` tree, `^p` picker, `b` backlinks, `^l` logs, `?` help) route to `openModalWith(kind, prepare)`.
+3. Modal-toggle keys (`t` tree, `^p`/`o` picker, `b` backlinks, `^l` logs, `?` help — pager dialect; modern keeps `^b` tree and `^p`-only picker) route to `openModalWith(kind, prepare)`.
 4. If a modal is open, the keystroke is dispatched to that modal's handler — e.g. `modalTree` updates `m.tree.cursor` or calls `openFile` (closing itself on a file Enter). The picker grabs printable rune keys before the global modal-toggle switch sees them so plain-letter toggles (`b`) don't kick the picker out when typed into the query.
 5. Otherwise, dispatch to `handleContentKey` — cycles `m.content.linkCursor`, follows a link, clears selection, or falls through to the viewport's own scrolling bindings.
 6. `openFile(path)` records the visit in `nav.History` and calls `refreshContent`.
