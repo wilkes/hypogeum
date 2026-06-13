@@ -615,16 +615,10 @@ func (m *Model) scrollCaretIntoView() {
 // movable caret at the top-left of the visible area, no span yet. The
 // caret is selection.cursor; anchor tracks it until Space drops the anchor.
 func (m *Model) enterVisual() {
-	line := m.content.viewport.YOffset
-	if n := len(m.contentLines()); line > n-1 {
-		line = n - 1
-	}
-	if line < 0 {
-		line = 0
-	}
-	at := cellPos{line: line, col: 0}
-	m.content.selection = selection{visual: true, anchor: at, cursor: at, pendingLink: -1}
-	m.applySelectionHighlight()
+	// placeCaret clamps the line, sets anchor = cursor (positioning phase,
+	// since selecting is false), scrolls into view, and repaints.
+	m.content.selection = selection{visual: true, pendingLink: -1}
+	m.placeCaret(m.content.viewport.YOffset, 0)
 }
 
 // allVaultMarkdownPaths walks m.rootNode and returns every markdown file
