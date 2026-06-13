@@ -243,6 +243,18 @@ func TestNew_OptionsSurfacesStartupWarnings(t *testing.T) {
 	}
 }
 
+func TestVisualModeBindingsPresent(t *testing.T) {
+	for _, dialect := range []string{"pager", "modern"} {
+		km := keysFor(dialect)
+		if !slices.Contains(km.EnterVisual.Keys(), "v") {
+			t.Errorf("%s: EnterVisual = %v, want to include \"v\"", dialect, km.EnterVisual.Keys())
+		}
+		if !slices.Contains(km.BeginSelect.Keys(), " ") {
+			t.Errorf("%s: BeginSelect = %v, want to include \" \"", dialect, km.BeginSelect.Keys())
+		}
+	}
+}
+
 // isAllowedKeyOverlap whitelists context-multiplexed bindings: the same
 // physical key drives different actions in mutually exclusive modal
 // states. Picker and search modals can't be open simultaneously (the
@@ -258,6 +270,9 @@ func isAllowedKeyOverlap(a, b, key string) bool {
 		return true
 	}
 	if pair("PickerCursorUp", "SearchCursorUp") && key == "ctrl+k" {
+		return true
+	}
+	if pair("BeginSelect", "ToggleFolder") && key == " " {
 		return true
 	}
 	return false

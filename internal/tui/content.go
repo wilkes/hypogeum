@@ -27,12 +27,14 @@ type cellPos struct {
 // selection tracks an in-progress or finalized text selection in the
 // content pane, in absolute document coordinates.
 type selection struct {
-	anchored    bool    // a left-press landed in the content pane
-	moved       bool    // motion seen since the press (click-vs-drag)
-	copied      bool    // released with text → highlight persists
-	anchor      cellPos // where the drag started
-	cursor      cellPos // current / final drag point
-	pendingLink int     // link index under the press, or -1
+	anchored    bool    // a left-press landed in the content pane (mouse)
+	moved       bool    // motion seen since press (mouse click-vs-drag)
+	copied      bool    // released/yanked with text → highlight persists
+	visual      bool    // keyboard visual mode is active (either phase)
+	selecting   bool    // anchor dropped (Space) → caret movement extends
+	anchor      cellPos // where the selection started
+	cursor      cellPos // current end / caret position
+	pendingLink int     // link index under a mouse press, or -1
 }
 
 // contentUIState bundles the right content pane's render state. viewport
