@@ -8,6 +8,7 @@ import (
 	"github.com/charmbracelet/bubbles/viewport"
 	"github.com/charmbracelet/lipgloss"
 
+	"github.com/wilkes/hypogeum/internal/highlight"
 	"github.com/wilkes/hypogeum/internal/vault"
 )
 
@@ -21,15 +22,6 @@ type backlinksUIState struct {
 	items        []vault.Backlink
 	returnCursor *returnCursor
 }
-
-// snippetHighlightOpenChar / CloseChar mirror the markers vault embeds
-// in Backlink.Snippet. Defined here so the TUI doesn't import vault's
-// internal constants — the markers are part of the Snippet string's
-// data contract.
-const (
-	snippetHighlightOpenChar  = "\x11"
-	snippetHighlightCloseChar = "\x12"
-)
 
 // returnCursor remembers where the user was in the backlinks list
 // before following a backlink. Single-slot: we only restore on the
@@ -83,14 +75,15 @@ func formatBacklinks(links []vault.Backlink, root string, width, cursor int) str
 	return b.String()
 }
 
-// applyHighlight replaces snippetHighlightOpenChar/CloseChar markers
-// with SGR codes for visible bold/yellow display.
+// applyHighlight replaces the highlight.Open/Close markers (\x11/\x12,
+// defined in internal/highlight) embedded in a snippet with SGR codes
+// for visible bold/yellow display.
 func applyHighlight(s string) string {
 	hi := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("11"))
 	out := s
 	for {
-		i := strings.Index(out, snippetHighlightOpenChar)
-		j := strings.Index(out, snippetHighlightCloseChar)
+		i := strings.Index(out, highlight.Open)
+		j := strings.Index(out, highlight.Close)
 		if i < 0 || j < 0 || j < i {
 			break
 		}

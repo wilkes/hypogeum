@@ -4,18 +4,14 @@ import (
 	"strings"
 
 	"github.com/yuin/goldmark/ast"
+
+	"github.com/wilkes/hypogeum/internal/highlight"
 )
 
-// snippetHighlightOpen / Close bracket the display text of a reference
-// inside its snippet. The TUI applies SGR around these markers when
-// rendering snippets so the wikilink target stands out.
-//
-// Using ASCII control chars keeps the markers invisible to plain-text
-// processing while distinguishable from anything in user content.
-const (
-	snippetHighlightOpen  = "\x11" // DC1
-	snippetHighlightClose = "\x12" // DC2
-)
+// Snippets bracket the display text of a reference with highlight.Open /
+// highlight.Close (defined in internal/highlight as the single source of
+// truth for the wire format). The TUI applies SGR around these markers
+// when rendering snippets so the wikilink target stands out.
 
 // snippetForNode walks up from n to the smallest enclosing block-level
 // node, then renders that subtree as plain text. Within the result,
@@ -23,7 +19,7 @@ const (
 func snippetForNode(n ast.Node, source []byte, displayText string) string {
 	block := enclosingBlock(n)
 	if block == nil {
-		return wrapHighlight(displayText)
+		return highlight.Wrap(displayText)
 	}
 	plain := nodeText(block, source)
 	plain = strings.TrimSpace(plain)
@@ -31,14 +27,10 @@ func snippetForNode(n ast.Node, source []byte, displayText string) string {
 	if displayText != "" {
 		i := strings.Index(plain, displayText)
 		if i >= 0 {
-			plain = plain[:i] + wrapHighlight(displayText) + plain[i+len(displayText):]
+			plain = plain[:i] + highlight.Wrap(displayText) + plain[i+len(displayText):]
 		}
 	}
 	return plain
-}
-
-func wrapHighlight(s string) string {
-	return snippetHighlightOpen + s + snippetHighlightClose
 }
 
 // enclosingBlock returns the smallest block-level ancestor of n.
