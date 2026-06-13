@@ -21,6 +21,29 @@ func TestMain(m *testing.M) {
 	os.Exit(m.Run())
 }
 
+// resetGlobalZoneManager replaces the package-level BubbleZone DefaultManager
+// with a fresh instance. This is necessary for test isolation because
+// zone.NewGlobal() is a no-op when a manager already exists, so zone bounds
+// and ID mappings registered by one test persist into subsequent tests.
+//
+// The stale persistence causes a race in renderAndScan: it polls for a
+// sentinel zone (zoneContentPane) to detect when the current View()'s Scan
+// has completed. If the sentinel zone already has non-zero bounds from a
+// prior test, the poll returns immediately before the current scan completes,
+// and any zones rendered for the first time in the current test (e.g.
+// "link:0", "tree:3") are not yet in the map.
+//
+// Call at the start of any test setup that creates a Model and relies on
+// zone bounds (i.e., inside sized()).
+func resetGlobalZoneManager(t *testing.T) {
+	t.Helper()
+	if zone.DefaultManager != nil {
+		zone.DefaultManager.Close()
+	}
+	zone.DefaultManager = nil
+	zone.NewGlobal()
+}
+
 // writeFixture lays down a small markdown directory and returns its root.
 func writeFixture(t *testing.T) string {
 	t.Helper()
@@ -74,6 +97,7 @@ func isolatedHome(t *testing.T) {
 // synthesize mouse clicks find their zones.
 func sized(t *testing.T, root, initialFile string) Model {
 	t.Helper()
+	resetGlobalZoneManager(t)
 	isolatedHome(t)
 	m, err := New(root, initialFile)
 	if err != nil {
@@ -93,9 +117,13 @@ func sized(t *testing.T, root, initialFile string) Model {
 // goroutine writes the zone map. Tests that synthesize a click directly
 // after View() can race the worker and see empty bounds. Polling for a
 // known zone is the cheapest reliable sync without exporting internals.
+//
+// We clear waitID before View() so the poll cannot return early from a
+// stale value left by a prior renderAndScan call in the same test.
 func renderAndScan(t *testing.T, m Model, waitID string) {
 	t.Helper()
-	_ = m.View() // triggers zone.Scan
+	zone.Clear(waitID) // ensure stale bounds don't fool the poll below
+	_ = m.View()       // triggers zone.Scan
 	deadline := time.Now().Add(500 * time.Millisecond)
 	for time.Now().Before(deadline) {
 		if !zone.Get(waitID).IsZero() {
