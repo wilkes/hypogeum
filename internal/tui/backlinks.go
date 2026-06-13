@@ -158,8 +158,8 @@ func (m *Model) followBacklink() {
 	// destination's refreshContent can reapply it. Mirrors the capture
 	// in Back/Forward (input.go) — every navigation-out path must
 	// capture both fields so the invariant holds uniformly.
-	m.pendingPreselectTarget = m.history.Current()
-	m.pendingPreselectRange = m.content.rangeHighlight
+	m.pending.preselectTarget = m.history.Current()
+	m.pending.preselectRange = m.content.rangeHighlight
 
 	m.openFile(bl.SourceFile)
 	// Re-derive tree expansion from the new file's ancestor chain so the

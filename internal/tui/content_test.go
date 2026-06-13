@@ -52,8 +52,8 @@ func TestRefreshContent_CodeFile_DispatchesToCodeRenderer(t *testing.T) {
 	if m.content.linkCursor != -1 {
 		t.Errorf("expected linkCursor == -1, got %d", m.content.linkCursor)
 	}
-	if m.status != goPath {
-		t.Errorf("expected status to be %q, got %q", goPath, m.status)
+	if m.currentPath != goPath {
+		t.Errorf("expected currentPath to be %q, got %q", goPath, m.currentPath)
 	}
 }
 
@@ -99,8 +99,8 @@ func TestRefreshContent_DirectoryPath_RendersListing(t *testing.T) {
 	if len(m.content.links) == 0 {
 		t.Errorf("expected directory listing to produce navigable links, got 0")
 	}
-	if m.status != subdir {
-		t.Errorf("status: got %q want %q", m.status, subdir)
+	if m.currentPath != subdir {
+		t.Errorf("currentPath: got %q want %q", m.currentPath, subdir)
 	}
 }
 
@@ -123,8 +123,8 @@ func TestRefreshContent_CodeFileReadError_ClearsLinksAndReportsStatus(t *testing
 
 	m.refreshContent(filepath.Join(dir, "nonexistent.go"))
 
-	if m.status == "" {
-		t.Error("expected status to carry read error, got empty string")
+	if m.footerMessage == "" {
+		t.Error("expected footerMessage to carry read error, got empty string")
 	}
 	if len(m.content.links) != 0 {
 		t.Errorf("expected links cleared after read error, got %d", len(m.content.links))
@@ -137,7 +137,7 @@ func TestRefreshContent_CodeFileReadError_ClearsLinksAndReportsStatus(t *testing
 // TestRefreshContent_MarkdownHonorsRangeHighlight pins that a non-nil
 // m.content.rangeHighlight set before refreshContent on a markdown
 // file causes the viewport to scroll to that line. Search-Enter uses
-// pendingPreselectRange → rangeHighlight as the scroll-to-line carrier.
+// pending.preselectRange → rangeHighlight as the scroll-to-line carrier.
 func TestRefreshContent_MarkdownHonorsRangeHighlight(t *testing.T) {
 	dir := t.TempDir()
 	// Build a markdown file that renders tall enough to require scrolling.
@@ -157,7 +157,7 @@ func TestRefreshContent_MarkdownHonorsRangeHighlight(t *testing.T) {
 	updated, _ := m.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
 	m = updated.(Model)
 
-	m.pendingPreselectRange = &markdown.LineRange{Start: 50, End: 50}
+	m.pending.preselectRange = &markdown.LineRange{Start: 50, End: 50}
 	m.openFile(p)
 
 	if m.content.viewport.YOffset == 0 {

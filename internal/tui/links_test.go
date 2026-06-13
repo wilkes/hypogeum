@@ -109,8 +109,8 @@ func TestModel_EnterOnExternalLinkSetsStatus(t *testing.T) {
 	if m.history.Current() != beforeHistory {
 		t.Errorf("Enter on external link must not change history; was %q, now %q", beforeHistory, m.history.Current())
 	}
-	if !strings.Contains(m.status, "https://x.test") {
-		t.Errorf("expected status to mention external URL, got %q", m.status)
+	if !strings.Contains(m.footerMessage, "https://x.test") {
+		t.Errorf("expected footerMessage to mention external URL, got %q", m.footerMessage)
 	}
 }
 

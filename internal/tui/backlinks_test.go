@@ -278,7 +278,7 @@ func TestReturnCursor_ClampsToShrunkList(t *testing.T) {
 
 func TestFollowBacklink_CapturesPendingPreselectRange(t *testing.T) {
 	// Verify followBacklink mirrors Back/Forward's capture of
-	// m.content.rangeHighlight into m.pendingPreselectRange so the
+	// m.content.rangeHighlight into m.pending.preselectRange so the
 	// destination's refreshContent can disambiguate between multiple
 	// links to the same target (one with a #L range, one without).
 	//
@@ -300,7 +300,7 @@ func TestFollowBacklink_CapturesPendingPreselectRange(t *testing.T) {
 
 	// Simulate the unreachable-via-UI state: an active range highlight
 	// on the current file while a backlink modal is open. The capture
-	// in followBacklink should mirror this into pendingPreselectRange.
+	// in followBacklink should mirror this into pending.preselectRange.
 	m.content.rangeHighlight = &markdown.LineRange{Start: 10, End: 20}
 	m = pressRune(t, m, 'b')
 	if len(m.backlinks.items) < 1 {
@@ -316,7 +316,7 @@ func TestFollowBacklink_CapturesPendingPreselectRange(t *testing.T) {
 		t.Fatalf("expected linkCursor preselected after follow, got %d", m.content.linkCursor)
 	}
 	// The pre-selected link must be the *ranged* one, proving that
-	// pendingPreselectRange was captured and used to disambiguate.
+	// pending.preselectRange was captured and used to disambiguate.
 	got := m.content.links[m.content.linkCursor].Resolved.Range
 	if got == nil || got.Start != 10 || got.End != 20 {
 		t.Fatalf("expected ranged link pre-selected (Range=10-20); got Range=%+v", got)

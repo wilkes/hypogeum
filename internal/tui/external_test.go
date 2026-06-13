@@ -51,11 +51,11 @@ func TestExternal_EnterArmsConfirmPrompt(t *testing.T) {
 
 	m = pressKey(t, m, tea.KeyMsg{Type: tea.KeyEnter})
 
-	if m.pendingExternal == "" {
-		t.Fatalf("expected pendingExternal set after Enter on external link")
+	if m.pending.externalURL == "" {
+		t.Fatalf("expected pending.externalURL set after Enter on external link")
 	}
-	if !strings.Contains(m.status, "press Enter again") {
-		t.Errorf("expected status to show confirm prompt, got %q", m.status)
+	if !strings.Contains(m.footerMessage, "press Enter again") {
+		t.Errorf("expected footerMessage to show confirm prompt, got %q", m.footerMessage)
 	}
 }
 
@@ -67,10 +67,10 @@ func TestExternal_SecondEnterExecsOpener(t *testing.T) {
 
 	// First Enter arms.
 	m = pressKey(t, m, tea.KeyMsg{Type: tea.KeyEnter})
-	if m.pendingExternal == "" {
-		t.Fatalf("setup: pendingExternal should be set after first Enter")
+	if m.pending.externalURL == "" {
+		t.Fatalf("setup: pending.externalURL should be set after first Enter")
 	}
-	armed := m.pendingExternal
+	armed := m.pending.externalURL
 
 	// Second Enter exec's.
 	m = pressKey(t, m, tea.KeyMsg{Type: tea.KeyEnter})
@@ -81,11 +81,11 @@ func TestExternal_SecondEnterExecsOpener(t *testing.T) {
 	if fake.calls[0] != armed {
 		t.Errorf("opener called with %q, want %q", fake.calls[0], armed)
 	}
-	if m.pendingExternal != "" {
-		t.Errorf("pendingExternal should clear after confirm, got %q", m.pendingExternal)
+	if m.pending.externalURL != "" {
+		t.Errorf("pending.externalURL should clear after confirm, got %q", m.pending.externalURL)
 	}
-	if !strings.Contains(m.status, "opened:") {
-		t.Errorf("status after confirm = %q, want to mention 'opened:'", m.status)
+	if !strings.Contains(m.footerMessage, "opened:") {
+		t.Errorf("footerMessage after confirm = %q, want to mention 'opened:'", m.footerMessage)
 	}
 }
 
@@ -99,11 +99,11 @@ func TestExternal_OpenerErrorSurfacesInStatus(t *testing.T) {
 	m = pressKey(t, m, tea.KeyMsg{Type: tea.KeyEnter}) // arm
 	m = pressKey(t, m, tea.KeyMsg{Type: tea.KeyEnter}) // confirm
 
-	if !strings.Contains(m.status, "open failed") {
-		t.Errorf("expected 'open failed' in status, got %q", m.status)
+	if !strings.Contains(m.footerMessage, "open failed") {
+		t.Errorf("expected 'open failed' in footerMessage, got %q", m.footerMessage)
 	}
-	if !strings.Contains(m.status, "xdg-open not found") {
-		t.Errorf("expected wrapped error message in status, got %q", m.status)
+	if !strings.Contains(m.footerMessage, "xdg-open not found") {
+		t.Errorf("expected wrapped error message in footerMessage, got %q", m.footerMessage)
 	}
 }
 
@@ -115,15 +115,15 @@ func TestExternal_NonEnterKeyCancelsAndFallsThrough(t *testing.T) {
 	armedCursor := m.content.linkCursor
 
 	m = pressKey(t, m, tea.KeyMsg{Type: tea.KeyEnter}) // arm
-	if m.pendingExternal == "" {
-		t.Fatalf("setup: pendingExternal should be set")
+	if m.pending.externalURL == "" {
+		t.Fatalf("setup: pending.externalURL should be set")
 	}
 
 	// Press `n` — should cancel the prompt AND advance the link cursor.
 	m = pressRune(t, m, 'n')
 
-	if m.pendingExternal != "" {
-		t.Errorf("pendingExternal should clear on non-Enter, got %q", m.pendingExternal)
+	if m.pending.externalURL != "" {
+		t.Errorf("pending.externalURL should clear on non-Enter, got %q", m.pending.externalURL)
 	}
 	if len(fake.calls) != 0 {
 		t.Errorf("opener must not be called on cancel, got %d calls", len(fake.calls))
@@ -142,8 +142,8 @@ func TestExternal_EscCancelsWithoutExec(t *testing.T) {
 	m = pressKey(t, m, tea.KeyMsg{Type: tea.KeyEnter}) // arm
 	m = pressKey(t, m, tea.KeyMsg{Type: tea.KeyEsc})   // cancel via Esc
 
-	if m.pendingExternal != "" {
-		t.Errorf("pendingExternal should clear on Esc, got %q", m.pendingExternal)
+	if m.pending.externalURL != "" {
+		t.Errorf("pending.externalURL should clear on Esc, got %q", m.pending.externalURL)
 	}
 	if len(fake.calls) != 0 {
 		t.Errorf("opener must not be called on Esc, got %d calls", len(fake.calls))

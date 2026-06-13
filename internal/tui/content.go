@@ -174,10 +174,10 @@ func (m *Model) refreshContent(path string) {
 	// Single-shot pre-select: clear the fields unconditionally before any
 	// early return, so a read or render failure here can't leak a stale
 	// target into the next refreshContent.
-	target := m.pendingPreselectTarget
-	preselectRange := m.pendingPreselectRange
-	m.pendingPreselectTarget = ""
-	m.pendingPreselectRange = nil
+	target := m.pending.preselectTarget
+	preselectRange := m.pending.preselectRange
+	m.pending.preselectTarget = ""
+	m.pending.preselectRange = nil
 
 	var (
 		src   []byte
@@ -186,7 +186,7 @@ func (m *Model) refreshContent(path string) {
 	if info, statErr := os.Stat(path); statErr == nil && info.IsDir() {
 		listing, dirErr := renderDirListing(path)
 		if dirErr != nil {
-			m.status = dirErr.Error()
+			m.footerMessage = dirErr.Error()
 			m.setContent(fmt.Sprintf("Error: %v", dirErr))
 			m.content.links = nil
 			m.content.linkCursor = -1
@@ -199,7 +199,7 @@ func (m *Model) refreshContent(path string) {
 		var err error
 		src, err = os.ReadFile(path)
 		if err != nil {
-			m.status = err.Error()
+			m.footerMessage = err.Error()
 			m.setContent(fmt.Sprintf("Error: %v", err))
 			m.content.links = nil
 			m.content.linkCursor = -1
@@ -214,10 +214,11 @@ func (m *Model) refreshContent(path string) {
 			Highlight: m.content.rangeHighlight,
 		})
 		if rerr != nil {
-			m.status = rerr.Error()
+			m.footerMessage = rerr.Error()
 			m.setContent(fmt.Sprintf("Error: %v", rerr))
 		} else {
-			m.status = path
+			m.currentPath = path
+			m.footerMessage = ""
 			m.setContent(out)
 			m.content.viewport.GotoTop()
 			if m.content.rangeHighlight != nil {
@@ -236,7 +237,7 @@ func (m *Model) refreshContent(path string) {
 	// path to scroll to a specific line after rendering. Then clear so
 	// subsequent re-renders (e.g. on resize) don't keep re-scrolling.
 	// NOTE: on the markdown path m.content.rangeHighlight is not set
-	// from pendingPreselectRange; use the local preselectRange instead.
+	// from pending.preselectRange; use the local preselectRange instead.
 	pendingScrollLine := 0
 	if preselectRange != nil {
 		pendingScrollLine = preselectRange.Start
@@ -245,7 +246,7 @@ func (m *Model) refreshContent(path string) {
 	m.content.renderer.SetFromFile(path)
 	out, links, deps, err := m.content.renderer.RenderWithLinks(string(src), path, linkZoneMarker)
 	if err != nil {
-		m.status = err.Error()
+		m.footerMessage = err.Error()
 		m.setContent(fmt.Sprintf("Error: %v", err))
 		m.content.links = nil
 		m.content.linkCursor = -1
@@ -253,7 +254,8 @@ func (m *Model) refreshContent(path string) {
 		m.content.brokenCount = 0
 		return
 	}
-	m.status = path
+	m.currentPath = path
+	m.footerMessage = ""
 	m.setContent(out)
 	m.content.viewport.GotoTop()
 	if pendingScrollLine > 0 {
@@ -326,7 +328,7 @@ func (m *Model) handleFSEvent(ev watch.Event) {
 		}
 		newRoot, err := tree.Walk(m.root)
 		if err != nil {
-			m.status = err.Error()
+			m.footerMessage = err.Error()
 			return
 		}
 		m.rootNode = newRoot

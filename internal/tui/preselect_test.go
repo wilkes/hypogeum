@@ -39,8 +39,8 @@ func TestPreselect_DefaultPathUnchanged(t *testing.T) {
 	if m.content.linkCursor != -1 {
 		t.Fatalf("expected linkCursor=-1 on initial render, got %d", m.content.linkCursor)
 	}
-	if m.pendingPreselectTarget != "" {
-		t.Fatalf("expected pendingPreselectTarget empty, got %q", m.pendingPreselectTarget)
+	if m.pending.preselectTarget != "" {
+		t.Fatalf("expected pending.preselectTarget empty, got %q", m.pending.preselectTarget)
 	}
 	// Drive a redundant refresh; cursor should still be -1.
 	m.refreshContent(aAbs)
@@ -57,7 +57,7 @@ func TestPreselect_ConsumerMatchesByTarget(t *testing.T) {
 	root, aAbs, bAbs := writePreselectFixture(t)
 	m := sized(t, root, aAbs) // start on a.md
 
-	m.pendingPreselectTarget = bAbs
+	m.pending.preselectTarget = bAbs
 	m.refreshContent(aAbs) // a.md contains [b](b.md), so linkCursor should land on it
 
 	if m.content.linkCursor < 0 {
@@ -67,8 +67,8 @@ func TestPreselect_ConsumerMatchesByTarget(t *testing.T) {
 	if got != bAbs {
 		t.Fatalf("matched link target = %q, want %q", got, bAbs)
 	}
-	if m.pendingPreselectTarget != "" {
-		t.Fatalf("expected pendingPreselectTarget cleared after consumption, got %q", m.pendingPreselectTarget)
+	if m.pending.preselectTarget != "" {
+		t.Fatalf("expected pending.preselectTarget cleared after consumption, got %q", m.pending.preselectTarget)
 	}
 }
 
@@ -80,14 +80,14 @@ func TestPreselect_ConsumerNoMatchLeavesUnselected(t *testing.T) {
 	m := sized(t, root, aAbs)
 
 	bogus := filepath.Join(root, "does-not-exist.md")
-	m.pendingPreselectTarget = bogus
+	m.pending.preselectTarget = bogus
 	m.refreshContent(aAbs)
 
 	if m.content.linkCursor != -1 {
 		t.Fatalf("expected linkCursor=-1 with unmatched pending target, got %d", m.content.linkCursor)
 	}
-	if m.pendingPreselectTarget != "" {
-		t.Fatalf("expected pendingPreselectTarget cleared even on miss, got %q", m.pendingPreselectTarget)
+	if m.pending.preselectTarget != "" {
+		t.Fatalf("expected pending.preselectTarget cleared even on miss, got %q", m.pending.preselectTarget)
 	}
 }
 
@@ -259,15 +259,15 @@ func TestPreselect_ClearedAfterConsumption(t *testing.T) {
 	m = pressRune(t, m, 'n')
 	m = pressKey(t, m, tea.KeyMsg{Type: tea.KeyEnter}) // a → b
 	m = pressRune(t, m, 'h')                            // back to a
-	if m.pendingPreselectTarget != "" {
-		t.Fatalf("expected field cleared after Back consumed it, got %q", m.pendingPreselectTarget)
+	if m.pending.preselectTarget != "" {
+		t.Fatalf("expected field cleared after Back consumed it, got %q", m.pending.preselectTarget)
 	}
 
 	// Back again: should be a no-op (no further history). Pre-select
 	// field stays clear.
 	m = pressRune(t, m, 'h')
-	if m.pendingPreselectTarget != "" {
-		t.Fatalf("expected field cleared after no-op Back, got %q", m.pendingPreselectTarget)
+	if m.pending.preselectTarget != "" {
+		t.Fatalf("expected field cleared after no-op Back, got %q", m.pending.preselectTarget)
 	}
 	_ = bAbs
 }
@@ -281,15 +281,15 @@ func TestPreselect_WatcherEventConsumesQuietly(t *testing.T) {
 	m := sized(t, root, aAbs)
 
 	// Manually set the field to simulate "leave" without driving a navigation.
-	m.pendingPreselectTarget = bAbs
+	m.pending.preselectTarget = bAbs
 
 	// Fire a redundant refreshContent for the current file (simulating a
 	// watcher FileModified). This consumes the field. a.md DOES contain
 	// a link to b.md, so the cursor will end up selected — but the field
 	// is now empty and won't fire on a subsequent intentional navigation.
 	m.refreshContent(aAbs)
-	if m.pendingPreselectTarget != "" {
-		t.Fatalf("expected field cleared after watcher refresh, got %q", m.pendingPreselectTarget)
+	if m.pending.preselectTarget != "" {
+		t.Fatalf("expected field cleared after watcher refresh, got %q", m.pending.preselectTarget)
 	}
 }
 
@@ -313,7 +313,7 @@ func TestPreselect_OnlyLocalFileLinks(t *testing.T) {
 	// Set the pending target to the external URL string. Even if there
 	// were a Link with Href == this URL, its Kind is LinkExternal not
 	// LinkLocalFile, so the consumer should skip it.
-	m.pendingPreselectTarget = "https://example.test/"
+	m.pending.preselectTarget = "https://example.test/"
 	m.refreshContent(aAbs)
 	if m.content.linkCursor != -1 {
 		t.Fatalf("expected linkCursor=-1 (only LinkLocalFile is eligible), got %d", m.content.linkCursor)
@@ -330,10 +330,10 @@ func TestPreselect_FieldClearedOnReadError(t *testing.T) {
 
 	// Set the field, then trigger a read error by passing a non-existent
 	// path. The consumer's clear must run before the early return.
-	m.pendingPreselectTarget = bAbs
+	m.pending.preselectTarget = bAbs
 	m.refreshContent(filepath.Join(root, "does-not-exist.md"))
-	if m.pendingPreselectTarget != "" {
-		t.Fatalf("expected field cleared after read-failure refresh, got %q", m.pendingPreselectTarget)
+	if m.pending.preselectTarget != "" {
+		t.Fatalf("expected field cleared after read-failure refresh, got %q", m.pending.preselectTarget)
 	}
 
 	// Now refresh a real file that contains a link to b.md. With the

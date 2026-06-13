@@ -40,7 +40,7 @@ func (m *Model) applyLinkHighlight() {
 	if info, statErr := os.Stat(path); statErr == nil && info.IsDir() {
 		listing, dirErr := renderDirListing(path)
 		if dirErr != nil {
-			m.status = dirErr.Error()
+			m.footerMessage = dirErr.Error()
 			return
 		}
 		src = []byte(listing)
@@ -48,14 +48,14 @@ func (m *Model) applyLinkHighlight() {
 		var err error
 		src, err = os.ReadFile(path)
 		if err != nil {
-			m.status = err.Error()
+			m.footerMessage = err.Error()
 			return
 		}
 	}
 	m.content.renderer.SetFromFile(path)
 	out, _, _, err := m.content.renderer.RenderWithLinks(string(src), path, markdown.HighlightMarker(m.content.linkCursor))
 	if err != nil {
-		m.status = err.Error()
+		m.footerMessage = err.Error()
 		return
 	}
 	offset := m.content.viewport.YOffset
@@ -82,12 +82,12 @@ func (m *Model) followLink(l markdown.Link) {
 		}
 		m.navigateTo(l.Resolved.Target)
 	case markdown.LinkExternal:
-		m.pendingExternal = l.Href
-		m.status = "press Enter again to open: " + l.Href
+		m.pending.externalURL = l.Href
+		m.footerMessage = "press Enter again to open: " + l.Href
 	case markdown.LinkAnchor:
-		m.status = "anchor navigation not implemented: #" + l.Resolved.Anchor
+		m.footerMessage = "anchor navigation not implemented: #" + l.Resolved.Anchor
 	default:
-		m.status = "unrecognized link: " + l.Href
+		m.footerMessage = "unrecognized link: " + l.Href
 	}
 }
 

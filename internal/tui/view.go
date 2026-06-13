@@ -95,7 +95,13 @@ func (m Model) renderTree() string {
 func (m Model) renderFooter() string {
 	help := "?: help  q: quit"
 
-	loc := m.status
+	// A transient footer message (error or prompt) takes the location
+	// slot in place of the current path; otherwise the current file path
+	// shows. This mirrors the single overloaded field this replaced.
+	loc := m.currentPath
+	if m.footerMessage != "" {
+		loc = m.footerMessage
+	}
 	if loc != "" {
 		// Show path relative to root for brevity.
 		if rel, err := filepath.Rel(m.root, loc); err == nil {
