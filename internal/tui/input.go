@@ -574,9 +574,18 @@ func (m *Model) handleVisualKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return *m, nil
 }
 
-// yankVisual copies the current selection to the clipboard and exits visual
-// mode. Body filled in Task 4.
+// yankVisual copies the current selection to the clipboard, toasts the
+// count, and finalizes the selection so its highlight persists until the
+// user's next action. A zero-width selection (still positioning, or a
+// collapsed span) copies nothing and just exits.
 func (m *Model) yankVisual() {
+	text := m.extractSelection()
+	if n := utf8.RuneCountInString(text); n > 0 {
+		m.copyToClipboard(text)
+		m.diag.Info(fmt.Sprintf("Copied %d chars", n))
+		m.finalizeSelection()
+		return
+	}
 	m.clearSelection()
 }
 

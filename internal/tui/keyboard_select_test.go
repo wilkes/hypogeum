@@ -92,3 +92,57 @@ func TestVisual_CaretClampsAtEdges(t *testing.T) {
 		t.Errorf("caret after clamp = %+v, want {0,0}", got)
 	}
 }
+
+func TestVisual_SpaceAnchorsThenExtends(t *testing.T) {
+	root := writeFixture(t)
+	m := sized(t, root, "")
+	m.setContent("hello world")
+
+	m = pressRune(t, m, 'v')                            // caret {0,0}
+	m = pressRune(t, m, 'l')                            // {0,1} (positioning, no span)
+	m = pressKey(t, m, tea.KeyMsg{Type: tea.KeySpace})  // drop anchor at {0,1}
+	if !m.content.selection.selecting {
+		t.Fatal("Space should enter the extend phase")
+	}
+	m = pressRune(t, m, 'l') // {0,2}
+	m = pressRune(t, m, 'l') // {0,3}
+	m = pressRune(t, m, 'l') // {0,4}
+
+	// Anchor frozen at col 1; cursor at col 4 → "ell".
+	if got := m.extractSelection(); got != "ell" {
+		t.Errorf("extractSelection = %q, want %q", got, "ell")
+	}
+}
+
+func TestVisual_YankCopiesAndPersists(t *testing.T) {
+	root := writeFixture(t)
+	m := sized(t, root, "")
+	var copied string
+	m.copyToClipboard = func(s string) { copied = s }
+	m.setContent("hello world")
+
+	m = pressRune(t, m, 'v')
+	m = pressKey(t, m, tea.KeyMsg{Type: tea.KeySpace}) // anchor at {0,0}
+	m = pressRune(t, m, 'l')
+	m = pressRune(t, m, 'l')
+	m = pressRune(t, m, 'l')
+	m = pressRune(t, m, 'l')
+	m = pressRune(t, m, 'l')                            // cursor {0,5} → "hello"
+	m = pressRune(t, m, 'y')                            // yank
+
+	if copied != "hello" {
+		t.Errorf("clipboard = %q, want %q", copied, "hello")
+	}
+	if m.content.selection.visual || m.content.selection.selecting {
+		t.Error("yank should exit visual mode")
+	}
+	if !m.content.selection.copied {
+		t.Error("yank should leave the selection in the copied state")
+	}
+	if !hasReverseVideo(m.content.viewport.View()) {
+		t.Error("highlight should persist after yank")
+	}
+	if !strings.Contains(m.renderFooter(), "Copied 5 chars") {
+		t.Errorf("footer should toast the count; got %q", m.renderFooter())
+	}
+}

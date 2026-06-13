@@ -549,6 +549,8 @@ func (m *Model) finalizeSelection() {
 	m.content.selection.copied = true
 	m.content.selection.anchored = false
 	m.content.selection.moved = false
+	m.content.selection.visual = false
+	m.content.selection.selecting = false
 }
 
 // clearSelection drops the selection and restores the un-highlighted
