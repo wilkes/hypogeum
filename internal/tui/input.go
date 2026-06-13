@@ -464,6 +464,9 @@ func (m *Model) handleContentKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case key.Matches(msg, m.keys.PrevLink):
 		m.cycleLink(-1)
 		return *m, nil
+	case key.Matches(msg, m.keys.EnterVisual):
+		m.enterVisual()
+		return *m, nil
 	case key.Matches(msg, m.keys.CopyPath):
 		m.copyCurrentPath()
 		return *m, nil

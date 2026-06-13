@@ -494,7 +494,14 @@ func (m *Model) applySelectionHighlight() {
 		}
 		lo, hi := selColBounds(i, start, end, m.content.lineWidths[i])
 		if hi <= lo {
-			b.WriteString(ln)
+			// Zero-width: in keyboard visual mode draw a one-cell caret on
+			// the caret's line so the user can see where they are; mouse
+			// selections (visual=false) show nothing for a zero-width span.
+			if m.content.selection.visual && i == m.content.selection.cursor.line {
+				b.WriteString(renderCaretLine(ln, m.content.selection.cursor.col, m.content.lineWidths[i]))
+			} else {
+				b.WriteString(ln)
+			}
 			continue
 		}
 		b.WriteString(ansi.Cut(ln, 0, lo))
@@ -502,6 +509,20 @@ func (m *Model) applySelectionHighlight() {
 		b.WriteString(ansi.Cut(ln, hi, m.content.lineWidths[i]))
 	}
 	m.setViewportPreservingScroll(b.String())
+}
+
+// renderCaretLine returns ln with a single reverse-video caret cell at
+// visible column col. If col is at or past the line's content width, a
+// reverse-video space is appended (caret on a blank or end-of-line).
+func renderCaretLine(ln string, col, width int) string {
+	if col >= width {
+		return ln + selectionStyle.Render(" ")
+	}
+	var b strings.Builder
+	b.WriteString(ansi.Cut(ln, 0, col))
+	b.WriteString(selectionStyle.Render(ansi.Strip(ansi.Cut(ln, col, col+1))))
+	b.WriteString(ansi.Cut(ln, col+1, width))
+	return b.String()
 }
 
 // setViewportPreservingScroll replaces the viewport content while keeping
@@ -538,6 +559,22 @@ func (m *Model) clearSelection() {
 	if had {
 		m.setViewportPreservingScroll(m.content.rendered)
 	}
+}
+
+// enterVisual starts keyboard visual mode in the positioning phase: a
+// movable caret at the top-left of the visible area, no span yet. The
+// caret is selection.cursor; anchor tracks it until Space drops the anchor.
+func (m *Model) enterVisual() {
+	line := m.content.viewport.YOffset
+	if n := len(m.contentLines()); line > n-1 {
+		line = n - 1
+	}
+	if line < 0 {
+		line = 0
+	}
+	at := cellPos{line: line, col: 0}
+	m.content.selection = selection{visual: true, anchor: at, cursor: at, pendingLink: -1}
+	m.applySelectionHighlight()
 }
 
 // allVaultMarkdownPaths walks m.rootNode and returns every markdown file
