@@ -133,12 +133,6 @@ type Options struct {
 // Defined as a constant so tests can assert on its presence/absence.
 const linkFooterMarker = "→ "
 
-// maxRenderWidth caps Glamour's word-wrap width. The viewport pane can
-// be wider than this (uses whatever space is left after the tree); this
-// only affects where lines break. Keeps prose at a comfortable reading
-// width even on ultra-wide terminals.
-const maxRenderWidth = 80
-
 // treeRow is a flattened tree row used for cursor-driven navigation. Tracking
 // depth here avoids re-walking the tree on every keystroke.
 type treeRow struct {
@@ -289,17 +283,16 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			contentWidth = 20
 		}
 		m.content.viewport.Width = contentWidth
-		// Leave room for the pane's top+bottom borders (2) and the
-		// two-line footer (2) so View() fits within m.height.
-		m.content.viewport.Height = m.height - 4
+		// Leave room for the two-line footer so View() fits within m.height.
+		m.content.viewport.Height = m.height - 2
 		m.resizeModalVP()
 		m.resizePicker()
 		m.resizeSearch()
 		m.resizeTreeModalVP()
 		m.refreshTreeVP()
-		// Cap the renderer's wrap width so prose stays readable on wide
-		// terminals; the viewport pane keeps the full available width.
-		renderWidth := min(contentWidth, maxRenderWidth)
+		// Wrap prose at the full content width so it scales with the
+		// terminal rather than capping at a fixed reading width.
+		renderWidth := contentWidth
 		var rOpts []markdown.Option
 		if m.vault != nil {
 			rOpts = append(rOpts, markdown.WithResolver(m.vault))

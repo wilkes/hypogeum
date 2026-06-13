@@ -124,20 +124,20 @@ func (m *Model) contentLines() []string {
 }
 
 // screenToContent maps a mouse cell (x, y) to a position in the stored
-// base render. The content pane has a 1-cell border, so text begins at
-// screen (1, 1); the viewport's YOffset accounts for scroll. Out-of-
-// range coordinates clamp to a valid cell so drags that leave the pane
-// or run past end-of-line still resolve.
+// base render. The content pane is borderless, so text begins at screen
+// (0, 0); the viewport's YOffset accounts for scroll. Out-of-range
+// coordinates clamp to a valid cell so drags that leave the pane or run
+// past end-of-line still resolve.
 func (m *Model) screenToContent(x, y int) cellPos {
 	lines := m.contentLines()
-	line := m.content.viewport.YOffset + (y - 1)
+	line := m.content.viewport.YOffset + y
 	if line < 0 {
 		line = 0
 	}
 	if line > len(lines)-1 {
 		line = len(lines) - 1
 	}
-	col := x - 1
+	col := x
 	if col < 0 {
 		col = 0
 	}

@@ -39,22 +39,18 @@ func TestModel_RenderedBaseIsStored(t *testing.T) {
 func TestModel_ScreenToContent_MapsAndClamps(t *testing.T) {
 	root := writeFixture(t)
 	m := sized(t, root, filepath.Join(root, "index.md"))
-	// Top-left content cell (border at 0,0 → text at 1,1) maps to line 0,col 0.
-	if got := m.screenToContent(1, 1); got != (cellPos{line: 0, col: 0}) {
-		t.Errorf("screenToContent(1,1) = %+v, want {0,0}", got)
-	}
-	// Negative-ish coords clamp to 0.
+	// Borderless pane: top-left screen cell (0,0) maps directly to line 0, col 0.
 	if got := m.screenToContent(0, 0); got != (cellPos{line: 0, col: 0}) {
-		t.Errorf("screenToContent(0,0) = %+v, want {0,0} (clamped)", got)
+		t.Errorf("screenToContent(0,0) = %+v, want {0,0}", got)
 	}
 	// A y far past the end clamps to the last line.
 	last := len(m.contentLines()) - 1
-	if got := m.screenToContent(1, 10_000); got.line != last {
+	if got := m.screenToContent(0, 10_000); got.line != last {
 		t.Errorf("screenToContent y=10000 line = %d, want %d (clamped)", got.line, last)
 	}
 	// An x far past the end of the first line clamps to that line's width.
 	firstLineW := ansi.StringWidth(m.contentLines()[0])
-	if got := m.screenToContent(10_000, 1); got.col != firstLineW {
+	if got := m.screenToContent(10_000, 0); got.col != firstLineW {
 		t.Errorf("screenToContent x=10000 col = %d, want %d (clamped)", got.col, firstLineW)
 	}
 }
@@ -141,12 +137,12 @@ func TestModel_DragSelectsAndCopies(t *testing.T) {
 	// Force a known base so column math is predictable.
 	m.setContent("hello world")
 
-	// Press at content (1,1) → doc (0,0); drag to (6,1) → doc (0,5); release.
-	updated, _ := m.Update(mouseAt(tea.MouseActionPress, 1, 1))
+	// Press at content (0,0) → doc (0,0); drag to (5,0) → doc (0,5); release.
+	updated, _ := m.Update(mouseAt(tea.MouseActionPress, 0, 0))
 	m = updated.(Model)
-	updated, _ = m.Update(mouseAt(tea.MouseActionMotion, 6, 1))
+	updated, _ = m.Update(mouseAt(tea.MouseActionMotion, 5, 0))
 	m = updated.(Model)
-	updated, _ = m.Update(mouseAt(tea.MouseActionRelease, 6, 1))
+	updated, _ = m.Update(mouseAt(tea.MouseActionRelease, 5, 0))
 	m = updated.(Model)
 
 	if copied != "hello" {
@@ -209,11 +205,11 @@ func TestModel_KeystrokeClearsFinalizedSelection(t *testing.T) {
 	m.copyToClipboard = func(string) {}
 	m.setContent("hello world")
 
-	updated, _ := m.Update(mouseAt(tea.MouseActionPress, 1, 1))
+	updated, _ := m.Update(mouseAt(tea.MouseActionPress, 0, 0))
 	m = updated.(Model)
-	updated, _ = m.Update(mouseAt(tea.MouseActionMotion, 6, 1))
+	updated, _ = m.Update(mouseAt(tea.MouseActionMotion, 5, 0))
 	m = updated.(Model)
-	updated, _ = m.Update(mouseAt(tea.MouseActionRelease, 6, 1))
+	updated, _ = m.Update(mouseAt(tea.MouseActionRelease, 5, 0))
 	m = updated.(Model)
 	if !m.content.selection.copied {
 		t.Fatal("precondition: selection should be copied")
@@ -232,11 +228,11 @@ func TestModel_FooterShowsCopiedCount(t *testing.T) {
 	m.copyToClipboard = func(string) {}
 	m.setContent("hello world")
 
-	updated, _ := m.Update(mouseAt(tea.MouseActionPress, 1, 1))
+	updated, _ := m.Update(mouseAt(tea.MouseActionPress, 0, 0))
 	m = updated.(Model)
-	updated, _ = m.Update(mouseAt(tea.MouseActionMotion, 6, 1))
+	updated, _ = m.Update(mouseAt(tea.MouseActionMotion, 5, 0))
 	m = updated.(Model)
-	updated, _ = m.Update(mouseAt(tea.MouseActionRelease, 6, 1))
+	updated, _ = m.Update(mouseAt(tea.MouseActionRelease, 5, 0))
 	m = updated.(Model)
 
 	if !strings.Contains(m.renderFooter(), "Copied 5 chars") {

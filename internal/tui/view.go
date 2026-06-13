@@ -29,8 +29,8 @@ func (m Model) View() string {
 
 	content := m.content.viewport.View()
 
-	contentHeight := m.height - 4
-	body := zone.Mark(zoneContentPane, paneStyle(true).
+	contentHeight := m.height - 2
+	body := zone.Mark(zoneContentPane, lipgloss.NewStyle().
 		Width(m.content.viewport.Width).
 		Height(contentHeight).
 		Render(content))
@@ -154,11 +154,3 @@ func (m *Model) resizeTreeModalVP() {
 	}
 }
 
-func paneStyle(focused bool) lipgloss.Style {
-	border := lipgloss.RoundedBorder()
-	color := lipgloss.Color("240")
-	if focused {
-		color = lipgloss.Color("62")
-	}
-	return lipgloss.NewStyle().Border(border).BorderForeground(color)
-}
