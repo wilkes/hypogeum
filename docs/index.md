@@ -25,6 +25,11 @@ Cross-cutting ideas that show up in multiple specs and packages. Each is its own
 - [[return-cursor]] — path-keyed cursor restoration on Back navigation
 - [[link-cursor]] — content-pane link selection (`n`/`p`/`Enter`/`Esc`) state model
 
+## Diary
+
+- [Development diary](diary/index.md) — chronological log of how the project was built, reconstructed from commits and merged PRs (2026-05-05 → 2026-06-13).
+- [The Big Render](diary/noir.md) — the same history retold in Raymond Chandler's hardboiled voice, for fun.
+
 ## Active feature work
 
 - [Link following](link-following.md) — Phases 1 and 2 shipped (cursor selection + inline reverse-video highlight). Phase 3 (external URL launch) outlined.
