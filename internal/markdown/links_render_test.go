@@ -441,4 +441,3 @@ func TestReplaceOutsideInlineCode(t *testing.T) {
 		})
 	}
 }
-
