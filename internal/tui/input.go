@@ -99,7 +99,7 @@ func (m *Model) handleMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 	// under the press so a no-motion release still follows it; do NOT
 	// follow it here — the first motion event turns this into a drag.
 	if m.modals.kind == modalNone && zone.Get(zoneContentPane).InBounds(msg) {
-		m.clearSelection() // drop any prior finalized highlight
+		m.clearSelection() // drop any prior finalized highlight or visual-mode caret
 		m.focus = focusContent
 		pos := m.screenToContent(msg.X, msg.Y)
 		link := -1
@@ -527,6 +527,9 @@ func (m *Model) handleContentKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 // fields. Yank reuses the dialect's copy key; Space drops the anchor; Esc
 // cancels. Any other key is inert.
 func (m *Model) handleVisualKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	if len(m.contentLines()) == 0 {
+		return *m, nil
+	}
 	cur := m.content.selection.cursor
 	half := m.content.viewport.Height / 2
 	if half < 1 {
