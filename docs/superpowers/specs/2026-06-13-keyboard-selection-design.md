@@ -1,6 +1,6 @@
 # Keyboard selection (vim visual mode) — design
 
-**Status:** designed, not yet implemented.
+**Status:** shipped.
 
 ## Goal
 

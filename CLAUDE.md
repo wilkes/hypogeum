@@ -4,7 +4,7 @@ Guidance for Claude Code working in this repo. Keep this file short and accurate
 
 ## What this is
 
-`hypogeum` is a terminal markdown browser. Point it at a directory of `.md` files; rendered content fills the screen, `^p` / `o` (pager; `^p`-only in modern) opens a fuzzy file finder, `/` (pager) / `Ctrl+F` (modern) opens a full-text search modal, `t` (pager) / `^b` (modern) opens the directory tree in a modal, `h`/`l` navigate browser-style history (pager dialect; modern uses `Alt+←/→`), and `y` (pager) / `^y` (modern) copies the current file's absolute path to the clipboard.
+`hypogeum` is a terminal markdown browser. Point it at a directory of `.md` files; rendered content fills the screen, `^p` / `o` (pager; `^p`-only in modern) opens a fuzzy file finder, `/` (pager) / `Ctrl+F` (modern) opens a full-text search modal, `t` (pager) / `^b` (modern) opens the directory tree in a modal, `h`/`l` navigate browser-style history (pager dialect; modern uses `Alt+←/→`), and `y` (pager) / `^y` (modern) copies the current file's absolute path to the clipboard. Keyboard text selection is a two-phase visual mode — `v` reveals a movable caret, `Space` drops the anchor, motion keys (`h`/`j`/`k`/`l`/arrows, `g`/`G`, `^d`/`^u`) extend it, the dialect's copy key (`y`/`^y`) yanks, and `Esc` cancels — reusing the same `selection{anchor,cursor}` span machinery as mouse drag-to-select.
 
 Built on the Charm stack: Bubble Tea (Elm-style update loop), Bubbles (widgets — viewport, key bindings), Lip Gloss (styling), Glamour (markdown → ANSI).
 
