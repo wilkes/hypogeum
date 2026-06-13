@@ -15,7 +15,7 @@ func TestModel_TreeNavigationAndOpen(t *testing.T) {
 	want := filepath.Join(root, "notes", "first.md")
 	// Open the modal first (which calls expandAncestorsOf and clears the
 	// map), then expand notes/ so first.md becomes reachable.
-	m = pressKey(t, m, tea.KeyMsg{Type: tea.KeyCtrlB})
+	m = pressKey(t, m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'t'}})
 	m.tree.expanded[filepath.Join(root, "notes")] = true
 	m.tree.flat = m.flattenVisible()
 	m.refreshTreeVP()
@@ -34,8 +34,8 @@ func TestModel_TreeNavigationAndOpen(t *testing.T) {
 	}
 }
 
-// TestModel_ToggleTreeOpensAndClosesModal checks that ^b opens the tree
-// modal and a second ^b closes it. The tree renders only inside the
+// TestModel_ToggleTreeOpensAndClosesModal checks that t opens the tree
+// modal and a second t closes it. The tree renders only inside the
 // modal — there is no side pane.
 func TestModel_ToggleTreeOpensAndClosesModal(t *testing.T) {
 	root := writeFixture(t)
@@ -48,21 +48,21 @@ func TestModel_ToggleTreeOpensAndClosesModal(t *testing.T) {
 		t.Fatalf("tree rows must not render outside the modal")
 	}
 
-	// First ^b opens the tree modal.
-	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyCtrlB})
+	// First t opens the tree modal.
+	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'t'}})
 	m = updated.(Model)
 	if m.modals.kind != modalTree {
-		t.Fatalf("first ^b should open tree modal, got kind=%v", m.modals.kind)
+		t.Fatalf("first t should open tree modal, got kind=%v", m.modals.kind)
 	}
 	if !strings.Contains(m.View(), "notes") {
 		t.Errorf("expected tree modal to mention 'notes' after open")
 	}
 
-	// Second ^b closes it.
-	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyCtrlB})
+	// Second t closes it.
+	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'t'}})
 	m = updated.(Model)
 	if m.modals.kind != modalNone {
-		t.Errorf("second ^b should close tree modal, got kind=%v", m.modals.kind)
+		t.Errorf("second t should close tree modal, got kind=%v", m.modals.kind)
 	}
 }
 
@@ -74,9 +74,9 @@ func TestModel_TreeModalLandsOnCurrentFile(t *testing.T) {
 	firstPath := filepath.Join(root, "notes", "first.md")
 	m := sized(t, root, firstPath)
 
-	m = pressKey(t, m, tea.KeyMsg{Type: tea.KeyCtrlB})
+	m = pressKey(t, m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'t'}})
 	if m.modals.kind != modalTree {
-		t.Fatalf("^b should open tree modal, got kind=%v", m.modals.kind)
+		t.Fatalf("t should open tree modal, got kind=%v", m.modals.kind)
 	}
 	if got := m.tree.flat[m.tree.cursor].node.Path; got != firstPath {
 		t.Errorf("tree cursor on open = %q, want %q", got, firstPath)
@@ -90,9 +90,9 @@ func TestModel_TreeModalEscClosesWithoutOpening(t *testing.T) {
 	m := sized(t, root, "")
 	before := m.history.Current()
 
-	m = pressKey(t, m, tea.KeyMsg{Type: tea.KeyCtrlB})
+	m = pressKey(t, m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'t'}})
 	if m.modals.kind != modalTree {
-		t.Fatalf("^b should open tree modal, got kind=%v", m.modals.kind)
+		t.Fatalf("t should open tree modal, got kind=%v", m.modals.kind)
 	}
 	m = pressKey(t, m, tea.KeyMsg{Type: tea.KeyEsc})
 	if m.modals.kind != modalNone {
@@ -211,7 +211,7 @@ func TestModel_ArrowKeysAreNoopOnFileRow(t *testing.T) {
 
 	// Cursor lands on index.md after opening, which is a file row.
 	indexPath := filepath.Join(root, "index.md")
-	m = pressKey(t, m, tea.KeyMsg{Type: tea.KeyCtrlB})
+	m = pressKey(t, m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'t'}})
 	if m.modals.kind != modalTree {
 		t.Fatalf("setup: ^b should open tree modal")
 	}
@@ -254,7 +254,7 @@ func TestModel_ArrowKeysShadowHistoryWhileTreeModalOpen(t *testing.T) {
 	}
 
 	// Open tree modal; ← should not navigate back to firstPath.
-	m = pressKey(t, m, tea.KeyMsg{Type: tea.KeyCtrlB})
+	m = pressKey(t, m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'t'}})
 	m = pressKey(t, m, tea.KeyMsg{Type: tea.KeyLeft})
 	if m.history.Current() != indexPath {
 		t.Errorf("← in tree modal triggered history Back; current = %q, want %q",
@@ -303,7 +303,7 @@ func TestModel_TreeScrollsToCursorOnTallTree(t *testing.T) {
 	root := writeTallFixture(t, 60)
 	m := sized(t, root, "")
 	// Open the modal so the tree viewport is sized.
-	m = pressKey(t, m, tea.KeyMsg{Type: tea.KeyCtrlB})
+	m = pressKey(t, m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'t'}})
 	if m.modals.kind != modalTree {
 		t.Fatalf("^b should open tree modal")
 	}
@@ -333,7 +333,7 @@ func TestModel_TreeScrollsToCursorOnTallTree(t *testing.T) {
 func TestModel_TreeScrollsBackUp(t *testing.T) {
 	root := writeTallFixture(t, 60)
 	m := sized(t, root, "")
-	m = pressKey(t, m, tea.KeyMsg{Type: tea.KeyCtrlB})
+	m = pressKey(t, m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'t'}})
 	if m.modals.kind != modalTree {
 		t.Fatalf("^b should open tree modal")
 	}

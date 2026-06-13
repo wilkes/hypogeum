@@ -39,6 +39,20 @@ func TestPickerOpenPopulatesRanked(t *testing.T) {
 	}
 }
 
+// TestPickerOpensOnO verifies the pager `o` alias opens the same picker
+// modal as `^p`. Both keys are bound to OpenPicker in pagerKeys().
+func TestPickerOpensOnO(t *testing.T) {
+	dir := t.TempDir()
+	writePickerFile(t, filepath.Join(dir, "a.md"), "# A")
+
+	m := sized(t, dir, "")
+	m = pressRune(t, m, 'o')
+
+	if m.modals.kind != modalPicker {
+		t.Fatalf("o should open picker modal: got kind %d want %d", m.modals.kind, modalPicker)
+	}
+}
+
 func TestPickerEscClosesWithoutOpening(t *testing.T) {
 	dir := t.TempDir()
 	writePickerFile(t, filepath.Join(dir, "a.md"), "# A")

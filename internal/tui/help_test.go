@@ -44,9 +44,9 @@ func TestHelpModalOpensOnQuestionMark(t *testing.T) {
 		"copy path", // copy current file path
 		"^l", "logs", // moved logs binding
 		"?", "help", // help itself
-		"^p", "open file", // picker
+		"^p/o", "open file", // picker
 		"/", "search", // search modal
-		"h/←", "back",
+		"←/h", "back",
 		"esc", "clear link",
 		// scrolling group (pager defaults)
 		"^d", "half-page down",

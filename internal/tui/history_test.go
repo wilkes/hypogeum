@@ -17,11 +17,11 @@ import (
 func openViaTree(t *testing.T, m Model, path string) Model {
 	t.Helper()
 	if m.modals.kind != modalTree {
-		updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyCtrlB})
+		updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'t'}})
 		m = updated.(Model)
 	}
 	if m.modals.kind != modalTree {
-		t.Fatalf("openViaTree: ^b should open tree modal, got kind=%v", m.modals.kind)
+		t.Fatalf("openViaTree: t should open tree modal, got kind=%v", m.modals.kind)
 	}
 	// Expand the ancestor chain so the target row is visible.
 	for dir := filepath.Dir(path); dir != m.root && dir != filepath.Dir(dir); dir = filepath.Dir(dir) {
