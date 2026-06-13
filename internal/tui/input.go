@@ -520,11 +520,10 @@ func (m *Model) handleContentKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 }
 
 // handleVisualKey routes every keystroke while keyboard visual mode is
-// active. Char/line motions are matched on the raw key (h/j/k/l + arrows) so the
-// caret responds to both vim letters and arrows directly, independent of
-// the history Back/Forward bindings. Jumps (g/G, ^d/^u) reuse the
-// Top/Bottom/HalfPage keyMap fields. Yank reuses the copy key; Space drops
-// the anchor; Esc cancels. Any other key is inert.
+// active. Char/line motions reuse the Back/Forward/Up/Down keyMap fields
+// (h/l/k/j + arrows); jumps (g/G, ^d/^u) reuse Top/Bottom/HalfPage. Yank
+// reuses the copy key; Space drops the anchor; Esc cancels; ^c/q quit. Any
+// other key is inert.
 func (m *Model) handleVisualKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if len(m.contentLines()) == 0 {
 		return *m, nil
@@ -541,36 +540,26 @@ func (m *Model) handleVisualKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return *m, tea.Quit
 	case key.Matches(msg, m.keys.ClearLink): // Esc
 		m.clearSelection()
-		return *m, nil
 	case key.Matches(msg, m.keys.CopyPath): // y / ^y → yank
 		m.yankVisual()
-		return *m, nil
 	case key.Matches(msg, m.keys.BeginSelect): // Space → drop anchor
 		m.content.selection.selecting = true
-		return *m, nil
+	case key.Matches(msg, m.keys.Back): // h / ←
+		m.placeCaret(cur.line, cur.col-1)
+	case key.Matches(msg, m.keys.Forward): // l / →
+		m.placeCaret(cur.line, cur.col+1)
+	case key.Matches(msg, m.keys.Up): // k / ↑
+		m.placeCaret(cur.line-1, cur.col)
+	case key.Matches(msg, m.keys.Down): // j / ↓
+		m.placeCaret(cur.line+1, cur.col)
 	case key.Matches(msg, m.keys.Top): // g
 		m.placeCaret(0, 0)
-		return *m, nil
 	case key.Matches(msg, m.keys.Bottom): // G → end of the last line (doc bottom)
 		m.placeCaret(last, m.content.lineWidths[last])
-		return *m, nil
 	case key.Matches(msg, m.keys.HalfPageDown): // ^d
 		m.placeCaret(cur.line+half, cur.col)
-		return *m, nil
 	case key.Matches(msg, m.keys.HalfPageUp): // ^u
 		m.placeCaret(cur.line-half, cur.col)
-		return *m, nil
-	}
-
-	switch msg.String() {
-	case "h", "left":
-		m.placeCaret(cur.line, cur.col-1)
-	case "l", "right":
-		m.placeCaret(cur.line, cur.col+1)
-	case "k", "up":
-		m.placeCaret(cur.line-1, cur.col)
-	case "j", "down":
-		m.placeCaret(cur.line+1, cur.col)
 	}
 	return *m, nil
 }
