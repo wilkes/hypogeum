@@ -321,7 +321,7 @@ func (m *Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				if 0 <= m.modals.search.cursor && m.modals.search.cursor < len(m.modals.search.hits) {
 					h := m.modals.search.hits[m.modals.search.cursor]
 					cmd = m.closeModal()
-					m.pendingPreselectRange = &markdown.LineRange{Start: h.Line, End: h.Line}
+					m.pending.preselectRange = &markdown.LineRange{Start: h.Line, End: h.Line}
 					m.navigateTo(h.Path)
 				}
 				return *m, cmd
@@ -379,8 +379,8 @@ func (m *Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		leaving := m.history.Current()
 		leavingRange := m.content.rangeHighlight
 		if path, ok := m.history.Back(); ok {
-			m.pendingPreselectTarget = leaving
-			m.pendingPreselectRange = leavingRange
+			m.pending.preselectTarget = leaving
+			m.pending.preselectRange = leavingRange
 			m.refreshContent(path)
 			m.selectInTree(path)
 			m.maybeRestoreReturnCursor(path)
@@ -391,8 +391,8 @@ func (m *Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		leaving := m.history.Current()
 		leavingRange := m.content.rangeHighlight
 		if path, ok := m.history.Forward(); ok {
-			m.pendingPreselectTarget = leaving
-			m.pendingPreselectRange = leavingRange
+			m.pending.preselectTarget = leaving
+			m.pending.preselectRange = leavingRange
 			m.refreshContent(path)
 			m.selectInTree(path)
 		}
@@ -438,22 +438,22 @@ func (m *Model) copyCurrentPath() {
 // viewport so its scrolling bindings keep working.
 func (m *Model) handleContentKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	// One-keystroke confirm for external URL handoff: if a previous
-	// Enter on an external link armed pendingExternal, a second Enter
+	// Enter on an external link armed pending.externalURL, a second Enter
 	// exec's the opener. Any other keystroke cancels the prompt and
 	// then falls through to normal dispatch so the user doesn't lose
 	// the keystroke they pressed.
-	if m.pendingExternal != "" {
-		armed := m.pendingExternal
-		m.pendingExternal = ""
+	if m.pending.externalURL != "" {
+		armed := m.pending.externalURL
+		m.pending.externalURL = ""
 		if key.Matches(msg, m.keys.Open) {
 			if err := m.openExternal(armed); err != nil {
-				m.status = "open failed: " + err.Error()
+				m.footerMessage = "open failed: " + err.Error()
 			} else {
-				m.status = "opened: " + armed
+				m.footerMessage = "opened: " + armed
 			}
 			return *m, nil
 		}
-		m.status = ""
+		m.footerMessage = ""
 		// Fall through: process this keystroke as if nothing was armed.
 	}
 

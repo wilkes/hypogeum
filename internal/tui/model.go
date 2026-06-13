@@ -44,6 +44,30 @@ const (
 	focusContent focus = iota
 )
 
+// pendingNav holds the in-flight navigation intent: which inline link to
+// pre-select at the destination, an optional range to disambiguate, and an
+// external URL awaiting a confirm keystroke.
+//
+//   - preselectTarget is the absolute path of a file whose inline link should
+//     be pre-selected on the next refreshContent. Set by any navigation that
+//     has a meaningful "the link you were looking at" notion: backlink-follow,
+//     Back, Forward. Cleared by refreshContent after consumption (whether or
+//     not a match was found).
+//   - preselectRange disambiguates when several inline links share the same
+//     target (e.g. two #L-range links into the same source file). When set,
+//     refreshContent prefers a link whose Resolved.Range matches; otherwise it
+//     falls back to the first target match. Set alongside preselectTarget and
+//     cleared on the same lifecycle.
+//   - externalURL is set when the user presses Enter on an external link. The
+//     footer shows a "press Enter again to open <url>" prompt; a second Enter
+//     exec's the opener and clears the field, any other keystroke clears it
+//     without exec'ing.
+type pendingNav struct {
+	preselectTarget string
+	preselectRange  *markdown.LineRange
+	externalURL     string
+}
+
 // Model is the top-level Bubble Tea model.
 type Model struct {
 	root     string
@@ -59,7 +83,17 @@ type Model struct {
 
 	width, height int
 	keys          keyMap
-	status        string // last error or info message
+
+	// currentPath is the absolute path of the file or view currently
+	// displayed in the content pane. The footer shows it (relative to
+	// root) unless a footerMessage is overriding it.
+	currentPath string
+	// footerMessage is the last error or transient info message shown in
+	// the footer (e.g. a render error, "press Enter again to open …",
+	// "opened: …"). When non-empty it takes the footer's location slot in
+	// place of currentPath. Cleared on a successful render and on confirm
+	// cancellation.
+	footerMessage string
 
 	// watcher observes the tree for live updates. nil if construction
 	// failed (we degrade gracefully — the browser still works without it).
@@ -69,25 +103,10 @@ type Model struct {
 	recent *recent.Store
 	diag   *diagnostics
 
-	// pendingPreselectTarget is the absolute path of a file whose inline
-	// link should be pre-selected on the next refreshContent. Set by any
-	// navigation that has a meaningful "the link you were looking at"
-	// notion: backlink-follow, Back, Forward. Cleared by refreshContent
-	// after consumption (whether or not a match was found).
-	pendingPreselectTarget string
-
-	// pendingPreselectRange disambiguates when several inline links share
-	// the same target (e.g. two #L-range links into the same source
-	// file). When set, refreshContent prefers a link whose Resolved.Range
-	// matches; otherwise it falls back to the first target match. Set
-	// alongside pendingPreselectTarget and cleared on the same lifecycle.
-	pendingPreselectRange *markdown.LineRange
-
-	// pendingExternal is set when the user presses Enter on an external
-	// link. The footer shows a "press Enter again to open <url>" prompt;
-	// a second Enter exec's the opener and clears the field, any other
-	// keystroke clears the field without exec'ing.
-	pendingExternal string
+	// pending holds the in-flight navigation intent: which inline link to
+	// pre-select at the destination, an optional range to disambiguate,
+	// and an external URL awaiting a confirm keystroke. See pendingNav.
+	pending pendingNav
 
 	// openExternal hands a URL off to the OS browser. Injected so tests
 	// can substitute a fake that records calls instead of exec-ing.
