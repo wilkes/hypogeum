@@ -30,6 +30,7 @@ type selection struct {
 	anchored    bool    // a left-press landed in the content pane (mouse)
 	moved       bool    // motion seen since press (mouse click-vs-drag)
 	copied      bool    // released/yanked with text → highlight persists
+
 	visual      bool    // keyboard visual mode is active (either phase)
 	selecting   bool    // anchor dropped (Space) → caret movement extends
 	anchor      cellPos // where the selection started

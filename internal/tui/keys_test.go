@@ -272,6 +272,9 @@ func isAllowedKeyOverlap(a, b, key string) bool {
 	if pair("PickerCursorUp", "SearchCursorUp") && key == "ctrl+k" {
 		return true
 	}
+	// BeginSelect (Space) is active only in keyboard visual mode in the
+	// content pane; ToggleFolder (Space) only fires while the tree modal is
+	// open. The two states are mutually exclusive, so they safely share " ".
 	if pair("BeginSelect", "ToggleFolder") && key == " " {
 		return true
 	}
