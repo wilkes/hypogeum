@@ -174,8 +174,7 @@ type Neighborhood struct {
 //     reports an empty Path (matching the spec's broken-relative example).
 //   - external / anchor: never broken (we do not probe URLs, and an anchor
 //     is intra-document).
-func outboundLinks(v *vault.Vault, abs string) []Link {
-	refs := v.Outbound(abs)
+func outboundLinks(refs []vault.Outbound, abs string) []Link {
 	out := make([]Link, 0, len(refs))
 	for _, r := range refs {
 		if r.Kind == vault.OutboundWikilink {
@@ -238,11 +237,14 @@ func Links(root, file string) ([]Link, error) {
 	if err != nil {
 		return nil, err
 	}
-	v, err := vault.Build(root, vault.NopDiagnostics{})
+	// Fast path: a file's outbound links need only its own parse plus the
+	// vault's name index (for wikilink resolution) — not the full reference
+	// graph that Build constructs. OutboundFor skips reading every other file.
+	refs, err := vault.OutboundFor(root, abs, vault.NopDiagnostics{})
 	if err != nil {
 		return nil, err
 	}
-	return outboundLinks(v, abs), nil
+	return outboundLinks(refs, abs), nil
 }
 
 // Neighbors returns file's outbound links and its backlinks.
@@ -260,7 +262,7 @@ func Neighbors(root, file string) (Neighborhood, error) {
 	// zero backlinks (matching tree.MarkdownFiles' init-then-append style).
 	n := Neighborhood{
 		File:      abs,
-		Outbound:  outboundLinks(v, abs),
+		Outbound:  outboundLinks(v.Outbound(abs), abs),
 		Backlinks: []BacklinkEntry{},
 	}
 	for _, b := range v.Backlinks(abs) {
