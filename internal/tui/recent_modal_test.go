@@ -54,6 +54,45 @@ func TestRecentModalListsVisitedInVisitOrder(t *testing.T) {
 	}
 }
 
+// TestRecentModalCursorMoveDoesNotRerank locks in the caching invariant: the
+// visit-ordered list is captured when the modal opens, so moving the cursor
+// must not re-query the store. We record a fresh visit while the modal is open
+// and confirm a cursor move doesn't fold it into the list (an old version
+// re-ranked the whole vault on every keystroke).
+func TestRecentModalCursorMoveDoesNotRerank(t *testing.T) {
+	dir := t.TempDir()
+	a := filepath.Join(dir, "a.md")
+	b := filepath.Join(dir, "b.md")
+	c := filepath.Join(dir, "c.md")
+	for _, p := range []string{a, b, c} {
+		writePickerFile(t, p, "# x")
+	}
+
+	m := sized(t, dir, "")
+	m.openFile(a)
+	m.openFile(b)
+
+	m = pressRune(t, m, 'r')
+	if got := len(m.recentList.items); got != 2 {
+		t.Fatalf("recent items at open: got %d, want 2", got)
+	}
+
+	// Record a visit to c *after* the modal is open, then move the cursor.
+	if err := m.recent.Record(c); err != nil {
+		t.Fatalf("Record: %v", err)
+	}
+	m = pressRune(t, m, 'j')
+
+	if got := len(m.recentList.items); got != 2 {
+		t.Fatalf("after cursor move: got %d items, want 2 — cursor move re-ranked the store", got)
+	}
+	for _, it := range m.recentList.items {
+		if it.Path == c {
+			t.Errorf("file %q visited after open should not appear until reopen", c)
+		}
+	}
+}
+
 // TestRecentModalEmptyState verifies a vault with no visits shows an empty
 // list (and renders without panicking).
 func TestRecentModalEmptyState(t *testing.T) {

@@ -20,24 +20,27 @@ type recentUIState struct {
 	items  []recent.Ranked
 }
 
-// refreshRecentModal repopulates m.modals.vp from the visit history, scoped
-// to the current vault's markdown files and ordered most-recently-opened
-// first. Visited-only: files never opened don't appear. Called when opening
-// the modal and after each cursor move.
+// refreshRecentModal ranks the visit history — scoped to the current vault's
+// markdown files, ordered most-recently-opened first, visited-only — into
+// m.recentList.items and renders it. This re-queries the store, so it runs
+// only when the modal opens; cursor moves use renderRecentModal (render-only)
+// to repaint the cached list without re-walking the vault on every keystroke.
 func (m *Model) refreshRecentModal() {
-	m.resizeModalVP()
 	var items []recent.Ranked
 	if m.recent != nil {
 		items = m.recent.RankByVisit(m.allVaultMarkdownPaths())
 	}
 	m.recentList.items = items
-	if m.recentList.cursor >= len(items) {
-		m.recentList.cursor = len(items) - 1
-	}
-	if m.recentList.cursor < 0 {
-		m.recentList.cursor = 0
-	}
-	m.modals.vp.SetContent(formatRecent(items, m.root, m.modals.vp.Width, m.recentList.cursor))
+	m.recentList.cursor = clamp(m.recentList.cursor, 0, len(items)-1)
+	m.renderRecentModal()
+}
+
+// renderRecentModal repaints the cached visit-ordered list into the modal
+// viewport (the cursor marker may have moved) without re-querying the store.
+// Cursor moves call this; only opening the modal calls refreshRecentModal.
+func (m *Model) renderRecentModal() {
+	m.resizeModalVP()
+	m.modals.vp.SetContent(formatRecent(m.recentList.items, m.root, m.modals.vp.Width, m.recentList.cursor))
 	m.ensureRecentCursorVisible()
 }
 

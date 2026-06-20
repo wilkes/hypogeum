@@ -379,10 +379,10 @@ func (m *Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if m.modals.kind == modalRecent {
 			switch {
 			case key.Matches(msg, m.keys.Down):
-				cursorMoveAndRefresh(&m.recentList.cursor, len(m.recentList.items), +1, m.refreshRecentModal)
+				cursorMoveAndRefresh(&m.recentList.cursor, len(m.recentList.items), +1, m.renderRecentModal)
 				return *m, nil
 			case key.Matches(msg, m.keys.Up):
-				cursorMoveAndRefresh(&m.recentList.cursor, len(m.recentList.items), -1, m.refreshRecentModal)
+				cursorMoveAndRefresh(&m.recentList.cursor, len(m.recentList.items), -1, m.renderRecentModal)
 				return *m, nil
 			case key.Matches(msg, m.keys.Open):
 				return *m, m.followRecent()
