@@ -55,6 +55,7 @@ Cross-cutting ideas that show up in multiple specs and packages. Each is its own
 - [Copy current file path](superpowers/specs/2026-06-12-copy-current-path-design.md) — `y` copies the absolute path of the current view (`m.history.Current()`) via the existing `copyToClipboard`, toasting `Copied path: <path>`. No-op when nothing is open.
 - [Keyboard selection (vim visual mode)](superpowers/specs/2026-06-13-keyboard-selection-design.md) — shipped — two-phase vim-style visual mode reusing the mouse selection's `selection{anchor,cursor}` span machinery: `v` shows a movable caret, `Space` drops the anchor to start extending, `h/j/k/l`/arrows + `g`/`G` + `^d`/`^u` move it, `y` yanks, `Esc` cancels.
 - [Scriptable query mode](superpowers/specs/2026-06-20-scriptable-query-mode-design.md) — approved — non-interactive JSON-to-stdout verbs (`search`, `links`, `recent`, `neighbors`) for agent/script consumption; git-style dispatch in `cmd/hypogeum`, new pure `internal/query` package, plus a `Vault.Outbound` accessor. Pointers (path/line/snippet), not content. [Plan](superpowers/plans/2026-06-20-scriptable-query-mode.md).
+- [Benchmarking foundation](superpowers/specs/2026-06-20-benchmarking-foundation-design.md) — approved — measure-only sweep of the five hot paths (`tree.Walk`, `vault.Build`, `markdown.Render`, `search.Search`, `recent.Rank`) over a deterministic scale-parameterized corpus generator (`internal/benchcorpus`). Additive test + doc code only; findings land in `docs/benchmarking.md`.
 
 ## Conventions for adding to this folder
 
