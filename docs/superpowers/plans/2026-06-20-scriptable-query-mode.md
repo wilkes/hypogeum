@@ -149,7 +149,7 @@ git commit -m "feat(tree): add MarkdownFiles flattening helper"
 - Consumes: existing private `(*Vault).files map[string]*fileEntry`, `fileEntry.refs []reference`, `reference{kind, target, resolved, displayText, snippet, line}`, and the `refWikilink` constant. The `files` map is keyed by absolute path.
 - Produces:
   - `type OutboundKind int` with `OutboundWikilink` (= 0) and `OutboundStdLink`.
-  - `type Outbound struct { DisplayText, RawTarget, Resolved string; Line int; Snippet string; Kind OutboundKind }`. `RawTarget` is the bare target as indexed (the wikilink name, e.g. `bar`, or the std-link href). `Resolved` is the absolute target path, or `""` when unresolved.
+  - `type Outbound struct { DisplayText, RawTarget, Resolved string; Line int; Snippet string; Kind OutboundKind }`. `RawTarget` is the bare target as indexed (the wikilink name, e.g. `bar`, or the std-link href). `Resolved` is the vault's already-computed target path: for wikilinks it is existence-based (`""` when no indexed file matches); for std links it is a pure path computation (non-empty even when the file is missing — `resolveStdLink` does not check existence). **The accessor surfaces `ref.resolved` verbatim — no filesystem I/O.** Determining whether a relative link is "broken" is the query layer's job (Task 5), not the accessor's.
   - `func (v *Vault) Outbound(path string) []Outbound` — outbound references from `path` in document order; empty when the file is not indexed.
 
 - [ ] **Step 1: Write the failing test**
@@ -195,17 +195,24 @@ func TestOutbound(t *testing.T) {
 		t.Errorf("out[0].Resolved = %q, want bar.md", out[0].Resolved)
 	}
 
-	// Second: broken relative std link.
+	// Second: relative std link. The vault surfaces the COMPUTED path
+	// as-is; it does not check existence at the vault layer (broken-ness
+	// is a query-layer concern). So even though nope.md is missing,
+	// Resolved is the computed absolute path.
 	if out[1].Kind != OutboundStdLink {
 		t.Errorf("out[1].Kind = %v, want OutboundStdLink", out[1].Kind)
 	}
-	if out[1].Resolved != "" {
-		t.Errorf("out[1].Resolved = %q, want empty (broken)", out[1].Resolved)
+	if out[1].Resolved != filepath.Join(dir, "nope.md") {
+		t.Errorf("out[1].Resolved = %q, want computed nope.md path", out[1].Resolved)
 	}
 
-	// Third: external std link, raw target preserved, unresolved.
+	// Third: external std link — raw target preserved, never resolved
+	// (resolveStdLink returns "" for http/https schemes).
 	if out[2].RawTarget != "https://x.com" {
 		t.Errorf("out[2].RawTarget = %q, want https://x.com", out[2].RawTarget)
+	}
+	if out[2].Resolved != "" {
+		t.Errorf("out[2].Resolved = %q, want empty (external)", out[2].Resolved)
 	}
 }
 
@@ -767,11 +774,32 @@ func TestLinks(t *testing.T) {
 	if links[0].Path != filepath.Join(dir, "bar.md") {
 		t.Errorf("links[0].Path = %q, want bar.md", links[0].Path)
 	}
-	if links[1].Kind != "relative" || !links[1].Broken {
-		t.Errorf("links[1] = %+v, want broken relative", links[1])
+	if links[1].Kind != "relative" || !links[1].Broken || links[1].Path != "" {
+		t.Errorf("links[1] = %+v, want broken relative with empty path", links[1])
 	}
-	if links[2].Kind != "external" || links[2].Broken || links[2].Target != "https://x.com" {
-		t.Errorf("links[2] = %+v, want external https://x.com", links[2])
+	if links[2].Kind != "external" || links[2].Broken || links[2].Target != "https://x.com" || links[2].Path != "" {
+		t.Errorf("links[2] = %+v, want external https://x.com with empty path", links[2])
+	}
+}
+
+func TestLinksResolvedRelative(t *testing.T) {
+	dir := t.TempDir()
+	foo := filepath.Join(dir, "foo.md")
+	if err := os.WriteFile(foo, []byte("[real](./bar.md)\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "bar.md"), []byte("# bar\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	links, err := Links(dir, foo)
+	if err != nil {
+		t.Fatalf("Links: %v", err)
+	}
+	if len(links) != 1 {
+		t.Fatalf("got %d links, want 1", len(links))
+	}
+	if links[0].Kind != "relative" || links[0].Broken || links[0].Path != filepath.Join(dir, "bar.md") {
+		t.Errorf("links[0] = %+v, want resolved relative to bar.md", links[0])
 	}
 }
 
@@ -856,6 +884,14 @@ func isExternalURL(target string) bool {
 }
 
 // outboundLinks maps a vault file's outbound references into Link values.
+//
+// Broken-ness is determined here, not in the vault accessor:
+//   - wikilink: broken when the vault left Resolved empty (existence-based
+//     via the names index, so Resolved already implies the file exists).
+//   - relative: the vault computes Resolved by pure path math without
+//     checking existence, so we os.Stat it. A missing target is broken and
+//     reports an empty Path (matching the spec's broken-relative example).
+//   - external: never broken (we do not probe URLs).
 func outboundLinks(v *vault.Vault, abs string) []Link {
 	refs := v.Outbound(abs)
 	out := make([]Link, 0, len(refs))
@@ -872,15 +908,25 @@ func outboundLinks(v *vault.Vault, abs string) []Link {
 		case isExternalURL(r.RawTarget):
 			l.Kind = "external"
 			l.Target = r.RawTarget
+			l.Path = ""
 			l.Broken = false
 		default:
 			l.Kind = "relative"
 			l.Target = r.RawTarget
-			l.Broken = r.Resolved == ""
+			if r.Resolved == "" || !fileExists(r.Resolved) {
+				l.Path = ""
+				l.Broken = true
+			}
 		}
 		out = append(out, l)
 	}
 	return out
+}
+
+// fileExists reports whether path names an existing entry on disk.
+func fileExists(path string) bool {
+	_, err := os.Stat(path)
+	return err == nil
 }
 
 // mustExist returns an absolute path for file, or an error if file does
