@@ -109,4 +109,6 @@ PRs merge with `gh pr merge --merge`, not squash. Squashing is disabled by repo 
 
 Write design docs, implementation plans, and investigation notes to `docs/` at the repo root. Start at [docs/index.md](docs/index.md) — it points at the [architecture overview](docs/architecture.md) (which links to per-package docs in `docs/packages/`) and to active feature plans like [link-following](docs/link-following.md).
 
+**`docs/` is this project's own vault** — it uses wikilinks/backlinks and is meant to be browsed with hypogeum itself (`hypogeum docs/`), dogfooding the tool. You can also query it non-interactively: `hypogeum search --vault docs "term"`, `hypogeum neighbors --vault docs docs/architecture.md`, etc. (see the reserved-query-verbs gotcha above). When unsure where a doc concept lives, querying `docs/` is often faster than grepping.
+
 One file per topic, kebab-cased filename, no date prefix. Update plans in place as work progresses — strike-through or "Status:" lines beat parallel files. README.md and CLAUDE.md stay at the repo root; everything longer-form goes in `docs/`. Update `docs/index.md` whenever you add a new file under `docs/`.
