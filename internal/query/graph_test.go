@@ -87,6 +87,49 @@ func TestGraphEdges(t *testing.T) {
 	}
 }
 
+func TestGraphEdgesGroupedBySortedSource(t *testing.T) {
+	dir := t.TempDir()
+	// Two source files. Sorted ascending: alpha.md < zebra.md. Each links the
+	// same two targets but in *opposite* document order, so the expected edge
+	// sequence can only be produced by grouping per sorted source file AND
+	// preserving each file's document order — not by any target sort.
+	files := map[string]string{
+		"alpha.md": "[[mid]] [[end]]\n", // alpha: mid then end
+		"zebra.md": "[[end]] [[mid]]\n", // zebra: end then mid
+		"mid.md":   "# mid\n",
+		"end.md":   "# end\n",
+	}
+	for name, content := range files {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(content), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	g, err := GraphFor(dir)
+	if err != nil {
+		t.Fatalf("Graph: %v", err)
+	}
+
+	alpha := filepath.Join(dir, "alpha.md")
+	zebra := filepath.Join(dir, "zebra.md")
+	mid := filepath.Join(dir, "mid.md")
+	end := filepath.Join(dir, "end.md")
+
+	want := []GraphEdge{
+		{From: alpha, To: mid, Kind: "wikilink"},
+		{From: alpha, To: end, Kind: "wikilink"},
+		{From: zebra, To: end, Kind: "wikilink"},
+		{From: zebra, To: mid, Kind: "wikilink"},
+	}
+	if len(g.Edges) != len(want) {
+		t.Fatalf("got %d edges, want %d: %+v", len(g.Edges), len(want), g.Edges)
+	}
+	for i, w := range want {
+		if g.Edges[i] != w {
+			t.Errorf("Edges[%d] = %+v, want %+v", i, g.Edges[i], w)
+		}
+	}
+}
+
 func TestGraphEmptyVault(t *testing.T) {
 	g, err := GraphFor(t.TempDir())
 	if err != nil {
