@@ -6,7 +6,111 @@ import (
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
+
+	"github.com/wilkes/hypogeum/internal/tree"
 )
+
+// dir/file build *tree.Node values for firstTopLevelFile's table tests
+// without touching the filesystem. The walker already filters to markdown,
+// so these mirror what a real walk would hand the model.
+func dir(name string, children ...*tree.Node) *tree.Node {
+	return &tree.Node{Path: "/vault/" + name, Name: name, IsDir: true, Children: children}
+}
+
+func file(name string) *tree.Node {
+	return &tree.Node{Path: "/vault/" + name, Name: name, IsDir: false}
+}
+
+func rootWith(children ...*tree.Node) *tree.Node {
+	return &tree.Node{Path: "/vault", Name: "vault", IsDir: true, Children: children}
+}
+
+func TestFirstTopLevelFile(t *testing.T) {
+	tests := []struct {
+		name string
+		root *tree.Node
+		want string // expected node Name, "" means nil
+	}{
+		{
+			name: "index wins over readme",
+			root: rootWith(file("readme.md"), file("index.md")),
+			want: "index.md",
+		},
+		{
+			name: "index wins over a plain file",
+			root: rootWith(file("aaa.md"), file("index.md")),
+			want: "index.md",
+		},
+		{
+			name: "readme wins over a plain file",
+			root: rootWith(file("aaa.md"), file("readme.md")),
+			want: "readme.md",
+		},
+		{
+			name: "case-insensitive index",
+			root: rootWith(file("aaa.md"), file("INDEX.MD")),
+			want: "INDEX.MD",
+		},
+		{
+			name: "case-insensitive readme",
+			root: rootWith(file("aaa.md"), file("ReadMe.md")),
+			want: "ReadMe.md",
+		},
+		{
+			name: "index beats readme regardless of order",
+			root: rootWith(file("index.markdown"), file("README.md")),
+			want: "index.markdown",
+		},
+		{
+			name: "fall through to first file when no index or readme",
+			root: rootWith(file("bbb.md"), file("ccc.md")),
+			want: "bbb.md",
+		},
+		{
+			name: "directories are skipped when matching index",
+			root: rootWith(dir("index"), file("readme.md")),
+			want: "readme.md",
+		},
+		{
+			name: "first file when only directories precede it",
+			root: rootWith(dir("notes", file("first.md")), file("zzz.md")),
+			want: "zzz.md",
+		},
+		{
+			name: "nil root returns nil",
+			root: nil,
+			want: "",
+		},
+		{
+			name: "empty root returns nil",
+			root: rootWith(),
+			want: "",
+		},
+		{
+			name: "only directories returns nil",
+			root: rootWith(dir("notes", file("first.md")), dir("other", file("x.md"))),
+			want: "",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got := firstTopLevelFile(tc.root)
+			if tc.want == "" {
+				if got != nil {
+					t.Fatalf("firstTopLevelFile = %q, want nil", got.Name)
+				}
+				return
+			}
+			if got == nil {
+				t.Fatalf("firstTopLevelFile = nil, want %q", tc.want)
+			}
+			if got.Name != tc.want {
+				t.Errorf("firstTopLevelFile = %q, want %q", got.Name, tc.want)
+			}
+		})
+	}
+}
 
 func TestModel_TreeNavigationAndOpen(t *testing.T) {
 	root := writeFixture(t)

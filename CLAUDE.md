@@ -55,7 +55,7 @@ The packages are layered: `tui` depends on `tree`, `markdown`, `nav`, `watch`, `
 ## Gotchas
 
 - **Empty directories are pruned.** `tree.Walk` drops any directory whose subtree contains zero markdown files (`internal/tree/tree.go`). A user pointing at a folder with only PDFs in it will see an empty tree, not a wall of folders.
-- **Auto-open is top-level only.** When no `initialFile` is given, the model picks the *first root-level* `.md` (`firstTopLevelFile` in `internal/tui/model.go`). It does *not* descend into subdirectories — earlier versions did, and the result was landing on the deepest leaf alphabetically. Don't change this back without a strong reason.
+- **Auto-open prefers index/readme, top-level only.** When no `initialFile` is given, the model picks a *root-level* `.md` via `firstTopLevelFile` (`internal/tui/tree.go`), preferring (1) a child whose basename stem case-insensitively equals `index`, else (2) one whose stem equals `readme`, else (3) the first non-directory child (the historical alphabetical fallback). It does *not* descend into subdirectories — earlier versions did, and the result was landing on the deepest leaf alphabetically. Keep the top-level-only scope; don't reintroduce descent without a strong reason.
 - **`tree.Walk` returns a synthesized empty root** when nothing matches, instead of nil — callers don't have to special-case nil. Keep that contract.
 - **Hidden entries are skipped** (anything starting with `.`) — `.git`, dotfile notes directories, etc. If you ever expose a flag to include them, do it in `tree`, not `tui`.
 - **Glamour renderer is per-width.** It's recreated on every `WindowSizeMsg`. Don't cache it across width changes or wrapping breaks silently.
