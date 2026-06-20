@@ -11,7 +11,7 @@ import (
 
 func BenchmarkSearch(b *testing.B) {
 	const unlimited = 1 << 30 // large cap so the full fan-out scan runs
-	for _, n := range []int{10, 100, 1000} {
+	for _, n := range []int{10, 100, 1000, 5000, 10000} {
 		b.Run(fmt.Sprintf("N=%d", n), func(b *testing.B) {
 			c := benchcorpus.Generate(b.TempDir(), 7, n, 3)
 			ctx := context.Background()

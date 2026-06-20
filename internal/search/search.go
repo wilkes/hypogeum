@@ -110,6 +110,23 @@ const snippetBudget = 60
 // practice — this is defense-in-depth.
 const maxFileBytes = 1 << 20 // 1 MiB
 
+// scanBufSize is the initial bufio.Scanner buffer size handed to each
+// scanFile. A full-vault search allocates one of these per file; pooling
+// them keeps the fan-out from churning ~64 KiB per scanned file through
+// the GC. The scanner only grows past this for lines longer than 64 KiB,
+// in which case it allocates internally and leaves the pooled buffer
+// untouched — so returning the original to the pool is always safe.
+const scanBufSize = 64 * 1024
+
+// bufPool recycles scanFile's initial scanner buffers. Pooling *[]byte
+// (not []byte) avoids the per-Put allocation of boxing a slice header.
+var bufPool = sync.Pool{
+	New: func() any {
+		b := make([]byte, scanBufSize)
+		return &b
+	},
+}
+
 // scanFile reads path and returns one Hit per line containing
 // case-insensitive substring matches of query. The query is assumed
 // non-empty (caller's responsibility — Search filters short queries).
@@ -130,8 +147,11 @@ func scanFile(ctx context.Context, path, query string) ([]Hit, error) {
 	queryLen := len(query)
 	var hits []Hit
 
+	bufp := bufPool.Get().(*[]byte)
+	defer bufPool.Put(bufp)
+
 	scanner := bufio.NewScanner(io.LimitReader(f, maxFileBytes))
-	scanner.Buffer(make([]byte, 64*1024), 1024*1024)
+	scanner.Buffer(*bufp, 1024*1024)
 
 	lineNum := 0
 	for scanner.Scan() {
