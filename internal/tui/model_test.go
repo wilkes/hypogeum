@@ -301,6 +301,43 @@ func TestModel_EscClearingRangeHighlightPreservesScroll(t *testing.T) {
 	}
 }
 
+func TestModel_LinkCycleReusesRenderHandle(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "a.md"), []byte("# A\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "b.md"), []byte("# B\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	mdPath := filepath.Join(dir, "notes.md")
+	if err := os.WriteFile(mdPath, []byte("See [alpha](a.md) and [bravo](b.md).\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	m := sized(t, dir, mdPath)
+	if m.content.render == nil {
+		t.Fatal("expected render handle set after refresh")
+	}
+	if len(m.content.links) < 2 {
+		t.Fatalf("expected >=2 links, got %d", len(m.content.links))
+	}
+
+	m.cycleLink(+1) // linkCursor -> 0
+	first := m.content.viewport.View()
+	if !strings.Contains(first, "\x1b[7m") {
+		t.Fatalf("expected reverse-video after cycling to first link:\n%s", first)
+	}
+
+	m.cycleLink(+1) // linkCursor -> 1
+	second := m.content.viewport.View()
+	if !strings.Contains(second, "\x1b[7m") {
+		t.Fatalf("expected reverse-video after cycling to second link:\n%s", second)
+	}
+	if first == second {
+		t.Fatal("expected highlight to move to a different link (views identical)")
+	}
+}
+
 func TestModel_CyclingOntoEmbedDoesNotScroll(t *testing.T) {
 	dir := t.TempDir()
 	target := filepath.Join(dir, "target.go")

@@ -441,3 +441,31 @@ func TestReplaceOutsideInlineCode(t *testing.T) {
 		})
 	}
 }
+
+func TestRenderDocument_WithHighlightMatchesFullRender(t *testing.T) {
+	r, err := NewRenderer(80)
+	if err != nil {
+		t.Fatalf("NewRenderer: %v", err)
+	}
+	src := "See [one](a.md) and [two](b.md) and [three](c.md).\n"
+	base := "/base/file.md"
+
+	rr, err := r.RenderDocument(src, base, nil)
+	if err != nil {
+		t.Fatalf("RenderDocument: %v", err)
+	}
+	if len(rr.Links) < 3 {
+		t.Fatalf("expected >=3 links, got %d", len(rr.Links))
+	}
+
+	for _, i := range []int{-1, 0, 1, 2} {
+		want, _, _, err := r.RenderWithLinks(src, base, HighlightMarker(i))
+		if err != nil {
+			t.Fatalf("RenderWithLinks(%d): %v", i, err)
+		}
+		if got := rr.WithHighlight(i); got != want {
+			t.Errorf("WithHighlight(%d) != full render with HighlightMarker(%d)\n got: %q\nwant: %q",
+				i, i, got, want)
+		}
+	}
+}

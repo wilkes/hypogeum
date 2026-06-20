@@ -14,7 +14,7 @@ import (
 // renderer so all link-following plumbing applies: n/p cycles entries,
 // Enter follows them, Back works.
 //
-// dir must be an absolute path; callers (refreshContent, applyLinkHighlight)
+// dir must be an absolute path; callers (refreshContent)
 // already pass absolute paths from history.
 //
 // Entries are sorted directories-first, then alphabetical within each group,

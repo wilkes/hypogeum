@@ -49,6 +49,11 @@ type contentUIState struct {
 	codeRenderer *code.Renderer
 	links        []markdown.Link
 	linkCursor   int
+	// render is the current markdown document's reusable render. It holds the
+	// sentinel-instrumented Glamour output so applyLinkHighlight can
+	// re-highlight a different link without re-rendering. nil for code files
+	// and error states.
+	render *markdown.RenderResult
 	// brokenCount is the sum of unresolved wikilinks plus inline local
 	// links whose target file is missing in the currently rendered
 	// document. Recomputed by refreshContent; surfaced by renderFooter.
@@ -86,7 +91,7 @@ func linkZoneID(i int) string {
 	return fmt.Sprintf("link:%d", i)
 }
 
-// linkZoneMarker is the markdown.LinkMarker passed into RenderWithLinks.
+// linkZoneMarker is the markdown.LinkMarker passed into RenderDocument.
 // It returns the bubblezone open/close sentinel pair for the i-th link
 // so a click on rendered link text can be matched to the link index
 // without coordinate math.
@@ -194,6 +199,7 @@ func (m *Model) refreshContent(path string) {
 			m.content.links = nil
 			m.content.linkCursor = -1
 			m.content.brokenCount = 0
+			m.content.render = nil
 			return
 		}
 		src = []byte(listing)
@@ -207,6 +213,7 @@ func (m *Model) refreshContent(path string) {
 			m.content.links = nil
 			m.content.linkCursor = -1
 			m.content.brokenCount = 0
+			m.content.render = nil
 			return
 		}
 	}
@@ -231,6 +238,7 @@ func (m *Model) refreshContent(path string) {
 		m.content.links = nil
 		m.content.linkCursor = -1
 		m.content.embedDeps = nil
+		m.content.render = nil
 		_ = target // preselect doesn't apply to code files
 		return
 	}
@@ -247,7 +255,7 @@ func (m *Model) refreshContent(path string) {
 	}
 	m.content.rangeHighlight = nil
 	m.content.renderer.SetFromFile(path)
-	out, links, deps, err := m.content.renderer.RenderWithLinks(string(src), path, linkZoneMarker)
+	rr, err := m.content.renderer.RenderDocument(string(src), path, linkZoneMarker)
 	if err != nil {
 		m.footerMessage = err.Error()
 		m.setContent(fmt.Sprintf("Error: %v", err))
@@ -255,18 +263,20 @@ func (m *Model) refreshContent(path string) {
 		m.content.linkCursor = -1
 		m.content.embedDeps = nil
 		m.content.brokenCount = 0
+		m.content.render = nil
 		return
 	}
+	m.content.render = rr
 	m.currentPath = path
 	m.footerMessage = ""
-	m.setContent(out)
+	m.setContent(rr.Content)
 	m.content.viewport.GotoTop()
 	if pendingScrollLine > 0 {
 		m.scrollToLine(pendingScrollLine)
 	}
-	m.content.links = links
+	m.content.links = rr.Links
 	m.content.brokenCount = m.content.renderer.CountUnresolvedWikilinks(string(src))
-	for _, l := range links {
+	for _, l := range rr.Links {
 		if l.Resolved.Kind != markdown.LinkLocalFile {
 			continue
 		}
@@ -275,8 +285,8 @@ func (m *Model) refreshContent(path string) {
 		}
 	}
 
-	m.content.embedDeps = make(map[string]struct{}, len(deps))
-	for _, p := range deps {
+	m.content.embedDeps = make(map[string]struct{}, len(rr.EmbedDeps))
+	for _, p := range rr.EmbedDeps {
 		m.content.embedDeps[p] = struct{}{}
 		if m.watcher != nil {
 			_ = m.watcher.AddPath(filepath.Dir(p))
@@ -289,7 +299,7 @@ func (m *Model) refreshContent(path string) {
 		// one whose Range matches preselectRange (set by the originating
 		// navigation). Falls back to first target match.
 		best := -1
-		for i, l := range links {
+		for i, l := range rr.Links {
 			if l.Resolved.Kind != markdown.LinkLocalFile || l.Resolved.Target != target {
 				continue
 			}

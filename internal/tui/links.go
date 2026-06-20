@@ -1,7 +1,6 @@
 package tui
 
 import (
-	"os"
 	"path/filepath"
 
 	"github.com/wilkes/hypogeum/internal/markdown"
@@ -26,40 +25,17 @@ func (m *Model) cycleLink(step int) {
 	m.applyLinkHighlight()
 }
 
-// applyLinkHighlight re-renders the current file with a reverse-video
-// highlight around the selected link and updates the viewport content.
-// The scroll position set by scrollToLink is preserved. On read or
-// render failure, the status bar is updated and the existing viewport
-// content is left unchanged.
+// applyLinkHighlight re-renders the current document's reverse-video highlight
+// around the selected link by re-applying the highlight marker to the cached
+// render — no file read, no Glamour render. The scroll position set by
+// scrollToLink is preserved. A nil render handle (code file / error state)
+// is a no-op; such documents have no cyclable links.
 func (m *Model) applyLinkHighlight() {
-	path := m.history.Current()
-	if path == "" {
-		return
-	}
-	var src []byte
-	if info, statErr := os.Stat(path); statErr == nil && info.IsDir() {
-		listing, dirErr := renderDirListing(path)
-		if dirErr != nil {
-			m.footerMessage = dirErr.Error()
-			return
-		}
-		src = []byte(listing)
-	} else {
-		var err error
-		src, err = os.ReadFile(path)
-		if err != nil {
-			m.footerMessage = err.Error()
-			return
-		}
-	}
-	m.content.renderer.SetFromFile(path)
-	out, _, _, err := m.content.renderer.RenderWithLinks(string(src), path, markdown.HighlightMarker(m.content.linkCursor))
-	if err != nil {
-		m.footerMessage = err.Error()
+	if m.content.render == nil {
 		return
 	}
 	offset := m.content.viewport.YOffset
-	m.setContent(out)
+	m.setContent(m.content.render.WithHighlight(m.content.linkCursor))
 	m.content.viewport.SetYOffset(offset)
 }
 
