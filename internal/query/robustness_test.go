@@ -120,12 +120,15 @@ func TestRecentDegradesOnCorruptStore(t *testing.T) {
 	}
 	corruptStore(t)
 
+	// Recent now reports visited-only. A corrupt store degrades to a usable
+	// (non-nil) store with an empty visit map, so the graceful-degradation
+	// contract is: no error, and zero entries (nothing has a recorded visit).
 	got, err := Recent(dir, 10)
 	if err != nil {
 		t.Fatalf("Recent degraded path returned error: %v, want graceful degradation", err)
 	}
-	if len(got) != 2 {
-		t.Fatalf("got %d entries, want 2 (degraded ranks by mtime)", len(got))
+	if len(got) != 0 {
+		t.Fatalf("got %d entries, want 0 (corrupt store has no visits)", len(got))
 	}
 }
 

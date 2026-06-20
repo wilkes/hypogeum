@@ -1,10 +1,12 @@
 package tui
 
 import (
+	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/x/ansi"
@@ -75,16 +77,22 @@ func TestRefilterEmptyQueryRestoresAll(t *testing.T) {
 
 func TestRefilterScoresWithRecencyTiebreaker(t *testing.T) {
 	// Two paths with identical fuzzy scores — the one earlier in `all`
-	// (more recent) must win the stable tiebreak.
+	// (more recently edited) must win the stable tiebreak. Source order is
+	// the finder's mtime ranking, so make p1 the newer file.
 	dir := t.TempDir()
 	p1 := filepath.Join(dir, "a-hyp.md")
 	p2 := filepath.Join(dir, "b-hyp.md")
 	writePickerFile(t, p1, "# A")
 	writePickerFile(t, p2, "# B")
+	base := time.Now()
+	if err := os.Chtimes(p2, base.Add(-2*time.Hour), base.Add(-2*time.Hour)); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chtimes(p1, base.Add(-1*time.Hour), base.Add(-1*time.Hour)); err != nil {
+		t.Fatal(err)
+	}
 
 	m := sized(t, dir, "")
-	// Open p1 first; this bumps it ahead of p2 in `all`.
-	m.openFile(p1)
 	m = pressKey(t, m, tea.KeyMsg{Type: tea.KeyCtrlP})
 
 	m.modals.picker.input.SetValue("hyp")

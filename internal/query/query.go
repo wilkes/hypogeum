@@ -70,14 +70,9 @@ func Search(root, term string, max int) ([]SearchHit, error) {
 		return nil, err
 	}
 
-	// A non-nil store is always usable for ranking even if loadStore also
-	// returned a diagnostic error (malformed/old state file) — it ranks by
-	// mtime with an empty visit map. Only a nil store leaves hits unranked.
-	var order func([]string) []string
-	if store, _ := loadStore(); store != nil {
-		order = store.RankPaths
-	}
-	hits = search.RerankByRecency(order, hits)
+	// Search results re-rank by edit-recency (mtime), matching the TUI
+	// search modal and the file finder. This is stateless — no store needed.
+	hits = search.RerankByRecency(recent.RankPathsByMTime, hits)
 	if max > 0 && len(hits) > max {
 		hits = hits[:max]
 	}
@@ -93,29 +88,31 @@ func Search(root, term string, max int) ([]SearchHit, error) {
 	return out, nil
 }
 
-// RecentEntry is one recency-ranked note.
+// RecentEntry is one visit-ranked note. There is no score field: the
+// ordering is a plain descending sort on the visit timestamp.
 type RecentEntry struct {
 	Path    string    `json:"path"`
-	Score   float64   `json:"score"`
-	MTime   time.Time `json:"mtime"`
 	Visited time.Time `json:"visited"`
 }
 
-// Recent returns up to max markdown files under root, ranked by the
-// persisted hybrid recency score.
+// Recent returns up to max markdown files under root that have been opened in
+// hypogeum, ordered by last-visited time descending (most recent first).
+// Files never opened are excluded — this is "recently opened," matching the
+// TUI r modal, not a recency score over the whole vault.
 func Recent(root string, max int) ([]RecentEntry, error) {
 	paths, err := tree.MarkdownFiles(root)
 	if err != nil {
 		return nil, err
 	}
 	// Degrade gracefully, matching Search: a malformed/old state file still
-	// yields a usable (non-nil) store that ranks by mtime, so we only fail
-	// when the store itself is nil (the stateFileFn failure path).
+	// yields a usable (non-nil) store with an empty visit map (which simply
+	// returns no entries), so we only fail when the store itself is nil (the
+	// stateFileFn failure path).
 	store, err := loadStore()
 	if store == nil {
 		return nil, err
 	}
-	ranked := store.Rank(paths)
+	ranked := store.RankByVisit(paths)
 	if max > 0 && len(ranked) > max {
 		ranked = ranked[:max]
 	}
@@ -123,8 +120,6 @@ func Recent(root string, max int) ([]RecentEntry, error) {
 	for _, r := range ranked {
 		out = append(out, RecentEntry{
 			Path:    r.Path,
-			Score:   r.Score,
-			MTime:   r.MTime,
 			Visited: r.Visit,
 		})
 	}

@@ -13,9 +13,6 @@ func TestRankedZeroValue(t *testing.T) {
 	if r.Path != "" {
 		t.Errorf("zero Ranked.Path: got %q want \"\"", r.Path)
 	}
-	if r.Score != 0 {
-		t.Errorf("zero Ranked.Score: got %v want 0", r.Score)
-	}
 	if !r.MTime.IsZero() {
 		t.Errorf("zero Ranked.MTime: got %v want zero", r.MTime)
 	}
@@ -24,133 +21,158 @@ func TestRankedZeroValue(t *testing.T) {
 	}
 }
 
-func TestConstants(t *testing.T) {
-	// Sanity check that the published constants are positive and finite.
-	if mtimeHalfLifeHours <= 0 {
-		t.Errorf("mtimeHalfLifeHours must be > 0, got %v", mtimeHalfLifeHours)
-	}
-	if visitHalfLifeHours <= 0 {
-		t.Errorf("visitHalfLifeHours must be > 0, got %v", visitHalfLifeHours)
-	}
-	if visitWeight <= 0 {
-		t.Errorf("visitWeight must be > 0, got %v", visitWeight)
-	}
-	_ = time.Now() // keeps the time import used in this file
-}
-
-func TestScoreOnlyMTime(t *testing.T) {
-	now := time.Date(2026, 5, 12, 12, 0, 0, 0, time.UTC)
-	// File edited 1 hour ago, never visited.
-	mtime := now.Add(-1 * time.Hour)
-	var visit time.Time // zero
-	got := score(now, mtime, visit)
-
-	// score = exp(-1/168) + 0  ≈  0.9941
-	if got < 0.99 || got > 1.0 {
-		t.Errorf("1h-old mtime, no visit: got %v, want in [0.99, 1.0]", got)
+// chtime sets a deterministic mtime on path so RankByMTime ordering is
+// independent of test execution timing.
+func chtime(t *testing.T, path string, mtime time.Time) {
+	t.Helper()
+	if err := os.Chtimes(path, mtime, mtime); err != nil {
+		t.Fatal(err)
 	}
 }
 
-func TestScoreOnlyVisit(t *testing.T) {
-	now := time.Date(2026, 5, 12, 12, 0, 0, 0, time.UTC)
-	// Visited 1 hour ago, file very old (mtime contribution near zero).
-	var mtime time.Time = now.Add(-10000 * time.Hour) // way more than 7-day half life
-	visit := now.Add(-1 * time.Hour)
-	got := score(now, mtime, visit)
-
-	// mtime term ≈ 0, visit term ≈ 0.5 · exp(-1/48) ≈ 0.490
-	if got < 0.48 || got > 0.50 {
-		t.Errorf("very-old mtime, 1h visit: got %v, want in [0.48, 0.50]", got)
-	}
-}
-
-func TestScoreRecentVisitBeatsOldEdit(t *testing.T) {
-	now := time.Date(2026, 5, 12, 12, 0, 0, 0, time.UTC)
-
-	// File A: edited 8 days ago, never visited.
-	scoreA := score(now, now.Add(-8*24*time.Hour), time.Time{})
-	// File B: edited 8 days ago, visited 1 day ago.
-	scoreB := score(now, now.Add(-8*24*time.Hour), now.Add(-1*24*time.Hour))
-
-	if scoreB <= scoreA {
-		t.Errorf("recent visit should outrank no-visit: A=%v B=%v", scoreA, scoreB)
-	}
-}
-
-func TestScoreRecentVisitBeatsRecentEdit(t *testing.T) {
-	now := time.Date(2026, 5, 12, 12, 0, 0, 0, time.UTC)
-
-	// File A: edited 1 hour ago, never visited.
-	scoreA := score(now, now.Add(-1*time.Hour), time.Time{})
-	// File B: edited 1 hour ago, visited 1 hour ago.
-	scoreB := score(now, now.Add(-1*time.Hour), now.Add(-1*time.Hour))
-
-	if scoreB <= scoreA {
-		t.Errorf("equal-mtime: visited should outrank not-visited: A=%v B=%v", scoreA, scoreB)
-	}
-}
-
-func TestScoreRecentEditBeatsRecentVisit(t *testing.T) {
-	now := time.Date(2026, 5, 12, 12, 0, 0, 0, time.UTC)
-
-	// File A: edited 1 hour ago, never visited.
-	scoreA := score(now, now.Add(-1*time.Hour), time.Time{})
-	// File B: never edited (very old mtime), visited 1 hour ago.
-	scoreB := score(now, now.Add(-10000*time.Hour), now.Add(-1*time.Hour))
-
-	if scoreA <= scoreB {
-		t.Errorf("equal-age: recent edit should outrank recent visit: edit=%v visit=%v", scoreA, scoreB)
-	}
-}
-
-func TestStoreRecordAndRankBasic(t *testing.T) {
+func TestRankByMTimeSortsNewestFirst(t *testing.T) {
 	dir := t.TempDir()
-	p1 := filepath.Join(dir, "a.md")
-	p2 := filepath.Join(dir, "b.md")
-	if err := os.WriteFile(p1, []byte("# A"), 0o644); err != nil {
+	older := filepath.Join(dir, "older.md")
+	newer := filepath.Join(dir, "newer.md")
+	if err := os.WriteFile(older, []byte("# old"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(p2, []byte("# B"), 0o644); err != nil {
+	if err := os.WriteFile(newer, []byte("# new"), 0o644); err != nil {
 		t.Fatal(err)
 	}
+	base := time.Date(2026, 6, 20, 12, 0, 0, 0, time.UTC)
+	chtime(t, older, base.Add(-2*time.Hour))
+	chtime(t, newer, base.Add(-1*time.Hour))
 
-	s := &Store{
-		visits:  map[string]time.Time{},
-		nowFunc: time.Now,
-	}
-
-	// Visit p1 first, then p2 — p2 is more recent, should rank higher
-	// (assuming both files have similar mtimes).
-	now := time.Date(2026, 5, 12, 12, 0, 0, 0, time.UTC)
-	s.nowFunc = func() time.Time { return now }
-	s.visits[p1] = now.Add(-2 * time.Hour)
-	s.visits[p2] = now.Add(-1 * time.Hour)
-
-	ranked := s.Rank([]string{p1, p2})
+	// Pass in reverse order to prove the function sorts rather than echoes.
+	ranked := RankByMTime([]string{older, newer})
 	if len(ranked) != 2 {
-		t.Fatalf("Rank returned %d entries, want 2", len(ranked))
+		t.Fatalf("RankByMTime returned %d entries, want 2", len(ranked))
 	}
-	if ranked[0].Path != p2 {
-		t.Errorf("Rank order: first entry %q, want %q (more recent visit)", ranked[0].Path, p2)
+	if ranked[0].Path != newer {
+		t.Errorf("first entry %q, want %q (newest mtime)", ranked[0].Path, newer)
+	}
+	if ranked[1].Path != older {
+		t.Errorf("second entry %q, want %q", ranked[1].Path, older)
+	}
+	// MTime is carried through.
+	if ranked[0].MTime.IsZero() {
+		t.Error("RankByMTime should populate MTime")
 	}
 }
 
-func TestStoreRankDropsMissingFiles(t *testing.T) {
+func TestRankByMTimeDropsStatFailures(t *testing.T) {
 	dir := t.TempDir()
-	p1 := filepath.Join(dir, "a.md")
-	pMissing := filepath.Join(dir, "missing.md")
-	if err := os.WriteFile(p1, []byte("# A"), 0o644); err != nil {
+	good := filepath.Join(dir, "good.md")
+	missing := filepath.Join(dir, "missing.md")
+	if err := os.WriteFile(good, []byte("# good"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-
-	s := &Store{visits: map[string]time.Time{}, nowFunc: time.Now}
-	ranked := s.Rank([]string{p1, pMissing})
-
+	ranked := RankByMTime([]string{good, missing})
 	if len(ranked) != 1 {
-		t.Fatalf("Rank returned %d entries, want 1 (missing file should drop)", len(ranked))
+		t.Fatalf("RankByMTime returned %d entries, want 1 (missing dropped)", len(ranked))
 	}
-	if ranked[0].Path != p1 {
-		t.Errorf("only entry: got %q want %q", ranked[0].Path, p1)
+	if ranked[0].Path != good {
+		t.Errorf("surviving entry %q, want %q", ranked[0].Path, good)
+	}
+}
+
+func TestRankByMTimeEmpty(t *testing.T) {
+	if got := RankByMTime(nil); len(got) != 0 {
+		t.Errorf("RankByMTime(nil) returned %d entries, want 0", len(got))
+	}
+}
+
+func TestRankPathsByMTime(t *testing.T) {
+	dir := t.TempDir()
+	older := filepath.Join(dir, "older.md")
+	newer := filepath.Join(dir, "newer.md")
+	if err := os.WriteFile(older, []byte("# old"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(newer, []byte("# new"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	base := time.Date(2026, 6, 20, 12, 0, 0, 0, time.UTC)
+	chtime(t, older, base.Add(-2*time.Hour))
+	chtime(t, newer, base.Add(-1*time.Hour))
+
+	got := RankPathsByMTime([]string{older, newer})
+	want := []string{newer, older}
+	if len(got) != len(want) {
+		t.Fatalf("RankPathsByMTime len: got %d want %d", len(got), len(want))
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Errorf("RankPathsByMTime[%d]: got %q want %q", i, got[i], want[i])
+		}
+	}
+}
+
+func TestRankByVisitVisitedOnlyMostRecentFirst(t *testing.T) {
+	dir := t.TempDir()
+	a := filepath.Join(dir, "a.md")
+	b := filepath.Join(dir, "b.md")
+	unvisited := filepath.Join(dir, "c.md")
+	for _, p := range []string{a, b, unvisited} {
+		if err := os.WriteFile(p, []byte("# x"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	now := time.Date(2026, 6, 20, 12, 0, 0, 0, time.UTC)
+	s := &Store{visits: map[string]time.Time{}, nowFunc: func() time.Time { return now }}
+	s.visits[a] = now.Add(-2 * time.Hour)
+	s.visits[b] = now.Add(-1 * time.Hour) // more recent
+
+	ranked := s.RankByVisit([]string{a, b, unvisited})
+	if len(ranked) != 2 {
+		t.Fatalf("RankByVisit returned %d entries, want 2 (unvisited excluded)", len(ranked))
+	}
+	if ranked[0].Path != b {
+		t.Errorf("first entry %q, want %q (most recent visit)", ranked[0].Path, b)
+	}
+	if ranked[1].Path != a {
+		t.Errorf("second entry %q, want %q", ranked[1].Path, a)
+	}
+	for _, r := range ranked {
+		if r.Path == unvisited {
+			t.Errorf("unvisited file %q should be excluded", unvisited)
+		}
+		if r.Visit.IsZero() {
+			t.Errorf("ranked entry %q has zero Visit", r.Path)
+		}
+	}
+}
+
+func TestRankByVisitExcludesNeverVisited(t *testing.T) {
+	s := &Store{visits: map[string]time.Time{}, nowFunc: time.Now}
+	ranked := s.RankByVisit([]string{"/abs/never.md", "/abs/also.md"})
+	if len(ranked) != 0 {
+		t.Errorf("RankByVisit with no visits: got %d entries, want 0", len(ranked))
+	}
+}
+
+func TestRankByVisitEmpty(t *testing.T) {
+	s := &Store{visits: map[string]time.Time{}, nowFunc: time.Now}
+	if got := s.RankByVisit(nil); len(got) != 0 {
+		t.Errorf("RankByVisit(nil) returned %d entries, want 0", len(got))
+	}
+}
+
+// TestRankByVisitDoesNotRequireFileOnDisk documents that visit ordering is
+// purely about the recorded visit timestamp — it does not os.Stat the paths,
+// so a file that was visited and later deleted still appears (callers decide
+// whether to filter). This keeps visit-recency independent of the filesystem.
+func TestRankByVisitIncludesPathsWithoutStat(t *testing.T) {
+	now := time.Date(2026, 6, 20, 12, 0, 0, 0, time.UTC)
+	s := &Store{visits: map[string]time.Time{}, nowFunc: func() time.Time { return now }}
+	gone := "/nonexistent/gone.md"
+	s.visits[gone] = now.Add(-1 * time.Hour)
+
+	ranked := s.RankByVisit([]string{gone})
+	if len(ranked) != 1 || ranked[0].Path != gone {
+		t.Errorf("RankByVisit should include visited-but-missing path: got %v", ranked)
 	}
 }
 
@@ -158,10 +180,7 @@ func TestStoreRecordUpdatesVisitTime(t *testing.T) {
 	s := &Store{visits: map[string]time.Time{}, nowFunc: time.Now}
 	fixed := time.Date(2026, 5, 12, 12, 0, 0, 0, time.UTC)
 	s.nowFunc = func() time.Time { return fixed }
-
-	// Persistence checks land in Task 4; for now we only verify the
-	// in-memory map is updated.
-	s.stateFile = "" // explicit: persistence disabled
+	s.stateFile = "" // persistence disabled
 	if err := s.Record("/abs/path/x.md"); err != nil {
 		t.Fatalf("Record with empty stateFile: %v", err)
 	}
@@ -171,65 +190,6 @@ func TestStoreRecordUpdatesVisitTime(t *testing.T) {
 	}
 	if !got.Equal(fixed) {
 		t.Errorf("Record stored %v, want %v", got, fixed)
-	}
-}
-
-func TestRankPaths(t *testing.T) {
-	dir := t.TempDir()
-	p1 := filepath.Join(dir, "a.md")
-	p2 := filepath.Join(dir, "b.md")
-	if err := os.WriteFile(p1, []byte("# A"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(p2, []byte("# B"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-
-	s := &Store{visits: map[string]time.Time{}, nowFunc: time.Now}
-	now := time.Date(2026, 5, 12, 12, 0, 0, 0, time.UTC)
-	s.nowFunc = func() time.Time { return now }
-	s.visits[p1] = now.Add(-2 * time.Hour)
-	s.visits[p2] = now.Add(-1 * time.Hour)
-
-	paths := []string{p1, p2}
-
-	// RankPaths must return exactly Rank mapped to .Path, in the same order.
-	ranked := s.Rank(paths)
-	want := make([]string, len(ranked))
-	for i, r := range ranked {
-		want[i] = r.Path
-	}
-
-	got := s.RankPaths(paths)
-	if len(got) != len(want) {
-		t.Fatalf("RankPaths len: got %d want %d", len(got), len(want))
-	}
-	for i := range want {
-		if got[i] != want[i] {
-			t.Errorf("RankPaths[%d]: got %q want %q", i, got[i], want[i])
-		}
-	}
-}
-
-func TestRankPathsDropsMissing(t *testing.T) {
-	dir := t.TempDir()
-	p1 := filepath.Join(dir, "a.md")
-	pMissing := filepath.Join(dir, "missing.md")
-	if err := os.WriteFile(p1, []byte("# A"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	s := &Store{visits: map[string]time.Time{}, nowFunc: time.Now}
-	got := s.RankPaths([]string{p1, pMissing})
-	if len(got) != 1 || got[0] != p1 {
-		t.Errorf("RankPaths dropping missing: got %v want [%q]", got, p1)
-	}
-}
-
-func TestStoreRankEmpty(t *testing.T) {
-	s := &Store{visits: map[string]time.Time{}, nowFunc: time.Now}
-	ranked := s.Rank(nil)
-	if len(ranked) != 0 {
-		t.Errorf("Rank(nil) returned %d entries, want 0", len(ranked))
 	}
 }
 
@@ -255,7 +215,6 @@ func TestNewWithMissingFile(t *testing.T) {
 func TestRoundTrip(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "visits.json")
-	// Create a "vault" file so Rank has something stat-able.
 	vaultFile := filepath.Join(dir, "note.md")
 	if err := os.WriteFile(vaultFile, []byte("# N"), 0o644); err != nil {
 		t.Fatal(err)
@@ -269,7 +228,6 @@ func TestRoundTrip(t *testing.T) {
 		t.Fatalf("Record: %v", err)
 	}
 
-	// New Store loaded from same path should see the visit.
 	s2, err := New(path)
 	if err != nil {
 		t.Fatalf("re-load: %v", err)
@@ -326,7 +284,6 @@ func TestRecordWritesAtomically(t *testing.T) {
 		t.Fatalf("Record: %v", err)
 	}
 
-	// Real file exists, .tmp does not.
 	if _, err := os.Stat(path); err != nil {
 		t.Errorf("real visits.json missing: %v", err)
 	}
@@ -334,7 +291,6 @@ func TestRecordWritesAtomically(t *testing.T) {
 		t.Errorf("temp file should have been renamed away; stat err=%v", err)
 	}
 
-	// Content is well-formed JSON with our format.
 	data, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatal(err)

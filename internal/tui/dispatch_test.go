@@ -156,23 +156,22 @@ func TestOpenFileRecordsVisit(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Sanity: Recent rank before openFile shouldn't include p as visited.
-	pre := m.recent.Rank([]string{p})
-	if len(pre) != 1 {
-		t.Fatalf("pre Rank: got %d, want 1", len(pre))
-	}
-	if !pre[0].Visit.IsZero() {
-		t.Errorf("pre Rank: visit should be zero, got %v", pre[0].Visit)
+	// Before openFile, p has no recorded visit, so RankByVisit (visited-only)
+	// excludes it.
+	pre := m.recent.RankByVisit([]string{p})
+	if len(pre) != 0 {
+		t.Fatalf("pre RankByVisit: got %d, want 0 (unvisited excluded)", len(pre))
 	}
 
 	m.openFile(p)
 
-	post := m.recent.Rank([]string{p})
+	// After openFile, p has a recorded visit, so it appears.
+	post := m.recent.RankByVisit([]string{p})
 	if len(post) != 1 {
-		t.Fatalf("post Rank: got %d, want 1", len(post))
+		t.Fatalf("post RankByVisit: got %d, want 1", len(post))
 	}
 	if post[0].Visit.IsZero() {
-		t.Error("post Rank: visit should be non-zero after openFile")
+		t.Error("post RankByVisit: visit should be non-zero after openFile")
 	}
 }
 

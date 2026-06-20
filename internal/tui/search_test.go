@@ -24,6 +24,33 @@ func TestSearch_SlashOpensModal(t *testing.T) {
 	}
 }
 
+// TestSearch_ModalToggleKeyTypedIntoSearchFilters is the search-modal twin of
+// the picker's printable-keys-grab regression guard: pressing a key that is a
+// global modal toggle (`r` opens the recent modal, `b` the backlinks modal)
+// while the search modal is open must type into the query, NOT swap modals.
+func TestSearch_ModalToggleKeyTypedIntoSearchFilters(t *testing.T) {
+	for _, r := range []rune{'r', 'b'} {
+		t.Run(string(r), func(t *testing.T) {
+			dir := t.TempDir()
+			writePickerFile(t, filepath.Join(dir, "a.md"), "# A\n")
+			m := sized(t, dir, "")
+			m = pressRune(t, m, '/')
+			if m.modals.kind != modalSearch {
+				t.Fatalf("/ should open search, got %v", m.modals.kind)
+			}
+
+			m = pressRune(t, m, r)
+
+			if m.modals.kind != modalSearch {
+				t.Fatalf("typing %q in search swapped to modal kind %v; it must stay in search", r, m.modals.kind)
+			}
+			if got := m.modals.search.input.Value(); got != string(r) {
+				t.Errorf("search query after typing %q: got %q, want %q", r, got, string(r))
+			}
+		})
+	}
+}
+
 func TestSearch_TypingShortQueryDoesNotFire(t *testing.T) {
 	dir := t.TempDir()
 	writePickerFile(t, filepath.Join(dir, "a.md"), "# A\nfoobar\n")
@@ -194,7 +221,7 @@ func TestSearch_EnterNavigatesAndScrolls(t *testing.T) {
 	}
 }
 
-func TestSearch_RecencyRerank(t *testing.T) {
+func TestSearch_MTimeRerank(t *testing.T) {
 	dir := t.TempDir()
 	a := filepath.Join(dir, "a.md")
 	b := filepath.Join(dir, "b.md")
@@ -204,27 +231,27 @@ func TestSearch_RecencyRerank(t *testing.T) {
 	if err := os.WriteFile(b, []byte("bravo needle\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	m, err := New(dir, "")
-	if err != nil {
-		t.Fatalf("New: %v", err)
+	// Search re-rank is now edit-recency (mtime), not visit history: make a
+	// the most recently edited file so it ranks first regardless of visits.
+	base := time.Now()
+	if err := os.Chtimes(b, base.Add(-2*time.Hour), base.Add(-2*time.Hour)); err != nil {
+		t.Fatal(err)
 	}
-	// Visit b first so it scores higher in recency than a, then a so a
-	// is the most-recent — final order should put a first.
-	m.openFile(b)
-	time.Sleep(2 * time.Millisecond)
-	m.openFile(a)
+	if err := os.Chtimes(a, base.Add(-1*time.Hour), base.Add(-1*time.Hour)); err != nil {
+		t.Fatal(err)
+	}
 
-	// Synthesize search results in alphabetical input order: a, b.
+	// Synthesize search results in input order b, a to prove re-rank sorts.
 	hits := []search.Hit{
-		{Path: a, Line: 1, Snippet: "alpha \x11needle\x12"},
 		{Path: b, Line: 1, Snippet: "bravo \x11needle\x12"},
+		{Path: a, Line: 1, Snippet: "alpha \x11needle\x12"},
 	}
-	reranked := rerankByRecency(m.recent, hits)
+	reranked := rerankByMTime(hits)
 	if len(reranked) != 2 {
 		t.Fatalf("got %d hits, want 2", len(reranked))
 	}
 	if reranked[0].Path != a {
-		t.Errorf("reranked[0].Path = %q, want %q (most recent)", reranked[0].Path, a)
+		t.Errorf("reranked[0].Path = %q, want %q (most recently edited)", reranked[0].Path, a)
 	}
 }
 

@@ -57,30 +57,81 @@ func TestSearchNoResults(t *testing.T) {
 	}
 }
 
-func TestRecent(t *testing.T) {
+// recordVisit opens the store behind stateFileFn and records a visit to
+// path, then closes it (writing through to the temp state file). Recent then
+// reads the same persisted state. Used to seed visit history in tests since
+// Recent now reports visited-only.
+func recordVisit(t *testing.T, path string) {
+	t.Helper()
+	store, err := loadStore()
+	if err != nil || store == nil {
+		t.Fatalf("loadStore: %v", err)
+	}
+	if err := store.Record(path); err != nil {
+		t.Fatalf("Record: %v", err)
+	}
+}
+
+func TestRecentVisitedOnly(t *testing.T) {
 	dir := withTempStore(t)
-	if err := os.WriteFile(filepath.Join(dir, "a.md"), []byte("# a\n"), 0o644); err != nil {
-		t.Fatal(err)
+	a := filepath.Join(dir, "a.md")
+	b := filepath.Join(dir, "b.md")
+	unvisited := filepath.Join(dir, "c.md")
+	for _, p := range []string{a, b, unvisited} {
+		if err := os.WriteFile(p, []byte("# x\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
 	}
-	if err := os.WriteFile(filepath.Join(dir, "b.md"), []byte("# b\n"), 0o644); err != nil {
-		t.Fatal(err)
-	}
+
+	// Visit a then b → b is most recent, c is never opened.
+	recordVisit(t, a)
+	recordVisit(t, b)
 
 	got, err := Recent(dir, 10)
 	if err != nil {
 		t.Fatalf("Recent: %v", err)
 	}
 	if len(got) != 2 {
-		t.Fatalf("got %d entries, want 2", len(got))
+		t.Fatalf("got %d entries, want 2 (unvisited excluded): %+v", len(got), got)
+	}
+	if got[0].Path != b {
+		t.Errorf("first entry %q, want %q (most recent visit)", got[0].Path, b)
+	}
+	if got[1].Path != a {
+		t.Errorf("second entry %q, want %q", got[1].Path, a)
+	}
+	for _, e := range got {
+		if e.Path == unvisited {
+			t.Errorf("unvisited file %q should be excluded", unvisited)
+		}
+		if e.Visited.IsZero() {
+			t.Errorf("entry %q has zero Visited time", e.Path)
+		}
+	}
+}
+
+func TestRecentNoVisitsIsEmpty(t *testing.T) {
+	dir := withTempStore(t)
+	if err := os.WriteFile(filepath.Join(dir, "a.md"), []byte("# a\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	got, err := Recent(dir, 10)
+	if err != nil {
+		t.Fatalf("Recent: %v", err)
+	}
+	if len(got) != 0 {
+		t.Errorf("got %d entries, want 0 (nothing visited)", len(got))
 	}
 }
 
 func TestRecentRespectsMax(t *testing.T) {
 	dir := withTempStore(t)
 	for _, n := range []string{"a.md", "b.md", "c.md"} {
-		if err := os.WriteFile(filepath.Join(dir, n), []byte("# x\n"), 0o644); err != nil {
+		p := filepath.Join(dir, n)
+		if err := os.WriteFile(p, []byte("# x\n"), 0o644); err != nil {
 			t.Fatal(err)
 		}
+		recordVisit(t, p)
 	}
 	got, err := Recent(dir, 2)
 	if err != nil {

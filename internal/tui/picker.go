@@ -119,11 +119,9 @@ func (p *pickerState) renderRows() string {
 	for i := 0; i < visible; i++ {
 		r := p.ranked[i]
 		rel := relativeTo(p.root, r.Path)
-		recencyLabel, edited := pickRecencyLabel(now, r.MTime, r.Visit)
-		suffix := recencyLabel
-		if edited {
-			suffix += " · edited"
-		}
+		// The finder ranks by pure edit-recency, so the label always
+		// reflects mtime: "<when> · edited".
+		suffix := humanRecency(now, r.MTime) + " · edited"
 		pathDisplay := preTruncatePath(rel, suffix, width)
 		if p.input.Value() != "" {
 			pathDisplay = highlightMatch(pathDisplay, p.input.Value())
@@ -158,18 +156,6 @@ func relativeTo(root, p string) string {
 		return p
 	}
 	return rel
-}
-
-// pickRecencyLabel returns the human-friendly recency label and a flag
-// indicating whether the time used was mtime (true) or visit (false).
-func pickRecencyLabel(now, mtime, visit time.Time) (label string, isMTime bool) {
-	t := mtime
-	isMTime = true
-	if !visit.IsZero() && visit.After(mtime) {
-		t = visit
-		isMTime = false
-	}
-	return humanRecency(now, t), isMTime
 }
 
 // humanRecency formats a duration since t in one-glance form.

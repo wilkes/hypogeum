@@ -1,13 +1,21 @@
-// Package recent owns the persisted visit history and the recency-based
-// scoring used by the TUI picker. It depends only on the standard library
-// and knows nothing about the directory tree, vault, or UI — callers pass
-// in a slice of absolute paths and receive a sorted slice of Ranked entries.
+// Package recent owns the persisted visit history and the two independent
+// recency orderings hypogeum exposes: edit-recency (filesystem mtime, used by
+// the file finder and search re-rank) and visit-recency (last-opened time,
+// used by the "recently opened" modal and the CLI recent verb). It depends
+// only on the standard library and knows nothing about the directory tree,
+// vault, or UI — callers pass in a slice of absolute paths and receive a
+// sorted slice of Ranked entries.
+//
+// The two signals are deliberately *not* blended. Each ordering answers one
+// question with a plain descending sort on a single key:
+//   - RankByMTime  → "most recently edited first" (stateless, os.Stat-based).
+//   - RankByVisit  → "most recently opened first" (visited-only, from the
+//     persisted visit map).
 package recent
 
 import (
 	"encoding/json"
 	"fmt"
-	"math"
 	"os"
 	"path/filepath"
 	"sort"
@@ -15,54 +23,49 @@ import (
 	"time"
 )
 
-// Half-lives and weights for the hybrid score. Package-level constants
-// rather than configuration: tweaking is a one-line change, exposing
-// them as knobs is YAGNI.
-const (
-	// mtimeHalfLifeHours sets the decay rate of the filesystem-mtime
-	// score term. 168h = 7 days: a file edited 7 days ago scores half
-	// what a file edited just now scores from this term.
-	mtimeHalfLifeHours = 168.0
-
-	// visitHalfLifeHours sets the decay rate of the visit-history score
-	// term. 48h = 2 days: visits decay faster than edits because they
-	// reflect short-term attention rather than long-term relevance.
-	visitHalfLifeHours = 48.0
-
-	// visitWeight scales the visit-history term relative to the mtime
-	// term. <1 means an equally-aged edit outranks an equally-aged
-	// visit; visits still contribute positively, just at a reduced
-	// weight so they nudge ranking rather than dominate it.
-	visitWeight = 0.5
-)
-
-// score computes the exponential-decay hybrid score from mtime and visit times.
-func score(now, mtime, visit time.Time) float64 {
-	var s float64
-	if !mtime.IsZero() {
-		dtMtime := now.Sub(mtime).Hours()
-		if dtMtime < 0 {
-			dtMtime = 0
-		}
-		s += math.Exp(-dtMtime / mtimeHalfLifeHours)
-	}
-	// Zero visit time means "never visited" — contribute 0, not exp(huge).
-	if !visit.IsZero() {
-		dtVisit := now.Sub(visit).Hours()
-		if dtVisit < 0 {
-			dtVisit = 0
-		}
-		s += visitWeight * math.Exp(-dtVisit/visitHalfLifeHours)
-	}
-	return s
-}
-
-// Ranked carries one entry of the ordered Rank result.
+// Ranked carries one entry of an ordered ranking result. MTime is populated
+// by RankByMTime; Visit is populated by RankByVisit. Each ordering sorts on
+// its own field; there is no combined numeric score.
 type Ranked struct {
 	Path  string
-	Score float64
-	MTime time.Time // file modification time at the moment of Rank
-	Visit time.Time // last visit; zero if never visited
+	MTime time.Time // file modification time (RankByMTime); zero otherwise
+	Visit time.Time // last visit (RankByVisit); zero if never visited
+}
+
+// RankByMTime returns paths sorted by filesystem mtime, newest first. It is
+// stateless — no Store needed, because mtime lives on the filesystem. Paths
+// that fail os.Stat (missing/unreadable) are dropped silently. mtime isn't
+// cached because the watcher may have updated files since the last call.
+//
+// This is the edit-recency ordering used by the file finder (^p/o) and the
+// search-result re-rank: "jump to what I'm working on" is almost always the
+// most recently edited file.
+func RankByMTime(paths []string) []Ranked {
+	out := make([]Ranked, 0, len(paths))
+	for _, p := range paths {
+		info, err := os.Stat(p)
+		if err != nil {
+			continue
+		}
+		out = append(out, Ranked{Path: p, MTime: info.ModTime()})
+	}
+	sort.SliceStable(out, func(i, j int) bool {
+		return out[i].MTime.After(out[j].MTime)
+	})
+	return out
+}
+
+// RankPathsByMTime is RankByMTime reduced to just the ordered path slice.
+// It exists so callers that only need the ordering (the search re-rank, the
+// non-interactive query mode) don't each hand-roll the Rank → .Path map.
+// Same drop-missing-files semantics as RankByMTime.
+func RankPathsByMTime(paths []string) []string {
+	ranked := RankByMTime(paths)
+	out := make([]string, len(ranked))
+	for i, r := range ranked {
+		out[i] = r.Path
+	}
+	return out
 }
 
 // Store holds the persisted visit history and exposes scoring + ranking.
@@ -87,14 +90,21 @@ func (s *Store) Record(path string) error {
 	return s.saveLocked()
 }
 
-// Rank returns paths sorted by hybrid score (descending). os.Stat fails
-// drop the entry silently; mtime isn't cached because the watcher may
-// have updated files since the last call.
-func (s *Store) Rank(paths []string) []Ranked {
-	now := s.nowFunc()
-
-	// Snapshot visits before any I/O so the lock isn't held across
-	// os.Stat. Cheap in practice — the map is bounded by vault size.
+// RankByVisit returns the subset of paths that have a recorded visit, sorted
+// by visit time descending (most recently opened first). Paths never opened
+// in hypogeum are excluded entirely — this is the "recently opened" list, not
+// a recency score over the whole vault, so an unvisited file simply doesn't
+// appear.
+//
+// It does not os.Stat the paths: visit ordering is purely about the recorded
+// timestamp, so a file that was visited and later deleted still appears
+// (callers may filter on existence if they care). This keeps visit-recency
+// independent of the filesystem.
+//
+// This is the visit-recency ordering used by the "recently opened" modal (r)
+// and the CLI recent verb.
+func (s *Store) RankByVisit(paths []string) []Ranked {
+	// Snapshot visits so the lock isn't held across the sort.
 	s.mu.Lock()
 	visits := make(map[string]time.Time, len(s.visits))
 	for k, v := range s.visits {
@@ -104,35 +114,15 @@ func (s *Store) Rank(paths []string) []Ranked {
 
 	out := make([]Ranked, 0, len(paths))
 	for _, p := range paths {
-		info, err := os.Stat(p)
-		if err != nil {
+		visit, ok := visits[p]
+		if !ok || visit.IsZero() {
 			continue
 		}
-		mtime := info.ModTime()
-		visit := visits[p]
-		out = append(out, Ranked{
-			Path:  p,
-			Score: score(now, mtime, visit),
-			MTime: mtime,
-			Visit: visit,
-		})
+		out = append(out, Ranked{Path: p, Visit: visit})
 	}
 	sort.SliceStable(out, func(i, j int) bool {
-		return out[i].Score > out[j].Score
+		return out[i].Visit.After(out[j].Visit)
 	})
-	return out
-}
-
-// RankPaths is Rank reduced to just the ordered path slice. It exists so
-// callers that only need recency ordering (the TUI search modal, the
-// non-interactive query mode) don't each hand-roll the Rank → .Path map.
-// Same drop-missing-files semantics as Rank.
-func (s *Store) RankPaths(paths []string) []string {
-	ranked := s.Rank(paths)
-	out := make([]string, len(ranked))
-	for i, r := range ranked {
-		out[i] = r.Path
-	}
 	return out
 }
 

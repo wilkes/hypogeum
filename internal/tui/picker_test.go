@@ -141,31 +141,34 @@ func TestPickerEmptyVault(t *testing.T) {
 	_ = m
 }
 
-func TestPickerRecentVisitBoostsRank(t *testing.T) {
+// TestPickerRanksByMTime verifies the finder orders by pure edit-recency:
+// the most recently MODIFIED file ranks first, and a visit does NOT boost
+// rank (visit ordering now lives in the `r` recently-opened modal).
+func TestPickerRanksByMTime(t *testing.T) {
 	dir := t.TempDir()
 	p1 := filepath.Join(dir, "a.md")
 	p2 := filepath.Join(dir, "b.md")
 	writePickerFile(t, p1, "# A")
 	writePickerFile(t, p2, "# B")
-	// Make mtimes deliberately equal.
-	now := time.Now()
-	if err := os.Chtimes(p1, now, now); err != nil {
+	// p2 is the more recently edited file.
+	base := time.Now()
+	if err := os.Chtimes(p1, base.Add(-2*time.Hour), base.Add(-2*time.Hour)); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.Chtimes(p2, now, now); err != nil {
+	if err := os.Chtimes(p2, base.Add(-1*time.Hour), base.Add(-1*time.Hour)); err != nil {
 		t.Fatal(err)
 	}
 
 	m := sized(t, dir, "")
-	// Open p1 → its visit bumps its score above p2.
+	// Visit p1 — this must NOT change the finder's mtime ordering.
 	m.openFile(p1)
 
 	m = pressKey(t, m, tea.KeyMsg{Type: tea.KeyCtrlP})
 	if len(m.modals.picker.ranked) < 2 {
 		t.Fatalf("ranked: got %d, want >=2", len(m.modals.picker.ranked))
 	}
-	if got := m.modals.picker.ranked[0].Path; got != p1 {
-		t.Errorf("top of rank after visiting p1: got %q want %q", got, p1)
+	if got := m.modals.picker.ranked[0].Path; got != p2 {
+		t.Errorf("top of rank should be most recently edited p2, got %q (visit must not boost)", got)
 	}
 }
 

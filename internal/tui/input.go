@@ -235,11 +235,9 @@ func (m *Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		})
 	case key.Matches(msg, m.keys.OpenPicker):
 		return *m, m.openModalWith(modalPicker, func() {
-			paths := m.allVaultMarkdownPaths()
-			ranked := []recent.Ranked{}
-			if m.recent != nil {
-				ranked = m.recent.Rank(paths)
-			}
+			// Finder ranks by pure edit-recency (mtime); stateless, so no
+			// recent.Store needed.
+			ranked := recent.RankByMTime(m.allVaultMarkdownPaths())
 			m.modals.picker.reset(ranked, m.root)
 		})
 	case key.Matches(msg, m.keys.OpenSearch):
@@ -256,6 +254,11 @@ func (m *Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			} else {
 				m.refreshTreeVP()
 			}
+		})
+	case key.Matches(msg, m.keys.OpenRecentModal):
+		return *m, m.openModalWith(modalRecent, func() {
+			m.recentList.cursor = 0
+			m.refreshRecentModal()
 		})
 	}
 
@@ -370,6 +373,19 @@ func (m *Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			case key.Matches(msg, m.keys.Open):
 				m.followBacklink()
 				return *m, nil
+			}
+			// Fall through to viewport scroll for any other key.
+		}
+		if m.modals.kind == modalRecent {
+			switch {
+			case key.Matches(msg, m.keys.Down):
+				cursorMoveAndRefresh(&m.recentList.cursor, len(m.recentList.items), +1, m.renderRecentModal)
+				return *m, nil
+			case key.Matches(msg, m.keys.Up):
+				cursorMoveAndRefresh(&m.recentList.cursor, len(m.recentList.items), -1, m.renderRecentModal)
+				return *m, nil
+			case key.Matches(msg, m.keys.Open):
+				return *m, m.followRecent()
 			}
 			// Fall through to viewport scroll for any other key.
 		}
