@@ -174,6 +174,57 @@ func TestStoreRecordUpdatesVisitTime(t *testing.T) {
 	}
 }
 
+func TestRankPaths(t *testing.T) {
+	dir := t.TempDir()
+	p1 := filepath.Join(dir, "a.md")
+	p2 := filepath.Join(dir, "b.md")
+	if err := os.WriteFile(p1, []byte("# A"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(p2, []byte("# B"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	s := &Store{visits: map[string]time.Time{}, nowFunc: time.Now}
+	now := time.Date(2026, 5, 12, 12, 0, 0, 0, time.UTC)
+	s.nowFunc = func() time.Time { return now }
+	s.visits[p1] = now.Add(-2 * time.Hour)
+	s.visits[p2] = now.Add(-1 * time.Hour)
+
+	paths := []string{p1, p2}
+
+	// RankPaths must return exactly Rank mapped to .Path, in the same order.
+	ranked := s.Rank(paths)
+	want := make([]string, len(ranked))
+	for i, r := range ranked {
+		want[i] = r.Path
+	}
+
+	got := s.RankPaths(paths)
+	if len(got) != len(want) {
+		t.Fatalf("RankPaths len: got %d want %d", len(got), len(want))
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Errorf("RankPaths[%d]: got %q want %q", i, got[i], want[i])
+		}
+	}
+}
+
+func TestRankPathsDropsMissing(t *testing.T) {
+	dir := t.TempDir()
+	p1 := filepath.Join(dir, "a.md")
+	pMissing := filepath.Join(dir, "missing.md")
+	if err := os.WriteFile(p1, []byte("# A"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	s := &Store{visits: map[string]time.Time{}, nowFunc: time.Now}
+	got := s.RankPaths([]string{p1, pMissing})
+	if len(got) != 1 || got[0] != p1 {
+		t.Errorf("RankPaths dropping missing: got %v want [%q]", got, p1)
+	}
+}
+
 func TestStoreRankEmpty(t *testing.T) {
 	s := &Store{visits: map[string]time.Time{}, nowFunc: time.Now}
 	ranked := s.Rank(nil)
