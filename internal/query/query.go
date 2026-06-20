@@ -270,3 +270,63 @@ func Neighbors(root, file string) (Neighborhood, error) {
 	}
 	return n, nil
 }
+
+// GraphNode is one document in the vault graph.
+type GraphNode struct {
+	Path string `json:"path"`
+}
+
+// GraphEdge is one directed link from a vault file to a target. The target
+// may be another vault file (wikilink/relative), an external URL, or a
+// same-document anchor; broken internal links carry To:"" and Broken:true.
+type GraphEdge struct {
+	From   string `json:"from"`
+	To     string `json:"to"`
+	Kind   string `json:"kind"`
+	Broken bool   `json:"broken"`
+}
+
+// Graph is the whole-vault link graph: every markdown document as a node
+// (orphans included) and every link as a directed edge.
+type Graph struct {
+	Nodes []GraphNode `json:"nodes"`
+	Edges []GraphEdge `json:"edges"`
+}
+
+// linkToEdge re-shapes a classified Link into a graph edge. Internal links
+// (wikilink/relative) point at their resolved file path; external links and
+// anchors point at the raw target. This is a pure re-shape of outboundLinks'
+// output — no new classification logic.
+func linkToEdge(from string, l Link) GraphEdge {
+	to := l.Target
+	if l.Kind == "wikilink" || l.Kind == "relative" {
+		to = l.Path // "" when broken, matching l.Broken
+	}
+	return GraphEdge{From: from, To: to, Kind: l.Kind, Broken: l.Broken}
+}
+
+// GraphFor returns the whole-vault link graph rooted at root. Nodes are every
+// indexed markdown file sorted by path (orphans included); edges are grouped
+// by source file (sorted) preserving each file's document order. It builds the
+// full forward graph via vault.Build — not the OutboundFor fast path, which
+// parses a single file — because a graph needs every file's edges.
+//
+// Named GraphFor to avoid colliding with the Graph result type in this package.
+func GraphFor(root string) (Graph, error) {
+	v, err := vault.Build(root, vault.NopDiagnostics{})
+	if err != nil {
+		return Graph{}, err
+	}
+	files := v.Files() // already sorted ascending
+	g := Graph{
+		Nodes: make([]GraphNode, 0, len(files)),
+		Edges: make([]GraphEdge, 0, len(files)),
+	}
+	for _, f := range files {
+		g.Nodes = append(g.Nodes, GraphNode{Path: f})
+		for _, l := range outboundLinks(v.Outbound(f), f) {
+			g.Edges = append(g.Edges, linkToEdge(f, l))
+		}
+	}
+	return g, nil
+}
