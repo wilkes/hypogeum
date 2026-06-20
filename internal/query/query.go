@@ -6,13 +6,12 @@ package query
 import (
 	"context"
 	"fmt"
-	"net/url"
 	"os"
 	"path/filepath"
-	"strings"
 	"time"
 
 	"github.com/wilkes/hypogeum/internal/highlight"
+	"github.com/wilkes/hypogeum/internal/markdown"
 	"github.com/wilkes/hypogeum/internal/recent"
 	"github.com/wilkes/hypogeum/internal/search"
 	"github.com/wilkes/hypogeum/internal/tree"
@@ -23,8 +22,17 @@ import (
 // so they never touch the real on-disk state.
 var stateFileFn = recent.DefaultStateFile
 
-// loadStore opens the persisted recency store. Returns (nil, err) on a
-// hard failure; callers decide whether to degrade or surface the error.
+// loadStore opens the persisted recency store.
+//
+// Contract: recent.New returns a USABLE (non-nil) Store even when the
+// state file is malformed or carries an unknown version — the visit map
+// is simply empty, but the store can still rank by filesystem mtime. We
+// preserve that here: a non-nil store is always returned for callers to
+// use, and any error is surfaced *alongside* it as a diagnostic rather
+// than a fatal signal. Callers should prefer graceful degradation (use
+// the store, ignore the error) over hard-failing — both the `search` and
+// `recent` verbs do. Only a nil store (the stateFileFn failure path) is
+// truly unusable.
 func loadStore() (*recent.Store, error) {
 	sf, err := stateFileFn()
 	if err != nil {
@@ -34,10 +42,10 @@ func loadStore() (*recent.Store, error) {
 }
 
 // sanitizeSnippet strips the highlight control chars search embeds so the
-// JSON output is clean text.
+// JSON output is clean text. It is a thin alias for highlight.Strip kept
+// for call-site readability at the query layer.
 func sanitizeSnippet(s string) string {
-	s = strings.ReplaceAll(s, highlight.Open, "")
-	return strings.ReplaceAll(s, highlight.Close, "")
+	return highlight.Strip(s)
 }
 
 // SearchHit is one full-text match.
@@ -62,16 +70,12 @@ func Search(root, term string, max int) ([]SearchHit, error) {
 		return nil, err
 	}
 
+	// A non-nil store is always usable for ranking even if loadStore also
+	// returned a diagnostic error (malformed/old state file) — it ranks by
+	// mtime with an empty visit map. Only a nil store leaves hits unranked.
 	var order func([]string) []string
-	if store, serr := loadStore(); serr == nil && store != nil {
-		order = func(ps []string) []string {
-			ranked := store.Rank(ps)
-			out := make([]string, len(ranked))
-			for i, r := range ranked {
-				out[i] = r.Path
-			}
-			return out
-		}
+	if store, _ := loadStore(); store != nil {
+		order = store.RankPaths
 	}
 	hits = search.RerankByRecency(order, hits)
 	if max > 0 && len(hits) > max {
@@ -104,8 +108,11 @@ func Recent(root string, max int) ([]RecentEntry, error) {
 	if err != nil {
 		return nil, err
 	}
+	// Degrade gracefully, matching Search: a malformed/old state file still
+	// yields a usable (non-nil) store that ranks by mtime, so we only fail
+	// when the store itself is nil (the stateFileFn failure path).
 	store, err := loadStore()
-	if err != nil {
+	if store == nil {
 		return nil, err
 	}
 	ranked := store.Rank(paths)
@@ -129,7 +136,7 @@ type Link struct {
 	Text   string `json:"text"`
 	Target string `json:"target"`
 	Path   string `json:"path"`
-	Kind   string `json:"kind"` // wikilink | relative | external
+	Kind   string `json:"kind"` // wikilink | relative | external | anchor
 	Broken bool   `json:"broken"`
 }
 
@@ -150,43 +157,50 @@ type Neighborhood struct {
 	Backlinks []BacklinkEntry `json:"backlinks"`
 }
 
-// isExternalURL reports whether target is an http/https URL.
-func isExternalURL(target string) bool {
-	u, err := url.Parse(target)
-	return err == nil && (u.Scheme == "http" || u.Scheme == "https")
-}
-
 // outboundLinks maps a vault file's outbound references into Link values.
+//
+// Std-link classification is delegated to markdown.ResolveLink — the single
+// source of truth shared with the vault and TUI — so non-http schemes
+// (mailto:, ftp:, protocol-relative, etc.) are recognized as external and
+// same-document #anchor targets get their own kind instead of being
+// mis-classified as broken relative links.
 //
 // Broken-ness is determined here, not in the vault accessor:
 //   - wikilink: broken when the vault left Resolved empty (existence-based
 //     via the names index, so Resolved already implies the file exists).
-//   - relative: the vault computes Resolved by pure path math without
-//     checking existence, so we os.Stat it. A missing target is broken and
+//   - relative (LinkLocalFile): the vault computes Resolved by pure path
+//     math without checking existence, so we os.Stat it via the shared
+//     markdown.IsBrokenLocalLink primitive. A missing target is broken and
 //     reports an empty Path (matching the spec's broken-relative example).
-//   - external: never broken (we do not probe URLs).
+//   - external / anchor: never broken (we do not probe URLs, and an anchor
+//     is intra-document).
 func outboundLinks(v *vault.Vault, abs string) []Link {
 	refs := v.Outbound(abs)
 	out := make([]Link, 0, len(refs))
 	for _, r := range refs {
-		l := Link{
-			Text: r.DisplayText,
-			Path: r.Resolved,
+		if r.Kind == vault.OutboundWikilink {
+			out = append(out, Link{
+				Text:   r.DisplayText,
+				Path:   r.Resolved,
+				Kind:   "wikilink",
+				Target: "[[" + r.RawTarget + "]]",
+				Broken: r.Resolved == "",
+			})
+			continue
 		}
-		switch {
-		case r.Kind == vault.OutboundWikilink:
-			l.Kind = "wikilink"
-			l.Target = "[[" + r.RawTarget + "]]"
-			l.Broken = r.Resolved == ""
-		case isExternalURL(r.RawTarget):
+
+		// Standard markdown link: classify the raw href once via the
+		// shared markdown resolver.
+		l := Link{Text: r.DisplayText, Target: r.RawTarget}
+		switch resolved := markdown.ResolveLink(abs, r.RawTarget); resolved.Kind {
+		case markdown.LinkExternal:
 			l.Kind = "external"
-			l.Target = r.RawTarget
-			l.Path = ""
-			l.Broken = false
-		default:
+		case markdown.LinkAnchor:
+			l.Kind = "anchor"
+		default: // LinkLocalFile / LinkInvalid
 			l.Kind = "relative"
-			l.Target = r.RawTarget
-			if r.Resolved == "" || !fileExists(r.Resolved) {
+			l.Path = resolved.Target
+			if markdown.IsBrokenLocalLink(resolved.Target) {
 				l.Path = ""
 				l.Broken = true
 			}
@@ -196,17 +210,19 @@ func outboundLinks(v *vault.Vault, abs string) []Link {
 	return out
 }
 
-// fileExists reports whether path names an existing entry on disk.
-func fileExists(path string) bool {
-	_, err := os.Stat(path)
-	return err == nil
-}
-
-// mustExist returns an absolute path for file, or an error if file does
-// not exist on disk. A missing file argument is an operational failure
+// mustExist resolves file against the vault root and returns an absolute
+// path, or an error if file does not exist on disk. A relative file
+// argument is resolved relative to root (the --vault directory), NOT the
+// process cwd — the vault index is keyed by paths under root, so resolving
+// against cwd would silently miss every link for a file whose cwd-relative
+// path isn't a vault key. A missing file argument is an operational failure
 // (exit 1), distinct from a file that simply has zero links.
-func mustExist(file string) (string, error) {
-	abs, err := filepath.Abs(file)
+func mustExist(root, file string) (string, error) {
+	abs := file
+	if !filepath.IsAbs(abs) {
+		abs = filepath.Join(root, file)
+	}
+	abs, err := filepath.Abs(abs)
 	if err != nil {
 		return "", err
 	}
@@ -218,7 +234,7 @@ func mustExist(file string) (string, error) {
 
 // Links returns the outbound edges from file within the vault at root.
 func Links(root, file string) ([]Link, error) {
-	abs, err := mustExist(file)
+	abs, err := mustExist(root, file)
 	if err != nil {
 		return nil, err
 	}
@@ -231,7 +247,7 @@ func Links(root, file string) ([]Link, error) {
 
 // Neighbors returns file's outbound links and its backlinks.
 func Neighbors(root, file string) (Neighborhood, error) {
-	abs, err := mustExist(file)
+	abs, err := mustExist(root, file)
 	if err != nil {
 		return Neighborhood{}, err
 	}
@@ -239,9 +255,13 @@ func Neighbors(root, file string) (Neighborhood, error) {
 	if err != nil {
 		return Neighborhood{}, err
 	}
+	// Outbound is always non-nil (outboundLinks returns a made slice);
+	// Backlinks is init'd up-front so JSON emits [] not null even with
+	// zero backlinks (matching tree.MarkdownFiles' init-then-append style).
 	n := Neighborhood{
-		File:     abs,
-		Outbound: outboundLinks(v, abs),
+		File:      abs,
+		Outbound:  outboundLinks(v, abs),
+		Backlinks: []BacklinkEntry{},
 	}
 	for _, b := range v.Backlinks(abs) {
 		n.Backlinks = append(n.Backlinks, BacklinkEntry{
@@ -250,12 +270,6 @@ func Neighbors(root, file string) (Neighborhood, error) {
 			Snippet: sanitizeSnippet(b.Snippet),
 			Text:    b.DisplayText,
 		})
-	}
-	if n.Backlinks == nil {
-		n.Backlinks = []BacklinkEntry{}
-	}
-	if n.Outbound == nil {
-		n.Outbound = []Link{}
 	}
 	return n, nil
 }

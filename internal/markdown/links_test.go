@@ -1,6 +1,8 @@
 package markdown
 
 import (
+	"os"
+	"path/filepath"
 	"reflect"
 	"testing"
 )
@@ -110,5 +112,23 @@ func TestResolveLink_NonLineFragmentIsStillAnchor(t *testing.T) {
 	}
 	if got.Anchor != "some-heading" {
 		t.Fatalf("anchor = %q", got.Anchor)
+	}
+}
+
+func TestIsBrokenLocalLink(t *testing.T) {
+	dir := t.TempDir()
+	existing := filepath.Join(dir, "exists.md")
+	if err := os.WriteFile(existing, []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	if IsBrokenLocalLink(existing) {
+		t.Errorf("existing file reported broken")
+	}
+	if !IsBrokenLocalLink(filepath.Join(dir, "ghost.md")) {
+		t.Errorf("missing file reported not-broken")
+	}
+	if !IsBrokenLocalLink("") {
+		t.Errorf("empty path reported not-broken")
 	}
 }
