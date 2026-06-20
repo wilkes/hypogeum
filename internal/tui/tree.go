@@ -2,6 +2,7 @@ package tui
 
 import (
 	"path/filepath"
+	"strings"
 
 	"github.com/wilkes/hypogeum/internal/tree"
 )
@@ -113,15 +114,45 @@ func (m *Model) isExpanded(n *tree.Node) bool {
 	return m.tree.expanded[n.Path]
 }
 
-// firstTopLevelFile returns the first non-directory child of root, or nil if
-// every top-level entry is a directory. Used to pick the landing file so that
-// users see something at the top of the tree rather than the deepest leaf.
+// firstTopLevelFile picks the landing file from root's direct children,
+// preferring a conventional overview file over alphabetical order. It scans
+// the top level only (never descending into subdirectories) in three passes:
+//
+//  1. the first child whose basename stem equals "index" (case-insensitive),
+//  2. else the first whose stem equals "readme" (case-insensitive),
+//  3. else the first non-directory child (the historical fallback).
+//
+// Returns nil if every top-level entry is a directory. The tree walker has
+// already filtered to markdown files, so this matches on the stem alone and
+// does not filter by extension. Among multiple matches the existing
+// (alphabetical) child order decides — no special tie-breaking.
 func firstTopLevelFile(root *tree.Node) *tree.Node {
 	if root == nil {
 		return nil
 	}
+	if n := firstTopLevelStem(root, "index"); n != nil {
+		return n
+	}
+	if n := firstTopLevelStem(root, "readme"); n != nil {
+		return n
+	}
 	for _, c := range root.Children {
 		if !c.IsDir {
+			return c
+		}
+	}
+	return nil
+}
+
+// firstTopLevelStem returns the first non-directory child of root whose
+// basename stem (filename minus extension) case-insensitively equals stem,
+// or nil if there is none.
+func firstTopLevelStem(root *tree.Node, stem string) *tree.Node {
+	for _, c := range root.Children {
+		if c.IsDir {
+			continue
+		}
+		if strings.ToLower(strings.TrimSuffix(c.Name, filepath.Ext(c.Name))) == stem {
 			return c
 		}
 	}
