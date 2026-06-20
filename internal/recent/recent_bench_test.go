@@ -8,7 +8,18 @@ import (
 	"github.com/wilkes/hypogeum/internal/recent"
 )
 
-func BenchmarkRank(b *testing.B) {
+func BenchmarkRankByMTime(b *testing.B) {
+	for _, n := range []int{10, 100, 1000} {
+		b.Run(fmt.Sprintf("N=%d", n), func(b *testing.B) {
+			c := benchcorpus.Generate(b.TempDir(), 7, n, 0)
+			for b.Loop() {
+				_ = recent.RankByMTime(c.Files)
+			}
+		})
+	}
+}
+
+func BenchmarkRankByVisit(b *testing.B) {
 	for _, n := range []int{10, 100, 1000} {
 		b.Run(fmt.Sprintf("N=%d", n), func(b *testing.B) {
 			c := benchcorpus.Generate(b.TempDir(), 7, n, 0)
@@ -22,7 +33,7 @@ func BenchmarkRank(b *testing.B) {
 				}
 			}
 			for b.Loop() {
-				_ = store.Rank(c.Files)
+				_ = store.RankByVisit(c.Files)
 			}
 		})
 	}
