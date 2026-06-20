@@ -91,7 +91,7 @@ func linkZoneID(i int) string {
 	return fmt.Sprintf("link:%d", i)
 }
 
-// linkZoneMarker is the markdown.LinkMarker passed into RenderWithLinks.
+// linkZoneMarker is the markdown.LinkMarker passed into RenderDocument.
 // It returns the bubblezone open/close sentinel pair for the i-th link
 // so a click on rendered link text can be matched to the link index
 // without coordinate math.
