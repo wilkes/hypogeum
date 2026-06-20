@@ -1316,3 +1316,48 @@ git commit -m "docs: document scriptable query mode"
 - `stateFileFn` / `sanitizeSnippet` defined Task 4, reused Task 5. ✓
 
 **Note on neighbors `outbound` shape:** the design's neighbors example omitted the `target` field; the plan reuses the full `Link` struct (superset, includes `target`) for DRY. This is an intentional, additive deviation — more information, same parser-friendly shape.
+
+---
+
+## Post-merge review follow-ups (2026-06-20)
+
+A high-effort review of the merged feature (`c19b3e7~1..HEAD`) found one real correctness bug, three contract/consistency issues, and a cluster of coupling/cohesion cleanups. The work is otherwise sound: builds clean, `go vet` clean, `go test -race ./...` clean, no CLAUDE.md violations, and the core extractions (`RerankByRecency`, `SearchAll`, the wikilink `Pos` line fix) are good seams. Findings are being addressed across four PRs, grouped by package cohesion so the independent ones land in parallel.
+
+### Findings
+
+**Correctness**
+
+1. **`-n` / `--vault` silently ignored after a positional arg** — `cmd/hypogeum/query.go:95`. Go's `flag` stops parsing at the first non-flag token, so `hypogeum search "term" -n 5` returns up to 50 results (default), not 5; `links file --vault dir` ignores `--vault`. The README documents exactly these broken forms. *Fix: separate flags from positionals before parsing (or reorder argv); add tests with flags after the positional.* **(PR B)**
+
+2. **Relative file arg + a different `--vault` → silent empty result** — `internal/query/query.go:575`. `mustExist` resolves the file via `filepath.Abs` against cwd, but the vault is built from `--vault`; a cwd-abs path that isn't a vault key yields `[]` (exit 0) for a file that has links. *Fix: resolve the file relative to the vault root, or verify it is under root and error otherwise.* **(PR D)**
+
+3. **`search` degrades on a corrupt recency store; `recent` hard-fails** — `internal/query/query.go:433` vs `:474`. Asymmetric handling of the same `loadStore` error. *Fix: pick one contract — graceful-degrade-with-stderr-note matches the project's best-effort posture.* **(PR D)**
+
+4. **`mailto:` / `ftp:` / anchor links reported as broken `relative`** — `internal/query/query.go:548`. `isExternalURL` only recognizes http/https, so other schemes fall into the relative branch, get `os.Stat`'d, and come back `broken:true`. Symptom of #6. *Fix: recognize any non-empty/non-`file` scheme as external and treat `#anchor`-only targets as their own kind.* **(PR D)**
+
+**Coupling & cohesion**
+
+5. **Recency `order` closure duplicated byte-for-byte** — `internal/query/query.go:433` ↔ `internal/tui/search.go:269`. The `store → ordered-paths` adapter didn't come along when `RerankByRecency` was extracted. *Fix: add `func (s *Store) RankPaths(paths []string) []string` to `internal/recent`; both call sites collapse to one line.* **(PR C library + PR D consumer)**
+
+6. **Link taxonomy decided in 4 places** — `markdown.ResolveLink`, `vault.resolveStdLink`, `tui.openExternalURL`, `query.isExternalURL` — and they disagree on non-http schemes (that disagreement is #4). *Fix: make one layer the single classifier and have `query` consume its verdict instead of re-parsing `RawTarget`.* **(PR D)**
+
+7. **Broken-local-link detection duplicates the TUI broken-link tally** — `internal/query/query.go:556` vs `internal/tui/content.go`. Same walk → keep local-file targets → `os.Stat` → mark broken, in two packages; they can drift. *Fix: one shared broken-local-link primitive both consume.* **(PR D)**
+
+8. **`SearchAll` copy-pastes `Search`'s worker-pool fan-out** — `internal/search/searchall.go:910`. ~30 lines duplicated; the only real difference is policy (cap-and-early-stop vs collect-and-sort). *Fix: extract a private `scan(ctx, paths, query, onHit func(Hit) bool)` core; `Search`/`SearchAll` become thin wrappers. (Also: `SearchAll` returns its partial slice unsorted on ctx cancellation — sort or document.)* **(PR A)**
+
+**Minor cleanups**
+
+9. **Add `highlight.Strip` next to `highlight.Wrap`** — `internal/query/query.go:405`. `sanitizeSnippet` hand-strips the `\x11`/`\x12` markers; the TUI strips them elsewhere too. The `highlight` package owns the wire format but only exposes `Wrap`. *Fix: add `Strip`, route both consumers through it.* **(PR C library + PR D consumer)**
+
+10. **Dead code + inconsistent nil-handling in `Neighbors`** — `internal/query/query.go:621,624` (the `n.Outbound == nil` guard can never fire — `outboundLinks` always returns non-nil), divergent nil-normalization style vs `tree.MarkdownFiles`, and `-n` registered-but-ignored for `links`/`neighbors`. *Fix: drop the dead guard, normalize consistently, and only register `-n` for `search`/`recent`.* **(PR B + PR D)**
+
+### PR grouping
+
+| PR | Branch | Findings | Files |
+|----|--------|----------|-------|
+| **A** | `refactor/search-scan-core` | #8 | `internal/search/` |
+| **B** | `fix/query-cli-flags` | #1, #10 (`-n` registration) | `cmd/hypogeum/query.go` |
+| **C** | `refactor/shared-query-helpers` | #5 (library), #9 (library) | `internal/recent/`, `internal/highlight/`, `internal/tui/{search,backlinks}.go` |
+| **D** | `fix/query-robustness-and-taxonomy` | #2, #3, #4, #6, #7, #10 (cleanup), consume #5/#9 | `internal/query/query.go`, `internal/tui/content.go`, `internal/markdown/` |
+
+A/B/C touch disjoint files and run in parallel; D stacks on C (it consumes `recent.RankPaths` and `highlight.Strip`).
