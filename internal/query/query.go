@@ -5,6 +5,10 @@ package query
 
 import (
 	"context"
+	"fmt"
+	"net/url"
+	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -12,6 +16,7 @@ import (
 	"github.com/wilkes/hypogeum/internal/recent"
 	"github.com/wilkes/hypogeum/internal/search"
 	"github.com/wilkes/hypogeum/internal/tree"
+	"github.com/wilkes/hypogeum/internal/vault"
 )
 
 // stateFileFn resolves the recent-visit state file. Overridable in tests
@@ -112,4 +117,138 @@ func Recent(root string, max int) ([]RecentEntry, error) {
 		})
 	}
 	return out, nil
+}
+
+// Link is one outbound edge from a file.
+type Link struct {
+	Text   string `json:"text"`
+	Target string `json:"target"`
+	Path   string `json:"path"`
+	Kind   string `json:"kind"` // wikilink | relative | external
+	Broken bool   `json:"broken"`
+}
+
+// BacklinkEntry is one reference into a file.
+type BacklinkEntry struct {
+	Path    string `json:"path"`
+	Line    int    `json:"line"`
+	Snippet string `json:"snippet"`
+	Text    string `json:"text"`
+}
+
+// neighbors is a file's 1-hop context bundle.
+type neighbors struct {
+	File      string          `json:"file"`
+	Outbound  []Link          `json:"outbound"`
+	Backlinks []BacklinkEntry `json:"backlinks"`
+}
+
+// isExternalURL reports whether target is an http/https URL.
+func isExternalURL(target string) bool {
+	u, err := url.Parse(target)
+	return err == nil && (u.Scheme == "http" || u.Scheme == "https")
+}
+
+// outboundLinks maps a vault file's outbound references into Link values.
+//
+// Broken-ness is determined here, not in the vault accessor:
+//   - wikilink: broken when the vault left Resolved empty (existence-based
+//     via the names index, so Resolved already implies the file exists).
+//   - relative: the vault computes Resolved by pure path math without
+//     checking existence, so we os.Stat it. A missing target is broken and
+//     reports an empty Path (matching the spec's broken-relative example).
+//   - external: never broken (we do not probe URLs).
+func outboundLinks(v *vault.Vault, abs string) []Link {
+	refs := v.Outbound(abs)
+	out := make([]Link, 0, len(refs))
+	for _, r := range refs {
+		l := Link{
+			Text: r.DisplayText,
+			Path: r.Resolved,
+		}
+		switch {
+		case r.Kind == vault.OutboundWikilink:
+			l.Kind = "wikilink"
+			l.Target = "[[" + r.RawTarget + "]]"
+			l.Broken = r.Resolved == ""
+		case isExternalURL(r.RawTarget):
+			l.Kind = "external"
+			l.Target = r.RawTarget
+			l.Path = ""
+			l.Broken = false
+		default:
+			l.Kind = "relative"
+			l.Target = r.RawTarget
+			if r.Resolved == "" || !fileExists(r.Resolved) {
+				l.Path = ""
+				l.Broken = true
+			}
+		}
+		out = append(out, l)
+	}
+	return out
+}
+
+// fileExists reports whether path names an existing entry on disk.
+func fileExists(path string) bool {
+	_, err := os.Stat(path)
+	return err == nil
+}
+
+// mustExist returns an absolute path for file, or an error if file does
+// not exist on disk. A missing file argument is an operational failure
+// (exit 1), distinct from a file that simply has zero links.
+func mustExist(file string) (string, error) {
+	abs, err := filepath.Abs(file)
+	if err != nil {
+		return "", err
+	}
+	if _, err := os.Stat(abs); err != nil {
+		return "", fmt.Errorf("file not found: %s", file)
+	}
+	return abs, nil
+}
+
+// Links returns the outbound edges from file within the vault at root.
+func Links(root, file string) ([]Link, error) {
+	abs, err := mustExist(file)
+	if err != nil {
+		return nil, err
+	}
+	v, err := vault.Build(root, vault.NopDiagnostics{})
+	if err != nil {
+		return nil, err
+	}
+	return outboundLinks(v, abs), nil
+}
+
+// Neighbors returns file's outbound links and its backlinks.
+func Neighbors(root, file string) (neighbors, error) {
+	abs, err := mustExist(file)
+	if err != nil {
+		return neighbors{}, err
+	}
+	v, err := vault.Build(root, vault.NopDiagnostics{})
+	if err != nil {
+		return neighbors{}, err
+	}
+	n := neighbors{
+		File:     abs,
+		Outbound: outboundLinks(v, abs),
+	}
+	for _, b := range v.Backlinks(abs) {
+		n.Backlinks = append(n.Backlinks, BacklinkEntry{
+			Path:    b.SourceFile,
+			Line:    b.Line + 1,
+			Snippet: sanitizeSnippet(b.Snippet),
+			Text:    b.DisplayText,
+		})
+	}
+	if n.Backlinks == nil {
+		n.Backlinks = []BacklinkEntry{}
+	}
+	if n.Outbound == nil {
+		n.Outbound = []Link{}
+	}
+	return n, nil
 }
