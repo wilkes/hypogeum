@@ -204,34 +204,44 @@ felt bottleneck.
 ## CLI command cold-start (`hypogeum search|recent|links|neighbors`)
 
 The non-interactive query verbs are not benchmarked at the Go level — their *work* is already
-covered one layer down (`query.Search`→`search.SearchAll`, `query.Links`/`Neighbors`→
-`vault.Build`, `query.Recent`→`recent.Rank`), and the wrappers add nothing (`Neighbors` builds
-the vault once and reads `Outbound`/`Backlinks` in memory — no double-parse). What package
-benchmarks *can't* see is the process-level cost, measured here by timing the built binary
-(30 runs, median) against `docs/` (68 small files):
+covered one layer down (`query.Search`→`search.SearchAll`, `query.Recent`→`recent.Rank`,
+`query.Neighbors`→`vault.Build`, `query.Links`→`vault.OutboundFor`). What package benchmarks
+*can't* see is the process-level cost, measured here by timing the built binary (50 runs,
+median, valid-JSON-asserted) against `docs/` (68 small files):
 
-| Invocation | Median | Above startup floor |
-|------------|--------|---------------------|
-| `--version` (startup floor) | 24.2 ms | — (process spawn + Go runtime init) |
-| `links` / `neighbors` | ~24 ms | **~0** (a 68-file `vault.Build` is sub-ms post-#82) |
-| `recent` | 31.9 ms | ~8 ms |
-| `search` | 33.8 ms | ~10 ms |
+| Invocation | Median | Above floor | What it does |
+|------------|--------|-------------|--------------|
+| `--version` (startup floor) | 23.7 ms | — | process spawn + Go runtime init |
+| `links` | 25.1 ms | **+1.4 ms** | fast path (#86): filename walk + parse one file |
+| `recent` | 32.5 ms | +8.9 ms | filename walk + `os.Stat` each + persisted visits |
+| `search` | 33.7 ms | +10.0 ms | read every file's content |
+| `neighbors` | 35.3 ms | +11.7 ms | full `vault.Build` (backlinks are global) |
+
+> Earlier numbers in this section's first draft accidentally timed an error path — `--vault docs`
+> resolves the file arg *relative to the vault root*, so `links --vault docs docs/architecture.md`
+> doubles to a non-existent path and exits fast. The correct form is `… --vault docs architecture.md`.
+> The table above is the corrected measurement.
 
 Two things define CLI latency, and neither is a package-benchmark target:
 
-- **A ~24 ms fixed floor** — process spawn + Go runtime init, paid by every invocation. On a
-  small vault the commands are startup-bound (`links`/`neighbors` don't even clear the floor);
-  you can't beat it from a cold binary, so there's nothing to optimize there.
-- **Cold rebuild on every call.** Unlike the TUI (which builds the vault once and reuses it all
-  session), each CLI invocation starts from zero. So at scale, per-call latency ≈ the package
-  benchmark for that op: `search` over 100k files ≈ 1.6 s *every time*; `links`/`neighbors` ≈ a
-  full `vault.Build` (~8 s at 100k). Scripting these in a loop over a large vault is the one
-  place this bites.
+- **A ~24 ms fixed floor** — process spawn + Go runtime init, paid by every invocation. You can't
+  beat it from a cold binary; the only escape is not spawning per query (a warm `serve` daemon —
+  big architectural step, only worth it under a tight query loop).
+- **Cold rebuild on every call** — but *how much* rebuild differs sharply by verb, because each
+  needs a different slice of the vault (this is why `links` got its own fast path in #86):
+  - **`links`** needs only the target file's parse + the name index (a filename-only walk) →
+    `OutboundFor`, **no content reads of other files**. Near-floor here; ~the `tree.Walk` cost at
+    scale (~170 ms at 100k, vs a full build's ~8 s).
+  - **`recent`** needs filenames + `os.Stat` + the persisted `visits.json` — no build, no content.
+  - **`search`** must read every file's content; **`neighbors`** must build the whole graph
+    (backlinks ask "who links *to* me"). These two are irreducible without a persisted index, and
+    at 100k files each call pays ≈ the package benchmark (`search` ~1.6 s, `neighbors` ~8 s) *every
+    time*.
 
-The fix for the large-vault case is the **persisted on-disk index** noted below — load instead
-of rebuild. It's the only lever that helps the CLI specifically: fs-event freshness can't,
-because no process is alive between invocations to receive the events. Still YAGNI below ~10k
-files, where the ~24 ms floor dominates anyway.
+The fix for the two irreducible verbs at scale is the **persisted on-disk index** noted below —
+load instead of rebuild. It's the only lever that helps the CLI specifically: fs-event freshness
+can't, because no process is alive between invocations to receive the events. Still YAGNI below
+~10k files, where the ~24 ms floor dominates anyway.
 
 **Follow-up candidates (separate branches, justified by benchstat):**
 
