@@ -19,6 +19,10 @@ type wikilinkNode struct {
 	Heading string
 	Block   string
 	Alias   string
+	// Pos is the absolute byte offset of the opening "[[" in the source.
+	// Wikilink nodes have no ast.Text child, so lineForNode can't locate
+	// them by segment; Pos lets it compute the 1-indexed line directly.
+	Pos int
 }
 
 var kindWikilink = ast.NewNodeKind("Wikilink")
@@ -71,10 +75,12 @@ func (wikilinkParser) Parse(parent ast.Node, block text.Reader, pc parser.Contex
 	if w == nil {
 		return nil
 	}
+	// segment.Start is the absolute offset of line[0] — the opening "[" —
+	// so it pins the wikilink's position for line computation.
+	w.Pos = segment.Start
 
 	// Advance the reader past the closing ]].
 	block.Advance(end + 2)
-	_ = segment
 	return w
 }
 
