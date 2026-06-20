@@ -112,6 +112,41 @@ made worse by a serial loop. **Fixes, if 100k+ vaults ever matter:** (a) mirror
 sidesteps the cliff entirely. Both YAGNI today: under ~263k files `Rank` is warm
 and sub-second, and it only runs on picker open.
 
+### File size vs file count — two separate axes
+
+The corpus uses tiny ~650 B files, so all the numbers above vary *file count*,
+not *file size*. They are independent axes, and they split the hot paths cleanly.
+Holding count fixed at N=2000 and varying only average file size (1 → 8 → 64 KB,
+a 64× byte increase):
+
+| Operation | 1 KB | 8 KB | 64 KB | reads… |
+|-----------|------|------|-------|--------|
+| `search.SearchAll` | 16.1 ms | 28.8 ms | 87.4 ms | **content → scales** (5.4×) |
+| `vault.Build` | 132 ms | 229 ms | 966 ms | **content → scales** (7.3×) |
+| `recent.Rank` | 9.0 ms | 7.6 ms | 9.1 ms | metadata → **flat** |
+| `tree.Walk` | 3.0 ms | 2.7 ms | 3.1 ms | metadata → **flat** |
+
+- **`tree.Walk` and `recent.Rank` don't read file contents** (`readdir` + `os.Stat`
+  only), so a 64× size increase moves them 0%. They are purely *file-count*-bound —
+  and `recent.Rank`'s vnode cliff is about *inode count*, so it's immune to file size
+  too. The 1M-file numbers above hold regardless of how big the notes are.
+- **`search` and `vault.Build` scale with total bytes read** — more lines to
+  lowercase/match, more prose to tokenize through goldmark. `RefreshFile` and
+  `markdown.RenderWithLinks` ride the same axis (one document, scales with its size).
+- **Scaling is sub-linear in bytes** (64× bytes → ~5–7× time) because fixed per-file
+  overhead (the `open` syscall, scanner/goldmark setup, map insert) costs the same at
+  1 KB or 64 KB. At 1 KB that overhead dominates (~7.8 ns/byte effective); at 64 KB
+  content work dominates (~0.67 ns/byte). Total cost is really
+  `count × per-file-overhead + total-bytes × per-byte-cost` — count-bound ops feel
+  only the first term, content ops feel both.
+
+So the extreme-scale numbers, run on tiny files, *under*-state the content ops for a
+realistic vault: with ~5–10 KB notes, `search` and `vault.Build` run roughly 2× the
+reported times (the 7.4-min build at 1M → ~12–15 min). `tree.Walk` and `recent.Rank`
+are unchanged. One guard worth knowing: `search` caps per-file reads at
+`maxFileBytes` (1 MiB), so a single giant note can't blow up a scan; `vault.Build`
+and `RefreshFile` have no such cap and read the whole file.
+
 > Method note: at this scale `testing.B`'s regenerate-per-run model is
 > impractical, so these came from a throwaway harness that generates one corpus
 > and times each operation a single pass. Not committed — reconstruct from this
