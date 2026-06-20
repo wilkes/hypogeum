@@ -1,6 +1,6 @@
 ---
 name: hypogeum-vault
-description: Use when exploring or auditing a directory of interlinked markdown files — a vault with [[wikilinks]] or a cross-linked docs/ tree. Query the link graph (neighbors, backlinks, outbound links, full-text search) and audit link health (broken links, orphan notes) with hypogeum's query CLI instead of grep. Only when hypogeum is installed and the directory is actually a linked vault.
+description: Use when exploring or auditing a directory of interlinked markdown files — a vault with [[wikilinks]] or a cross-linked docs/ tree. Query the link graph (neighbors, backlinks, outbound links, full-text search, whole-vault graph export) and audit link health (broken links, orphan notes) with hypogeum's query CLI instead of grep. Only when hypogeum is installed and the directory is actually a linked vault.
 ---
 
 # Navigating a markdown vault with hypogeum
@@ -58,9 +58,10 @@ Other essentials:
   match highlight). Strip them for display:
   `jq -r '.snippet | gsub("[\\u0011\\u0012]";"")'` or `tr -d '\021\022'`.
 
-## The four verbs
+## The five verbs
 
-All take `--vault <root>`; the file/query argument is vault-relative.
+All take `--vault <root>`. The first four take a vault-relative file/query
+argument; `graph` takes **no positional** — it's whole-vault.
 
 | Verb | Question | Output (JSON) | Backed by |
 |------|----------|---------------|-----------|
@@ -68,11 +69,21 @@ All take `--vault <root>`; the file/query argument is vault-relative.
 | `links <file>` | what this file links *out* to | `[{text, target, path, kind, broken}]` | `OutboundFor` fast path |
 | `search "<term>"` | where a phrase appears | `[{path, line, snippet}]` (recency-ranked) | substring scan |
 | `recent` | notes you've *opened* lately | `[{path, visited}]` (visited-only, newest first) | visit history |
+| `graph` | the **whole** vault link graph | `{nodes:[{path}], edges:[{from,to,kind,broken}]}` | full `vault.Build` |
 
 `kind` is one of `wikilink` / `relative` / `external` / `anchor`. `broken` is
 true when a `wikilink`/`relative` target doesn't resolve in the vault.
 `recent` is *visit*-recency (what you read in the TUI), distinct from edit
 (mtime) recency — it only lists files you've actually opened.
+
+`graph` is the only verb with no file argument — it emits **every** markdown doc
+as a node (orphans included, sorted by path) and **every** link as a directed
+edge. Node `path`, edge `from`, and resolved edge `to` are **absolute**
+filesystem paths (same as the `path` field on `links`/`neighbors` output) — not
+vault-relative like the input args. `to` is the *resolved* path for
+`wikilink`/`relative` edges (and `""` when `broken`), or the *raw target* for
+`external` URLs and same-document `anchor`s. It's the one-shot way to audit the
+whole vault — no `find | while read` loop needed.
 
 ### Examples
 
@@ -85,6 +96,9 @@ hypogeum links --vault docs architecture.md | jq -r 'group_by(.kind)[] | "\(.[0]
 
 # Where is a concept discussed (unique files):
 hypogeum search --vault docs "proximity tiebreaker" | jq -r '.[].path' | sort -u
+
+# Whole-vault graph shape (node + edge counts):
+hypogeum graph --vault docs | jq '{nodes:(.nodes|length), edges:(.edges|length)}'
 ```
 
 ## Explore recipes
@@ -106,12 +120,25 @@ hypogeum search --vault docs "proximity tiebreaker" | jq -r '.[].path' | sort -u
 
 ## Audit recipes — whole-vault sweeps
 
-The verbs are per-file. To audit the whole vault, lift them with a loop:
-`find <vault> -name '*.md'` → strip the vault prefix so the path is
-vault-relative → run the verb. **A sweep surfaces candidates, not verdicts —
+`graph` does the whole-vault sweep in **one** call — prefer it over a
+`find | while read` loop (the loop re-builds the name index per file; `graph`
+builds it once). The loop form still works on older binaries without `graph`, so
+it's kept below as a fallback. **A sweep surfaces candidates, not verdicts —
 always triage the output.**
 
 ### Broken-link sweep
+
+One shot — every broken edge across the vault, as `from -> to [kind]`:
+
+```bash
+hypogeum graph --vault docs \
+  | jq -r '.edges[] | select(.broken) | "\(.from) -> \(.to) [\(.kind)]"' \
+  | sed 's|.*/docs/||g'   # paths are absolute; strip for readable output
+```
+
+(Broken internal edges carry `to:""`, so use `.from`/`.kind` for the report.)
+
+Fallback (no `graph` verb): loop `links` per file —
 
 ```bash
 find docs -name '*.md' | while read -r f; do rel="${f#docs/}"
@@ -132,6 +159,17 @@ Triage each candidate — not every `broken == true` is a defect:
 - **Real dead link.** Target was moved/deleted. Fix it.
 
 ### Orphan finder (notes nothing links to)
+
+One shot — nodes that are no edge's resolved `to` (i.e. nothing points in):
+
+```bash
+hypogeum graph --vault docs | jq -r '
+  (.edges | map(.to) | unique) as $targets
+  | .nodes[].path | select(. as $p | ($targets | index($p)) | not)' \
+  | sed 's|.*/docs/||' | sort
+```
+
+Fallback (no `graph` verb): loop `neighbors` per file —
 
 ```bash
 find docs -name '*.md' | while read -r f; do rel="${f#docs/}"
