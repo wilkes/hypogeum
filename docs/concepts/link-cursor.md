@@ -28,7 +28,7 @@ The cursor is a single integer because [[sentinel-render]] guarantees the link l
 
 **Clearing (`Esc`):** sets `m.content.linkCursor = -1`. This is one step in the `Esc` priority chain; see [[modal-geometry]] for the full chain.
 
-**Reset on refresh:** every `refreshContent` resets `m.content.linkCursor` to `-1` *unless* the navigation that triggered it set `m.pendingPreselectTarget` to the path of the file being left. In that case the consumer scans the new document's link list for the first `LinkLocalFile` whose `Resolved.Target` matches and sets `linkCursor` to that index — so following a backlink, pressing `h` (Back), or `l` (Forward) lands on a page with the corresponding inline link already selected. The pending field is cleared on every `refreshContent`, matched or not, so it can never leak across navigations. See [[pre-select-inline-link]] (or its design at `docs/superpowers/specs/2026-05-09-pre-select-inline-link-design.md`) for the full rules.
+**Reset on refresh:** every `refreshContent` resets `m.content.linkCursor` to `-1` *unless* the navigation that triggered it set `m.pendingPreselectTarget` to the path of the file being left. In that case the consumer scans the new document's link list for the first `LinkLocalFile` whose `Resolved.Target` matches and sets `linkCursor` to that index — so following a backlink, pressing `h` (Back), or `l` (Forward) lands on a page with the corresponding inline link already selected. The pending field is cleared on every `refreshContent`, matched or not, so it can never leak across navigations. See [pre-select-inline-link-design](../superpowers/specs/2026-05-09-pre-select-inline-link-design.md) for the full rules.
 
 ## Invariants / gotchas
 
