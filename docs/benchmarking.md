@@ -64,12 +64,66 @@ complexity curves.
   At N=1000 this is ~4 ms and ~2,000 allocs. A naive reading of the alloc count would suggest
   a pure in-memory cost — the real bottleneck is the `os.Stat` fan-out.
 
+## Extreme-scale findings (100k–1M files)
+
+A one-off sweep at 100k and 1M files (flat directory — a filesystem worst case;
+real nested vaults are kinder). Same machine. The interesting column is
+**cost per file**: under clean O(n) it would be constant. It is not — most ops
+get 6–25× *more expensive per file* from 100k to 1M, the signature of falling
+off an OS cache cliff (see below).
+
+| Operation | 100k | 1M | per-file 100k → 1M |
+|-----------|------|-----|--------------------|
+| `tree.Walk` | 173 ms | 2.99 s | 1.7 → 3.0 µs (1.8×) |
+| `search.SearchAll` (worst case) | 1.64 s | 94 s | 16 → 94 µs (6×) |
+| `recent.Rank` | 526 ms | 135 s | 5.3 → 135 µs (**25×**) |
+| `vault.Build` | 7.8 s | 447 s (7.4 min) | 78 → 447 µs (6×) |
+| `vault.RefreshFile` | 87 µs | 74 µs | **flat** |
+
+- **`vault.Build` is the wall past ~100k files** — a 7.4-minute startup at 1M.
+  This is the regime (and the first target) where a *persisted on-disk index*
+  — load a prebuilt graph instead of rebuilding — would actually pay off. It
+  stays YAGNI for realistic vaults (tens of thousands of notes).
+- **`vault.RefreshFile` is dead flat from 1k → 1M files** (~75 µs), independent
+  of vault size. That's the payoff of scoping per-save resolution to the
+  changed file (PR #77 / [[vault-index]]). Without it, a save at 1M would run a
+  full `resolveAllRefs` over ~5M refs — seconds of lag per keystroke-save.
+
+### The vnode-cache cliff (why `recent.Rank` scaled 256×)
+
+`recent.Rank` does one **serial** `os.Stat` per file, then a sort (the sort is
+negligible). Two compounding factors explain its disproportionate blow-up:
+
+1. **macOS caps the vnode (inode) cache** — `kern.maxvnodes` was **263,168** on
+   the test machine. Below it, every `os.Stat` is a warm memory hit; above it
+   each stat forces a vnode reclaim + APFS B-tree re-resolution. Confirmed with
+   empty-file stat passes: serial cost went **4.0 µs/file at 100k → 12.7 µs/file
+   at 500k** as N crossed the limit (and 135 µs at 1M with content competing for
+   cache).
+2. **`Rank` is single-threaded**, so it eats every cliff-induced miss latency
+   back-to-back with zero overlap. `search` does *more* per file (open+read) yet
+   scaled better because its `numWorkers = 4` fan-out hides the latency. A
+   16-worker parallel stat pass beat the serial loop **3.1–3.3×** at 100k/500k.
+
+So it is not an algorithmic bug — it is linear work meeting a platform limit,
+made worse by a serial loop. **Fixes, if 100k+ vaults ever matter:** (a) mirror
+`search`'s worker fan-out in `Rank`'s stat loop (~3×); (b) the bigger win — a
+**persisted mtime cache** so `Rank` skips `os.Stat` for unchanged files and
+sidesteps the cliff entirely. Both YAGNI today: under ~263k files `Rank` is warm
+and sub-second, and it only runs on picker open.
+
+> Method note: at this scale `testing.B`'s regenerate-per-run model is
+> impractical, so these came from a throwaway harness that generates one corpus
+> and times each operation a single pass. Not committed — reconstruct from this
+> note if needed.
+
 **Follow-up candidates (separate branches, justified by benchstat):**
 
 - **`search.Search` allocates proportionally to N** (~667 KB at N=10, ~63 MB at N=1000). Each call
-  reads every file into memory. An index-based approach (pre-read + line table) would reduce
-  per-call allocations, at the cost of staleness — measure whether the current latency is
-  problematic in the real TUI before optimizing.
+  reads every file into memory. ✅ *Partially addressed (PR #76): pooling the per-file scanner
+  buffers cut full-scan allocations ~98% and time ~2.3×, putting a 10k-file vault back under the
+  150 ms debounce.* A full index-based approach (pre-read + line table) would cut allocations
+  further at the cost of staleness — still YAGNI below ~10k files.
 
 - **`markdown.RenderWithLinks` alloc reduction.** The only realistic lever is replacing or
   wrapping Glamour with a renderer that reuses buffers. Profile first (`-cpuprofile`) to confirm
