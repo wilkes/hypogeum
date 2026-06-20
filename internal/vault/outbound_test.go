@@ -36,17 +36,21 @@ func TestOutbound(t *testing.T) {
 		t.Errorf("out[0].Resolved = %q, want bar.md", out[0].Resolved)
 	}
 
-	// Second: broken relative std link.
+	// Second: relative std link. The vault surfaces the COMPUTED path
+	// as-is; it does not check existence at the vault layer.
 	if out[1].Kind != OutboundStdLink {
 		t.Errorf("out[1].Kind = %v, want OutboundStdLink", out[1].Kind)
 	}
-	if out[1].Resolved != "" {
-		t.Errorf("out[1].Resolved = %q, want empty (broken)", out[1].Resolved)
+	if out[1].Resolved != filepath.Join(dir, "nope.md") {
+		t.Errorf("out[1].Resolved = %q, want computed nope.md path", out[1].Resolved)
 	}
 
-	// Third: external std link, raw target preserved, unresolved.
+	// Third: external std link — raw target preserved, never resolved.
 	if out[2].RawTarget != "https://x.com" {
 		t.Errorf("out[2].RawTarget = %q, want https://x.com", out[2].RawTarget)
+	}
+	if out[2].Resolved != "" {
+		t.Errorf("out[2].Resolved = %q, want empty (external)", out[2].Resolved)
 	}
 }
 

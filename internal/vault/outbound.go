@@ -1,7 +1,6 @@
 package vault
 
 import (
-	"os"
 	"path/filepath"
 )
 
@@ -43,18 +42,10 @@ func (v *Vault) Outbound(path string) []Outbound {
 		if ref.kind == refWikilink {
 			kind = OutboundWikilink
 		}
-		resolved := ref.resolved
-		// For standard links, only report as resolved if the file actually exists.
-		// Wikilinks and external URLs are handled by the vault's resolve logic.
-		if kind == OutboundStdLink && resolved != "" {
-			if _, err := os.Stat(resolved); err != nil {
-				resolved = ""
-			}
-		}
 		out = append(out, Outbound{
 			DisplayText: ref.displayText,
 			RawTarget:   ref.target,
-			Resolved:    resolved,
+			Resolved:    ref.resolved,
 			Line:        ref.line,
 			Snippet:     ref.snippet,
 			Kind:        kind,
