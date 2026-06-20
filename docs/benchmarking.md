@@ -201,6 +201,38 @@ allocation isn't worth becoming a markdown-parser maintainer. Don't re-prototype
 a vault large enough that Build's *allocation* (not its already-parallel wall-clock) is the
 felt bottleneck.
 
+## CLI command cold-start (`hypogeum search|recent|links|neighbors`)
+
+The non-interactive query verbs are not benchmarked at the Go level — their *work* is already
+covered one layer down (`query.Search`→`search.SearchAll`, `query.Links`/`Neighbors`→
+`vault.Build`, `query.Recent`→`recent.Rank`), and the wrappers add nothing (`Neighbors` builds
+the vault once and reads `Outbound`/`Backlinks` in memory — no double-parse). What package
+benchmarks *can't* see is the process-level cost, measured here by timing the built binary
+(30 runs, median) against `docs/` (68 small files):
+
+| Invocation | Median | Above startup floor |
+|------------|--------|---------------------|
+| `--version` (startup floor) | 24.2 ms | — (process spawn + Go runtime init) |
+| `links` / `neighbors` | ~24 ms | **~0** (a 68-file `vault.Build` is sub-ms post-#82) |
+| `recent` | 31.9 ms | ~8 ms |
+| `search` | 33.8 ms | ~10 ms |
+
+Two things define CLI latency, and neither is a package-benchmark target:
+
+- **A ~24 ms fixed floor** — process spawn + Go runtime init, paid by every invocation. On a
+  small vault the commands are startup-bound (`links`/`neighbors` don't even clear the floor);
+  you can't beat it from a cold binary, so there's nothing to optimize there.
+- **Cold rebuild on every call.** Unlike the TUI (which builds the vault once and reuses it all
+  session), each CLI invocation starts from zero. So at scale, per-call latency ≈ the package
+  benchmark for that op: `search` over 100k files ≈ 1.6 s *every time*; `links`/`neighbors` ≈ a
+  full `vault.Build` (~8 s at 100k). Scripting these in a loop over a large vault is the one
+  place this bites.
+
+The fix for the large-vault case is the **persisted on-disk index** noted below — load instead
+of rebuild. It's the only lever that helps the CLI specifically: fs-event freshness can't,
+because no process is alive between invocations to receive the events. Still YAGNI below ~10k
+files, where the ~24 ms floor dominates anyway.
+
 **Follow-up candidates (separate branches, justified by benchstat):**
 
 - **`search.Search` allocation.** ✅ *Largely addressed across two passes.* PR #76 pooled the
