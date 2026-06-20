@@ -157,7 +157,10 @@ version-controlled with the tool and dogfoods itself against `docs/`. To make it
 fire in *any* repo you work in, symlink (or copy) it into your user skills dir:
 
 ```bash
+mkdir -p ~/.claude/skills   # ln won't create the parent dir; without this it errors
 ln -s "$PWD/.claude/skills/hypogeum-vault" ~/.claude/skills/hypogeum-vault
 ```
 
-A symlink keeps it in sync with the repo; a copy pins a snapshot.
+A symlink keeps it in sync with the repo; a copy pins a snapshot. (If `~/.claude/skills/`
+doesn't exist yet, `ln -s` fails with `No such file or directory` pointing at the *link*
+path — the `mkdir -p` avoids that.)
