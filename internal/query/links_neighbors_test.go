@@ -13,7 +13,8 @@ func writeVault(t *testing.T) (dir, foo string) {
 	files := map[string]string{
 		"foo.md": "See [[bar]], [missing](./nope.md), [site](https://x.com)\n",
 		"bar.md": "# Bar\n",
-		"baz.md": "Back to [[foo]] here\n",
+		// Standard link (not wikilink) so the backlink carries a real 1-indexed line; the link sits on line 3.
+		"baz.md": "# Baz\n\nLink to [foo](./foo.md) here\n",
 	}
 	for name, content := range files {
 		if err := os.WriteFile(filepath.Join(dir, name), []byte(content), 0o644); err != nil {
@@ -82,15 +83,15 @@ func TestNeighbors(t *testing.T) {
 	if len(n.Outbound) != 3 {
 		t.Errorf("got %d outbound, want 3", len(n.Outbound))
 	}
-	// baz.md links to foo via [[foo]].
+	// baz.md links to foo via [foo](./foo.md) on line 3.
 	if len(n.Backlinks) != 1 {
 		t.Fatalf("got %d backlinks, want 1: %+v", len(n.Backlinks), n.Backlinks)
 	}
 	if n.Backlinks[0].Path != filepath.Join(dir, "baz.md") {
 		t.Errorf("backlink path = %q, want baz.md", n.Backlinks[0].Path)
 	}
-	if n.Backlinks[0].Line != 1 {
-		t.Errorf("backlink line = %d, want 1", n.Backlinks[0].Line)
+	if n.Backlinks[0].Line != 3 {
+		t.Errorf("backlink line = %d, want 3 (surfaced verbatim)", n.Backlinks[0].Line)
 	}
 }
 

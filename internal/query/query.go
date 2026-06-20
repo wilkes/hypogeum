@@ -136,8 +136,10 @@ type BacklinkEntry struct {
 	Text    string `json:"text"`
 }
 
-// neighbors is a file's 1-hop context bundle.
-type neighbors struct {
+// Neighborhood is a file's 1-hop context bundle (named Neighborhood, not
+// Neighbors, because a type and the Neighbors function can't share a name in
+// one package).
+type Neighborhood struct {
 	File      string          `json:"file"`
 	Outbound  []Link          `json:"outbound"`
 	Backlinks []BacklinkEntry `json:"backlinks"`
@@ -223,23 +225,23 @@ func Links(root, file string) ([]Link, error) {
 }
 
 // Neighbors returns file's outbound links and its backlinks.
-func Neighbors(root, file string) (neighbors, error) {
+func Neighbors(root, file string) (Neighborhood, error) {
 	abs, err := mustExist(file)
 	if err != nil {
-		return neighbors{}, err
+		return Neighborhood{}, err
 	}
 	v, err := vault.Build(root, vault.NopDiagnostics{})
 	if err != nil {
-		return neighbors{}, err
+		return Neighborhood{}, err
 	}
-	n := neighbors{
+	n := Neighborhood{
 		File:     abs,
 		Outbound: outboundLinks(v, abs),
 	}
 	for _, b := range v.Backlinks(abs) {
 		n.Backlinks = append(n.Backlinks, BacklinkEntry{
 			Path:    b.SourceFile,
-			Line:    b.Line + 1,
+			Line:    b.Line,
 			Snippet: sanitizeSnippet(b.Snippet),
 			Text:    b.DisplayText,
 		})
