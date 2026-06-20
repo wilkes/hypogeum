@@ -46,6 +46,19 @@ hypogeum ~/notes/index.md # open a specific file; tree roots at its directory
 | `?` | Help (cheat sheet) |
 | `q` | Quit |
 
+## Scripting / query mode
+
+The binary also works in non-interactive mode: pass a reserved verb as the first argument to emit JSON and exit instead of launching the TUI. JSON goes to stdout, errors to stderr. Exit 0 on success (including empty results), exit 1 on failure.
+
+| Verb | Command | Output |
+|------|---------|--------|
+| `search` | `hypogeum search "term" [-n 50] [--vault dir]` | `[{path, line, snippet}]` — recency-ranked full-text hits across vault markdown |
+| `links` | `hypogeum links <file> [--vault dir]` | `[{text, target, path, kind, broken}]` — outbound links (kind ∈ wikilink/relative/external) |
+| `recent` | `hypogeum recent [-n 20] [--vault dir]` | `[{path, score, mtime, visited}]` — recency-ranked notes |
+| `neighbors` | `hypogeum neighbors <file> [--vault dir]` | `{file, outbound: [...], backlinks: [...]}` — outbound links and 1-hop backlinks with line/snippet |
+
+The `--vault` flag defaults to the current directory. Use `./` prefix to refer to a file literally named `search`, `links`, `recent`, or `neighbors` in the TUI.
+
 ## Inspiration
 
 The design owes an obvious debt to [Frogmouth](https://github.com/Textualize/frogmouth), which does the same job in Python on top of Textual. hypogeum is a clean-room reimplementation in Go with no shared code, written to feel native in environments where a single static binary beats a Python install.
