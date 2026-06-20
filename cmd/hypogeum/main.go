@@ -32,7 +32,7 @@ func main() {
 func run(args []string) error {
 	for _, a := range args {
 		if a == "--version" || a == "-v" {
-			fmt.Printf("hypogeum %s (commit %s, built %s)\n", version, commit, date)
+			fmt.Println(versionLine())
 			return nil
 		}
 	}
