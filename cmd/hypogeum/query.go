@@ -18,6 +18,7 @@ var queryVerbs = map[string]bool{
 	"links":     true,
 	"recent":    true,
 	"neighbors": true,
+	"graph":     true,
 }
 
 func isQueryVerb(s string) bool { return queryVerbs[s] }
@@ -96,6 +97,12 @@ func runQuery(args []string, stdout io.Writer) error {
 			return err
 		}
 		result = nb
+	case "graph":
+		g, err := query.GraphFor(root)
+		if err != nil {
+			return err
+		}
+		result = g
 	default:
 		return fmt.Errorf("unknown query verb: %s", verb)
 	}
