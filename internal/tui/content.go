@@ -270,7 +270,7 @@ func (m *Model) refreshContent(path string) {
 		if l.Resolved.Kind != markdown.LinkLocalFile {
 			continue
 		}
-		if _, err := os.Stat(l.Resolved.Target); err != nil {
+		if markdown.IsBrokenLocalLink(l.Resolved.Target) {
 			m.content.brokenCount++
 		}
 	}

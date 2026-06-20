@@ -2,6 +2,7 @@ package markdown
 
 import (
 	"net/url"
+	"os"
 	"regexp"
 	"strconv"
 	"strings"
@@ -83,6 +84,21 @@ func ResolveLink(base, href string) ResolvedLink {
 		out.Anchor = "" // line-range claims the fragment; not an anchor
 	}
 	return out
+}
+
+// IsBrokenLocalLink reports whether absPath (an already-resolved absolute
+// path to a LinkLocalFile target) names something that does not exist on
+// disk. It is the single source of truth for "broken local link" detection,
+// consumed by both the non-interactive query mode and the TUI's footer
+// broken-link tally so the two can't drift. Only LinkLocalFile targets
+// should be passed here — external URLs and same-document anchors are never
+// "broken" in this sense and must be filtered by Kind before calling.
+func IsBrokenLocalLink(absPath string) bool {
+	if absPath == "" {
+		return true
+	}
+	_, err := os.Stat(absPath)
+	return err != nil
 }
 
 // ASTLink is a single hyperlink as it appears in the markdown source.
