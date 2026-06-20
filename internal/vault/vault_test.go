@@ -3,6 +3,7 @@ package vault
 import (
 	"os"
 	"path/filepath"
+	"reflect"
 	"testing"
 )
 
@@ -207,5 +208,37 @@ func TestRebuildPicksUpNewFile(t *testing.T) {
 	}
 	if _, ok := v.Resolve(from, "b", "", ""); !ok {
 		t.Fatalf("b should resolve after Rebuild")
+	}
+}
+
+func TestVaultFiles(t *testing.T) {
+	dir := t.TempDir()
+	for _, name := range []string{"b.md", "a.md", "c.md"} {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte("# x\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	v, err := Build(dir, NopDiagnostics{})
+	if err != nil {
+		t.Fatalf("Build: %v", err)
+	}
+	got := v.Files()
+	want := []string{
+		filepath.Join(dir, "a.md"),
+		filepath.Join(dir, "b.md"),
+		filepath.Join(dir, "c.md"),
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("Files() = %v, want %v", got, want)
+	}
+}
+
+func TestVaultFilesEmpty(t *testing.T) {
+	v, err := Build(t.TempDir(), NopDiagnostics{})
+	if err != nil {
+		t.Fatalf("Build: %v", err)
+	}
+	if got := v.Files(); got == nil || len(got) != 0 {
+		t.Errorf("Files() = %v, want empty non-nil slice", got)
 	}
 }

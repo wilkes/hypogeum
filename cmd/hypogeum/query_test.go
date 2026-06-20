@@ -6,6 +6,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/wilkes/hypogeum/internal/query"
 )
 
 func TestIsQueryVerb(t *testing.T) {
@@ -164,5 +166,37 @@ func TestRunQueryMissingArgNeighbors(t *testing.T) {
 	var out bytes.Buffer
 	if err := runQuery([]string{"neighbors"}, &out); err == nil {
 		t.Error("runQuery neighbors with no file returned nil error, want non-nil")
+	}
+}
+
+func TestRunQueryGraph(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "a.md"), []byte("[[b]]\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "b.md"), []byte("# b\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	var buf bytes.Buffer
+	if err := runQuery([]string{"graph", "--vault", dir}, &buf); err != nil {
+		t.Fatalf("runQuery graph: %v", err)
+	}
+
+	var g query.Graph
+	if err := json.Unmarshal(buf.Bytes(), &g); err != nil {
+		t.Fatalf("unmarshal: %v (output: %s)", err, buf.String())
+	}
+	if len(g.Nodes) != 2 {
+		t.Errorf("got %d nodes, want 2: %+v", len(g.Nodes), g.Nodes)
+	}
+	if len(g.Edges) != 1 || g.Edges[0].Kind != "wikilink" || g.Edges[0].Broken {
+		t.Errorf("edges = %+v, want one resolved wikilink", g.Edges)
+	}
+}
+
+func TestGraphIsQueryVerb(t *testing.T) {
+	if !isQueryVerb("graph") {
+		t.Error("graph should be a reserved query verb")
 	}
 }

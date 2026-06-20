@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"sort"
 	"strings"
 	"sync"
 
@@ -234,6 +235,20 @@ func (v *Vault) fileCount() int {
 	v.mu.RLock()
 	defer v.mu.RUnlock()
 	return len(v.files)
+}
+
+// Files returns the absolute paths of every indexed markdown file, sorted
+// ascending. The result is a copy — callers may retain or mutate it freely.
+// An empty vault yields an empty (non-nil) slice.
+func (v *Vault) Files() []string {
+	v.mu.RLock()
+	defer v.mu.RUnlock()
+	out := make([]string, 0, len(v.files))
+	for p := range v.files {
+		out = append(out, p)
+	}
+	sort.Strings(out)
+	return out
 }
 
 // resolveStdLink resolves a standard markdown link's href against

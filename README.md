@@ -56,8 +56,9 @@ The binary also works in non-interactive mode: pass a reserved verb as the first
 | `links` | `hypogeum links <file> [--vault dir]` | `[{text, target, path, kind, broken}]` — outbound links (kind ∈ wikilink/relative/external) |
 | `recent` | `hypogeum recent [-n 20] [--vault dir]` | `[{path, visited}]` — notes you've opened, most-recently-visited first |
 | `neighbors` | `hypogeum neighbors <file> [--vault dir]` | `{file, outbound: [...], backlinks: [...]}` — outbound links and 1-hop backlinks with line/snippet |
+| `graph` | `hypogeum graph [--vault dir]` | `{nodes, edges}` — whole-vault link graph; nodes are every markdown doc (orphans included), edges are every link with `{from, to, kind, broken}`. Example: `hypogeum graph --vault docs \| jq '.edges \| length'` |
 
-The `--vault` flag defaults to the current directory. Use `./` prefix to refer to a file literally named `search`, `links`, `recent`, or `neighbors` in the TUI.
+The `--vault` flag defaults to the current directory. Use `./` prefix to refer to a file literally named `search`, `links`, `recent`, `neighbors`, or `graph` in the TUI.
 
 - **Agent skill:** [`.claude/skills/hypogeum-vault/`](.claude/skills/hypogeum-vault/SKILL.md) teaches Claude Code (or any skill-aware agent) to explore and audit a markdown vault with the query CLI. Symlink it into `~/.claude/skills/` to use it in any repo.
 
