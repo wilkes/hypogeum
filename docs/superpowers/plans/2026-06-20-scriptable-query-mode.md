@@ -722,9 +722,9 @@ git commit -m "feat(query): add Search and Recent query functions"
 - Produces:
   - `type Link struct { Text, Target, Path, Kind string; Broken bool }` (json: `text`,`target`,`path`,`kind`,`broken`). `Kind` ∈ `"wikilink"|"relative"|"external"`. For wikilinks, `Target` is rendered `[[name]]`; for std links it is the raw href.
   - `type BacklinkEntry struct { Path string; Line int; Snippet, Text string }` (json: `path`,`line`,`snippet`,`text`).
-  - `type Neighbors struct { File string; Outbound []Link; Backlinks []BacklinkEntry }` (json: `file`,`outbound`,`backlinks`).
+  - `type Neighborhood struct { File string; Outbound []Link; Backlinks []BacklinkEntry }` (json: `file`,`outbound`,`backlinks`). Named `Neighborhood` (not `Neighbors`) because a type and the `Neighbors` function cannot share a name in one Go package.
   - `func Links(root, file string) ([]Link, error)` — returns a "file not found" error when `file` does not exist on disk (spec: missing file → exit 1).
-  - `func Neighbors(root, file string) (Neighbors, error)` — same missing-file error contract.
+  - `func Neighbors(root, file string) (Neighborhood, error)` — same missing-file error contract.
   - Unexported `outboundLinks(v *vault.Vault, abs string) []Link` shared by both.
 
 - [ ] **Step 1: Write the failing test**
@@ -747,7 +747,10 @@ func writeVault(t *testing.T) (dir, foo string) {
 	files := map[string]string{
 		"foo.md": "See [[bar]], [missing](./nope.md), [site](https://x.com)\n",
 		"bar.md": "# Bar\n",
-		"baz.md": "Back to [[foo]] here\n",
+		// Standard markdown link (not a wikilink) so the backlink carries a
+		// real 1-indexed line — wikilink nodes have no ast.Text child, so
+		// the vault reports line 0 for them. The link sits on line 3.
+		"baz.md": "# Baz\n\nLink to [foo](./foo.md) here\n",
 	}
 	for name, content := range files {
 		if err := os.WriteFile(filepath.Join(dir, name), []byte(content), 0o644); err != nil {
@@ -816,15 +819,15 @@ func TestNeighbors(t *testing.T) {
 	if len(n.Outbound) != 3 {
 		t.Errorf("got %d outbound, want 3", len(n.Outbound))
 	}
-	// baz.md links to foo via [[foo]].
+	// baz.md links to foo via [foo](./foo.md) on line 3.
 	if len(n.Backlinks) != 1 {
 		t.Fatalf("got %d backlinks, want 1: %+v", len(n.Backlinks), n.Backlinks)
 	}
 	if n.Backlinks[0].Path != filepath.Join(dir, "baz.md") {
 		t.Errorf("backlink path = %q, want baz.md", n.Backlinks[0].Path)
 	}
-	if n.Backlinks[0].Line != 1 {
-		t.Errorf("backlink line = %d, want 1", n.Backlinks[0].Line)
+	if n.Backlinks[0].Line != 3 {
+		t.Errorf("backlink line = %d, want 3 (surfaced verbatim)", n.Backlinks[0].Line)
 	}
 }
 
@@ -870,8 +873,10 @@ type BacklinkEntry struct {
 	Text    string `json:"text"`
 }
 
-// Neighbors is a file's 1-hop context bundle.
-type Neighbors struct {
+// Neighborhood is a file's 1-hop context bundle. Named Neighborhood, not
+// Neighbors, because a type and the Neighbors function cannot share a
+// name in the same Go package.
+type Neighborhood struct {
 	File      string          `json:"file"`
 	Outbound  []Link          `json:"outbound"`
 	Backlinks []BacklinkEntry `json:"backlinks"`
@@ -957,16 +962,16 @@ func Links(root, file string) ([]Link, error) {
 }
 
 // Neighbors returns file's outbound links and its backlinks.
-func Neighbors(root, file string) (Neighbors, error) {
+func Neighbors(root, file string) (Neighborhood, error) {
 	abs, err := mustExist(file)
 	if err != nil {
-		return Neighbors{}, err
+		return Neighborhood{}, err
 	}
 	v, err := vault.Build(root, vault.NopDiagnostics{})
 	if err != nil {
-		return Neighbors{}, err
+		return Neighborhood{}, err
 	}
-	n := Neighbors{
+	n := Neighborhood{
 		File:     abs,
 		Outbound: outboundLinks(v, abs),
 	}
