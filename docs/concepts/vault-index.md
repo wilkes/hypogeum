@@ -15,7 +15,9 @@ Both questions span the whole vault, both are needed on every render of every fi
 
 ## How it works
 
-`internal/vault` walks the root once at startup (`Build`) and parses every `.md` file with goldmark's wikilink-extension-equipped parser. Each file becomes a `fileEntry` with a slice of `reference` records (kind = wikilink or stdlink, target name or href, resolved absolute path, optional heading/block/alias).
+`internal/vault` indexes the root once at startup (`Build`) and parses every `.md` file with goldmark's wikilink-extension-equipped parser. Each file becomes a `fileEntry` with a slice of `reference` records (kind = wikilink or stdlink, target name or href, resolved absolute path, optional heading/block/alias).
+
+`Build` is parallel, not a single serial pass. `walkAndIndex` (`internal/vault/vault.go`) does a serial directory walk to collect markdown *paths* only, then fans the read+parse across `runtime.GOMAXPROCS(0)` workers — a profile showed serial `os.Open` syscalls and goldmark-allocation GC dominated a serial build. Each worker holds its own `goldmark.Markdown` (via `newMarkdownParser()`, since goldmark instances aren't safe to share across goroutines); map writes into `v.files`/`v.names` are serialized by `v.mu` inside `indexFile`. The result is independent of completion order because resolution sorts candidates (`scoreProximity`), so worker scheduling can't change which file a wikilink resolves to.
 
 Forward index: `map[string]*fileEntry` keyed by absolute path.
 Name index: `map[string][]string`, lowercased basename → list of absolute paths. Built once during `Build`; consulted during `Resolve`.
@@ -24,12 +26,14 @@ Reverse index is computed on demand from the forward index — `Backlinks(path)`
 
 Refresh is incremental: `RefreshFile(path)` re-parses one file's outgoing references on `watch.FileModified`; `Rebuild()` re-walks the whole root on `watch.StructureChanged`. Both happen synchronously inside the TUI's fsEvent handler — vault sizes are small enough the work is invisible.
 
+See also: a single file's *outbound* links don't need a full `Build`. `OutboundFor` (`internal/vault/outbound_fast.go`) indexes basenames only (no file reads) plus parses the one target file — enough to resolve its wikilinks — and is used by `query.Links`. Backlinks still need the full forward graph, so they go through `Build`.
+
 ### Resolution rules
 
 In order of precedence:
 
 1. **Exact basename match, case-insensitive.** `[[Foo]]` matches `Foo.md`, `foo.md`, `notes/FOO.md`.
-2. **Proximity tiebreaker.** Compute relative path from `fromFile` to each candidate; pick the shortest. Lexical path order breaks ties.
+2. **Proximity tiebreaker.** For each candidate, compute the relative path from `filepath.Dir(fromFile)` to the candidate and score it by `len(rel)` — the *byte length of that relative-path string* (`scoreProximity` in `internal/vault/resolver.go`). Smallest wins; lexical `path < path` order breaks exact-length ties. (This is string length, not a count of shared leading path components.)
 3. **No-match → unresolved.** Renderer emits the broken-style placeholder (`?` suffix, dim red SGR).
 
 The "name" stored in the index is `strings.ToLower(basenameWithoutExt(path))`. The forms `[[Foo|alias]]`, `[[Foo#Heading]]`, and `[[Foo^block]]` all resolve by the `Foo` portion; alias/heading/block are recorded separately.

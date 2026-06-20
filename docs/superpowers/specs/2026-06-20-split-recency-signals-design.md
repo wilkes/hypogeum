@@ -1,6 +1,6 @@
 # Split recency signals: edit-recency vs visit-recency
 
-Status: design
+Status: shipped (PR #92, 2026-06-20)
 
 ## Problem
 

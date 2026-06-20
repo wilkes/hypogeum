@@ -1,5 +1,7 @@
 # Finder mtime weighting
 
+> **Superseded (2026-06-20):** the blended score this spec tunes (and the `visitWeight` constant) was deleted when recency was split into pure edit-recency (finder/search) and pure visit-recency (the `r` modal + CLI `recent`). See [split-recency-signals](2026-06-20-split-recency-signals-design.md).
+
 **Status:** shipped on 2026-06-01 (PR #43).
 
 Rebalance the `^p` finder's recency score so a recently *modified* file outranks a recently *visited* file at equal age. One-constant tweak in `internal/recent/recent.go`; no API change, no migration.

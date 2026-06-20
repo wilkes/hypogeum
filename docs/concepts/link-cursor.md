@@ -20,11 +20,11 @@ The cursor is a single integer because [[sentinel-render]] guarantees the link l
 
 **Cycling:** `n` increments, `p` decrements, both wrap at the ends. After the move, `scrollToLink` adjusts `m.content.viewport.YOffset` so the selected link's row is in view.
 
-**Following (`Enter` when `m.content.linkCursor >= 0`):** branches on `Resolved.Kind`:
-- `LinkLocalFile` — `openFile(target)` plus `selectInTree(target)`. Records history; moves the tree cursor if the path is in the tree.
-- `LinkExternal` — Status bar: `"external link not opened: <href>"`. Phase 3 will hand off to `xdg-open`/`open` after a confirm flow.
-- `LinkAnchor` — Status bar: `"anchor navigation not implemented"`. Phase 2 will resolve to a heading row.
-- `LinkInvalid` — Status bar: `"unrecognized link"`.
+**Following (`Enter` when `m.content.linkCursor >= 0`):** `followLink` (`internal/tui/links.go`) branches on `Resolved.Kind`:
+- `LinkLocalFile` — `navigateTo(target)` (records history, moves the tree cursor). If `l.Resolved.Range` is non-nil, `m.content.rangeHighlight` is set before navigating so `refreshContent` scrolls to and reverse-videos the gutter for that range; otherwise the stale highlight is cleared.
+- `LinkExternal` — arms a one-keystroke confirm: sets `m.pending.externalURL` and footer `"press Enter again to open: <href>"`. A second `Enter` exec's the platform opener (`open`/`xdg-open`/`cmd start`); any other key cancels. The opener ships (`internal/tui/external.go`).
+- `LinkAnchor` — footer `"anchor navigation not implemented: #<anchor>"`. Resolving anchors to heading rows is not built.
+- default (unrecognized) — footer `"unrecognized link: <href>"`.
 
 **Clearing (`Esc`):** sets `m.content.linkCursor = -1`. This is one step in the `Esc` priority chain; see [[modal-geometry]] for the full chain.
 
@@ -36,4 +36,4 @@ The cursor is a single integer because [[sentinel-render]] guarantees the link l
 - **Reset on every `refreshContent`, with a single carry-over knob.** The default is `linkCursor = -1`. The exception is `m.pendingPreselectTarget`: any caller can set it before navigation to ask the next refresh to pre-select the inline link pointing at that path. Pair `m.content.links` and `m.content.linkCursor` or accept stale UI.
 - **Footer marker is `→ <target> [k/n]` when selected.** The constant `linkFooterMarker` is package-public for tests to assert on.
 - **Unresolved wikilinks aren't in the cycler.** They render as plain text with a `?` suffix — visible to the user but not selectable with `n`/`p`. Intentional: a broken link can't be followed, so adding it to the cycler would be a confusing no-op.
-- **Inline highlight is via SGR re-splicing.** The selected link's bytes get reverse-video bracketed by `applyLinkHighlight`, which re-renders the source with `markdown.HighlightMarker(linkCursor)`. The viewport's `YOffset` is preserved across the re-render. Pre-Phase-2 the cursor was footer-only; the rendered text didn't change.
+- **Inline highlight replays the cached render — no re-render.** `applyLinkHighlight` (`internal/tui/links.go`) calls `m.content.render.WithHighlight(m.content.linkCursor)` on the cached `*markdown.RenderResult` (set in `refreshContent` via `RenderDocument`). `WithHighlight` is a single `stripSentinels` pass over the retained sentinel-intact `raw` with `HighlightMarker(i)` applied — no file read, no Glamour render. The viewport's `YOffset` is saved and restored around the swap so scroll position survives. The cached handle is `nil` for code-file and error-state documents, where `applyLinkHighlight` is a no-op (those documents have no cyclable links anyway). This is the `2026-06-20-link-cycle-render-cache` change; see [[sentinel-render]] for the render/highlight split on the markdown side.

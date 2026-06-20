@@ -38,12 +38,18 @@ complexity curves.
 
 ## Findings (run on 2026-06-20 / darwin/amd64 Intel Core i9-9980HK @ 2.40GHz)
 
+> Note: these figures were taken at the recency split (PR #92, 2026-06-20). The
+> measured numbers are kept verbatim; the function then named `recent.Rank` (a
+> blend that was in practice mtime-driven) is now `recent.RankByMTime`, and the
+> `BenchmarkRank` is now `BenchmarkRankByMTime` — every `os.Stat`/mtime/vnode
+> figure below is the mtime path, so the rename is purely nominal.
+
 | Benchmark | N=10 | N=100 | N=1000 | allocs/op @ N=1000 | Note |
 |-----------|------|-------|--------|--------------------|------|
 | tree.Walk | 39,502 ns/op | 155,270 ns/op | 1,358,281 ns/op | 4,031 | sublinear 10→100 (3.9×), then near-linear 100→1000 (8.7×) — directory stat batching effect |
 | vault.Build | 630,827 ns/op | 6,062,199 ns/op | 68,982,213 ns/op | 278,068 | near-linear across all sizes (~9.6× / ~11.4×); NOT the expected O(n²) |
 | search.Search | 198,297 ns/op | 1,754,616 ns/op | 17,915,101 ns/op | 16,037 | linear with N; 63 MB/op at N=1000 (file reads per call) |
-| recent.Rank | 35,534 ns/op | 350,943 ns/op | 4,058,654 ns/op | 2,009 | linear with N; cost includes one `os.Stat` per path — this is filesystem I/O, not pure memory |
+| recent.RankByMTime | 35,534 ns/op | 350,943 ns/op | 4,058,654 ns/op | 2,009 | linear with N; cost includes one `os.Stat` per path — this is filesystem I/O, not pure memory |
 | markdown.RenderWithLinks | 1,389,308 ns/op | — | — | 12,269 | single doc; Glamour is allocation-heavy (~1.4 ms, ~504 KB per render) |
 
 **Surprises and findings:**
@@ -58,11 +64,12 @@ complexity curves.
   rapid repeated re-renders (e.g. every `WindowSizeMsg`). The allocation count cannot be reduced
   without replacing Glamour.
 
-- **`recent.Rank` cost is dominated by filesystem I/O, not memory.** The doc comment in
-  `internal/recent/recent.go` (line 90–91) is explicit: mtime is intentionally not cached because
-  the watcher may update files between calls. Each `Rank` call issues one `os.Stat` per path.
-  At N=1000 this is ~4 ms and ~2,000 allocs. A naive reading of the alloc count would suggest
-  a pure in-memory cost — the real bottleneck is the `os.Stat` fan-out.
+- **`recent.RankByMTime` cost is dominated by filesystem I/O, not memory.** The doc comment in
+  the `RankByMTime` docstring (`internal/recent/recent.go:35–38`) is explicit: mtime is
+  intentionally not cached because the watcher may update files between calls. Each
+  `RankByMTime` call issues one `os.Stat` per path. At N=1000 this is ~4 ms and ~2,000 allocs.
+  A naive reading of the alloc count would suggest a pure in-memory cost — the real bottleneck
+  is the `os.Stat` fan-out.
 
 ## Extreme-scale findings (100k–1M files)
 
@@ -76,7 +83,7 @@ off an OS cache cliff (see below).
 |-----------|------|-----|--------------------|
 | `tree.Walk` | 173 ms | 2.99 s | 1.7 → 3.0 µs (1.8×) |
 | `search.SearchAll` (worst case) | 1.64 s | 94 s | 16 → 94 µs (6×) |
-| `recent.Rank` | 526 ms | 135 s | 5.3 → 135 µs (**25×**) |
+| `recent.RankByMTime` | 526 ms | 135 s | 5.3 → 135 µs (**25×**) |
 | `vault.Build` | 7.8 s | 447 s (7.4 min) | 78 → 447 µs (6×) |
 | `vault.RefreshFile` | 87 µs | 74 µs | **flat** |
 
@@ -89,9 +96,9 @@ off an OS cache cliff (see below).
   changed file (PR #77 / [[vault-index]]). Without it, a save at 1M would run a
   full `resolveAllRefs` over ~5M refs — seconds of lag per keystroke-save.
 
-### The vnode-cache cliff (why `recent.Rank` scaled 256×)
+### The vnode-cache cliff (why `recent.RankByMTime` scaled 256×)
 
-`recent.Rank` does one **serial** `os.Stat` per file, then a sort (the sort is
+`recent.RankByMTime` does one **serial** `os.Stat` per file, then a sort (the sort is
 negligible). Two compounding factors explain its disproportionate blow-up:
 
 1. **macOS caps the vnode (inode) cache** — `kern.maxvnodes` was **263,168** on
@@ -100,16 +107,16 @@ negligible). Two compounding factors explain its disproportionate blow-up:
    empty-file stat passes: serial cost went **4.0 µs/file at 100k → 12.7 µs/file
    at 500k** as N crossed the limit (and 135 µs at 1M with content competing for
    cache).
-2. **`Rank` is single-threaded**, so it eats every cliff-induced miss latency
+2. **`RankByMTime` is single-threaded**, so it eats every cliff-induced miss latency
    back-to-back with zero overlap. `search` does *more* per file (open+read) yet
    scaled better because its `numWorkers = 4` fan-out hides the latency. A
    16-worker parallel stat pass beat the serial loop **3.1–3.3×** at 100k/500k.
 
 So it is not an algorithmic bug — it is linear work meeting a platform limit,
 made worse by a serial loop. **Fixes, if 100k+ vaults ever matter:** (a) mirror
-`search`'s worker fan-out in `Rank`'s stat loop (~3×); (b) the bigger win — a
-**persisted mtime cache** so `Rank` skips `os.Stat` for unchanged files and
-sidesteps the cliff entirely. Both YAGNI today: under ~263k files `Rank` is warm
+`search`'s worker fan-out in `RankByMTime`'s stat loop (~3×); (b) the bigger win — a
+**persisted mtime cache** so `RankByMTime` skips `os.Stat` for unchanged files and
+sidesteps the cliff entirely. Both YAGNI today: under ~263k files `RankByMTime` is warm
 and sub-second, and it only runs on picker open.
 
 ### File size vs file count — two separate axes
@@ -123,12 +130,12 @@ a 64× byte increase):
 |-----------|------|------|-------|--------|
 | `search.SearchAll` | 16.1 ms | 28.8 ms | 87.4 ms | **content → scales** (5.4×) |
 | `vault.Build` | 132 ms | 229 ms | 966 ms | **content → scales** (7.3×) |
-| `recent.Rank` | 9.0 ms | 7.6 ms | 9.1 ms | metadata → **flat** |
+| `recent.RankByMTime` | 9.0 ms | 7.6 ms | 9.1 ms | metadata → **flat** |
 | `tree.Walk` | 3.0 ms | 2.7 ms | 3.1 ms | metadata → **flat** |
 
-- **`tree.Walk` and `recent.Rank` don't read file contents** (`readdir` + `os.Stat`
+- **`tree.Walk` and `recent.RankByMTime` don't read file contents** (`readdir` + `os.Stat`
   only), so a 64× size increase moves them 0%. They are purely *file-count*-bound —
-  and `recent.Rank`'s vnode cliff is about *inode count*, so it's immune to file size
+  and `recent.RankByMTime`'s vnode cliff is about *inode count*, so it's immune to file size
   too. The 1M-file numbers above hold regardless of how big the notes are.
 - **`search` and `vault.Build` scale with total bytes read** — more lines to
   lowercase/match, more prose to tokenize through goldmark. `RefreshFile` and
@@ -142,7 +149,7 @@ a 64× byte increase):
 
 So the extreme-scale numbers, run on tiny files, *under*-state the content ops for a
 realistic vault: with ~5–10 KB notes, `vault.Build` runs roughly 2× the reported times
-(the 7.4-min build at 1M → ~12–15 min). `tree.Walk` and `recent.Rank` are unchanged.
+(the 7.4-min build at 1M → ~12–15 min). `tree.Walk` and `recent.RankByMTime` are unchanged.
 One guard worth knowing: `search` caps per-file reads at `maxFileBytes` (1 MiB), so a
 single giant note can't blow up a scan; `vault.Build` and `RefreshFile` have no such cap
 and read the whole file.
@@ -204,7 +211,7 @@ felt bottleneck.
 ## CLI command cold-start (`hypogeum search|recent|links|neighbors`)
 
 The non-interactive query verbs are not benchmarked at the Go level — their *work* is already
-covered one layer down (`query.Search`→`search.SearchAll`, `query.Recent`→`recent.Rank`,
+covered one layer down (`query.Search`→`search.SearchAll`, `query.Recent`→`recent.Store.RankByVisit`,
 `query.Neighbors`→`vault.Build`, `query.Links`→`vault.OutboundFor`). What package benchmarks
 *can't* see is the process-level cost, measured here by timing the built binary (50 runs,
 median, valid-JSON-asserted) against `docs/` (68 small files):
@@ -213,7 +220,7 @@ median, valid-JSON-asserted) against `docs/` (68 small files):
 |------------|--------|-------------|--------------|
 | `--version` (startup floor) | 23.7 ms | — | process spawn + Go runtime init |
 | `links` | 25.1 ms | **+1.4 ms** | fast path (#86): filename walk + parse one file |
-| `recent` | 32.5 ms | +8.9 ms | filename walk + `os.Stat` each + persisted visits |
+| `recent` | 32.5 ms | +8.9 ms | filename walk + persisted visits lookup (visit-only; no mtime stat fan-out) |
 | `search` | 33.7 ms | +10.0 ms | read every file's content |
 | `neighbors` | 35.3 ms | +11.7 ms | full `vault.Build` (backlinks are global) |
 
@@ -232,7 +239,8 @@ Two things define CLI latency, and neither is a package-benchmark target:
   - **`links`** needs only the target file's parse + the name index (a filename-only walk) →
     `OutboundFor`, **no content reads of other files**. Near-floor here; ~the `tree.Walk` cost at
     scale (~170 ms at 100k, vs a full build's ~8 s).
-  - **`recent`** needs filenames + `os.Stat` + the persisted `visits.json` — no build, no content.
+  - **`recent`** needs filenames + the persisted `visits.json` lookup (visit-only — it no longer
+    `os.Stat`s for mtime) — no build, no content.
   - **`search`** must read every file's content; **`neighbors`** must build the whole graph
     (backlinks ask "who links *to* me"). These two are irreducible without a persisted index, and
     at 100k files each call pays ≈ the package benchmark (`search` ~1.6 s, `neighbors` ~8 s) *every

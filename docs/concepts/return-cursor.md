@@ -32,16 +32,19 @@ m.backlinks.returnCursor = &returnCursor{
 }
 ```
 
-**Consumed on Back** (after `history.Back()` and `refreshContent`):
+**Consumed on Back** (after `history.Back()` and `refreshContent`): the restore is factored into `maybeRestoreReturnCursor(path)` (`internal/tui/backlinks.go`), called with the path just navigated to. It bails unless a slot is set and `path == rc.sourceFile`, consumes the slot, reopens `modalBacklinks`, and calls `refreshBacklinksModal` **twice** — once to populate `m.backlinks.items`, then clamp the saved cursor against the (possibly shrunk) list, then a second refresh so the highlight lands on the right row:
 
 ```go
-if rc := m.backlinks.returnCursor; rc != nil && path == rc.sourceFile {
-    links := vaultBacklinks(m.vault, path)
-    m.backlinks.items = links
-    m.backlinks.cursor = clamp(rc.cursor, 0, len(links)-1)
-    m.modals.kind = modalBacklinks
-    m.refreshBacklinksModal(path)
+func (m *Model) maybeRestoreReturnCursor(path string) {
+    if m.backlinks.returnCursor == nil || path != m.backlinks.returnCursor.sourceFile {
+        return
+    }
+    rc := m.backlinks.returnCursor
     m.backlinks.returnCursor = nil
+    // ... reopen modalBacklinks ...
+    m.refreshBacklinksModal(path)                                  // populate items
+    m.backlinks.cursor = clamp(rc.cursor, 0, len(m.backlinks.items)-1)
+    m.refreshBacklinksModal(path)                                  // re-render at clamped cursor
 }
 ```
 

@@ -15,8 +15,11 @@ type Watcher struct{ /* unexported */ }
 
 func New(root string) (*Watcher, error)
 func (w *Watcher) Events() <-chan Event
+func (w *Watcher) AddPath(dir string) error
 func (w *Watcher) Close() error
 ```
+
+`AddPath` registers an extra directory with the underlying fsnotify watcher (no-op on a nil watcher or nil internal handle). The TUI uses it to watch the parent directories of source files pulled in by `![[file#L..]]` embeds, so live-reload fires when an embedded source changes.
 
 Events are coarse on purpose:
 

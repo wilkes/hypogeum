@@ -1,5 +1,7 @@
 # Unified finder with recency — design
 
+> **Superseded (2026-06-20):** the hybrid mtime+visit score was split into pure edit-recency (finder/search) and pure visit-recency (the `r` modal + CLI `recent`). See [split-recency-signals](2026-06-20-split-recency-signals-design.md).
+
 **Status:** shipped on 2026-05-12.
 **Scope:** replace the tree-rooted `^p` picker with a flat, recency-ranked finder over every markdown file in the vault. Introduce a new `internal/recent` package that owns the hybrid mtime + visit-history score and the persisted visits state file. First cut is foundation + recency only; name-filter and other sort modes are explicitly deferred.
 **Out of scope:** full-text content search, fuzzy name-filter typing inside the picker, sort-mode cycling, updated-together view, configurable decay constants, per-vault state files, Windows support.
