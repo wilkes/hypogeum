@@ -9,6 +9,43 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 <!-- next-release-here -->
 
+## [v0.5.1] - 2026-06-20
+
+### Features
+* 23d87fc6b80b3e28cf365464bdd75afe18118665: feat(cli): add reserved graph verb (@wilkes)
+* 9557f984816a1c17f78cfdaf7fd6ff7ad8562dce: feat(query): GraphFor builds the whole-vault link graph (@wilkes)
+* 8a1b5692b5615401877ce36313afe23a1392d912: feat(skill): hypogeum-vault audit recipes (broken-link + orphan sweeps) (@wilkes)
+* 1f78e76f54c6277cd0da84bd1f27676ecc809e3e: feat(skill): hypogeum-vault global-install section + README pointer (@wilkes)
+* e8680adcb5608b556c8fe1c5b117208616246e0b: feat(skill): hypogeum-vault verbs reference + explore recipes (@wilkes)
+* b3ae2c31548bb5dcbab109fe21f4062506c39248: feat(skill): scaffold hypogeum-vault — frontmatter, gating, gotcha (@wilkes)
+* 47b1667124c61756c69abe2bb9067b71056bef01: feat(tui): finder pure-mtime, add r "recently opened" visit modal (@wilkes)
+* 8bf77c21fdce01e54c3640243e3d79ce69564d17: feat(tui): prefer index/readme as default landing file (@wilkes)
+* df3b194aaf3f492e0ecbf168af000b09acb47232: feat(vault): add Files() accessor for whole-vault enumeration (@wilkes)
+* c6b4aac3fef461a26a20c6aaebd66edafb335122: feat(version): fall back to debug.BuildInfo for --version (@wilkes)
+### Refactors
+* 84e233e1fe331919d725045c1ef6dd52d6ddaef9: refactor(recent): split blended score into RankByMTime and RankByVisit (@wilkes)
+### Docs
+* 06ee900ded1a1be9245b023197b6b20a2218a3fc: docs(changelog): v0.5.0 (@github-actions[bot])
+* 05734c46a826224ad8341161e2209073232855c0: docs(concepts): fix dead [[pre-select-inline-link]] wikilink (@wilkes)
+* 5f0f4714019a12835a53d4c98ce54e54181e5e3c: docs(diary): add the 2026-06-20 finder-refinements campaign entry (@wilkes)
+* c25a91d281695805373cb3f791252b1e657e721c: docs(graph): design spec for the graph query verb (@wilkes)
+* 31195d304ba951c444fbb49d817113e2d2ccacc5: docs(graph): document the graph query verb (@wilkes)
+* 334ce0c8519120947e6335f753630810b852c480: docs(graph): implementation plan for the graph query verb (@wilkes)
+* 61a30f3163f5606d85300bc6903ab359992c0efd: docs(plan): hypogeum-vault skill implementation plan (@wilkes)
+* a4a3dabc2d6de49dc762738d64bf5bd764e599d9: docs(readme): fix recent verb JSON shape after recency split (@wilkes)
+* 668af4ce4b3d48047fb2495d047a9435d54f3d4b: docs(skill): mkdir -p before symlinking into ~/.claude/skills (@wilkes)
+* 159f0cb10717f56cb84e1c35b064d37712a0e823: docs(skill): teach hypogeum-vault the graph query verb (@wilkes)
+* 63d230a3a90e3e0a755a02eb7bd7598ca6bfe1c3: docs(spec): default landing file prefers index then readme (@wilkes)
+* badcd591c38f59dfcff5d88159991a445d6f7ec0: docs(spec): hypogeum-vault agent skill design (@wilkes)
+* 22441dca1c1e5e5a2831480cda3d90b1b217e3f8: docs(spec): split recency signals into edit-recency and visit-recency (@wilkes)
+* 6559b0640232bcb547664ea889ff4751156bf5a2: docs: fix benchmarking symbol names and mark superseded recency specs (@wilkes)
+* 86d93a3d128317f84499ca7febc18f371c12b0a9: docs: mark architecture-review findings 1-4 as shipped (@wilkes)
+* 1e4a100231fed834329394d3627ba5801663c561: docs: sync living reference docs with current code (@wilkes)
+### Other
+* 59d2edcf4748484a31e410b4c71a480b30e11e7e: Merge remote-tracking branch 'origin/main' into feat/split-recency-signals (@wilkes)
+* 38877e3ae513eaa010303e3575cb464a21ee4a6e: perf(tui): rank recent modal once at open, not per keystroke (@wilkes)
+* da96537ef3c89bbfd30909531d1a37f841d62990: style(query): gofmt-align map literal in graph_test.go (@wilkes)
+
 ## [v0.5.0] - 2026-06-20
 
 ### Features
