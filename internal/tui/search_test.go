@@ -194,7 +194,7 @@ func TestSearch_EnterNavigatesAndScrolls(t *testing.T) {
 	}
 }
 
-func TestSearch_RecencyRerank(t *testing.T) {
+func TestSearch_MTimeRerank(t *testing.T) {
 	dir := t.TempDir()
 	a := filepath.Join(dir, "a.md")
 	b := filepath.Join(dir, "b.md")
@@ -204,27 +204,27 @@ func TestSearch_RecencyRerank(t *testing.T) {
 	if err := os.WriteFile(b, []byte("bravo needle\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	m, err := New(dir, "")
-	if err != nil {
-		t.Fatalf("New: %v", err)
+	// Search re-rank is now edit-recency (mtime), not visit history: make a
+	// the most recently edited file so it ranks first regardless of visits.
+	base := time.Now()
+	if err := os.Chtimes(b, base.Add(-2*time.Hour), base.Add(-2*time.Hour)); err != nil {
+		t.Fatal(err)
 	}
-	// Visit b first so it scores higher in recency than a, then a so a
-	// is the most-recent — final order should put a first.
-	m.openFile(b)
-	time.Sleep(2 * time.Millisecond)
-	m.openFile(a)
+	if err := os.Chtimes(a, base.Add(-1*time.Hour), base.Add(-1*time.Hour)); err != nil {
+		t.Fatal(err)
+	}
 
-	// Synthesize search results in alphabetical input order: a, b.
+	// Synthesize search results in input order b, a to prove re-rank sorts.
 	hits := []search.Hit{
-		{Path: a, Line: 1, Snippet: "alpha \x11needle\x12"},
 		{Path: b, Line: 1, Snippet: "bravo \x11needle\x12"},
+		{Path: a, Line: 1, Snippet: "alpha \x11needle\x12"},
 	}
-	reranked := rerankByRecency(m.recent, hits)
+	reranked := rerankByMTime(hits)
 	if len(reranked) != 2 {
 		t.Fatalf("got %d hits, want 2", len(reranked))
 	}
 	if reranked[0].Path != a {
-		t.Errorf("reranked[0].Path = %q, want %q (most recent)", reranked[0].Path, a)
+		t.Errorf("reranked[0].Path = %q, want %q (most recently edited)", reranked[0].Path, a)
 	}
 }
 

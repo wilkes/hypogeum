@@ -12,6 +12,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
+	"github.com/wilkes/hypogeum/internal/recent"
 	"github.com/wilkes/hypogeum/internal/search"
 )
 
@@ -242,7 +243,7 @@ func (m *Model) handleSearchResults(msg searchResultsMsg) (tea.Model, tea.Cmd) {
 			m.diag.Info(fmt.Sprintf("search %q: %v", msg.query, msg.err))
 		}
 	}
-	m.modals.search.hits = rerankByRecency(m.recent, msg.hits)
+	m.modals.search.hits = rerankByMTime(msg.hits)
 	m.modals.search.cursor = 0
 	m.refreshSearchVP()
 	if m.diag != nil {
@@ -254,24 +255,14 @@ func (m *Model) handleSearchResults(msg searchResultsMsg) (tea.Model, tea.Cmd) {
 	return *m, tea.ClearScreen
 }
 
-// rerankByRecency reorders hits so files visited more recently come
-// first. Hits from the same file keep their (line) order. Recency
-// ranking scores every file that still exists on disk, so in practice
-// every hit path is ranked; a path that can't be scored (its file
-// vanished mid-scan) trails in input order rather than being dropped.
-//
-// store may be nil — happens in tests; we degrade to input order.
-func rerankByRecency(store recentStore, hits []search.Hit) []search.Hit {
-	if store == nil {
-		return hits
-	}
-	return search.RerankByRecency(store.RankPaths, hits)
-}
-
-// recentStore is the subset of *recent.Store that rerankByRecency uses.
-// Defined as an interface so tests can swap in a nil-tolerant fake.
-type recentStore interface {
-	RankPaths(paths []string) []string
+// rerankByMTime reorders hits so files edited more recently come first
+// (edit-recency), matching the file finder. Hits from the same file keep
+// their (line) order. mtime ranking scores every file that still exists on
+// disk, so in practice every hit path is ranked; a path that can't be stat'd
+// (its file vanished mid-scan) trails in input order rather than being
+// dropped. Stateless — no recent.Store needed.
+func rerankByMTime(hits []search.Hit) []search.Hit {
+	return search.RerankByRecency(recent.RankPathsByMTime, hits)
 }
 
 // formatSearchHits renders each hit as a two-row entry:

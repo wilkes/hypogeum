@@ -22,6 +22,7 @@ const (
 	modalHelp
 	modalTree
 	modalSearch
+	modalRecent
 )
 
 // modalUIState bundles modal render state. kind is which modal is up

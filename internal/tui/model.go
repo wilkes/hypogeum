@@ -73,10 +73,11 @@ type Model struct {
 	root     string
 	rootNode *tree.Node
 
-	tree      treeUIState
-	content   contentUIState
-	backlinks backlinksUIState
-	modals    modalUIState
+	tree       treeUIState
+	content    contentUIState
+	backlinks  backlinksUIState
+	recentList recentUIState
+	modals     modalUIState
 
 	history *nav.History
 	focus   focus

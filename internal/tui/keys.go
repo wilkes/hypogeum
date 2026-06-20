@@ -23,6 +23,7 @@ type keyMap struct {
 	OpenBacklinksModal key.Binding
 	OpenLogsModal      key.Binding
 	OpenHelpModal      key.Binding
+	OpenRecentModal    key.Binding
 
 	ToggleTree   key.Binding
 	ToggleFolder key.Binding
@@ -61,6 +62,7 @@ func defaultKeys() keyMap {
 		OpenBacklinksModal: key.NewBinding(key.WithKeys("b"), key.WithHelp("b", "backlinks")),
 		OpenLogsModal:      key.NewBinding(key.WithKeys("ctrl+l"), key.WithHelp("^l", "logs")),
 		OpenHelpModal:      key.NewBinding(key.WithKeys("?"), key.WithHelp("?", "help")),
+		OpenRecentModal:    key.NewBinding(key.WithKeys("r"), key.WithHelp("r", "recently opened")),
 
 		ToggleTree:   key.NewBinding(key.WithKeys("t"), key.WithHelp("t", "open tree")),
 		ToggleFolder: key.NewBinding(key.WithKeys(" "), key.WithHelp("space", "expand/collapse")),
