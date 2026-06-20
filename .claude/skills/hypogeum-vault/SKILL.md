@@ -149,3 +149,15 @@ disconnected note") is the real signal. To exclude plan leaves:
 ```bash
 ... | grep -vE '^index\.md$|^superpowers/plans/'
 ```
+
+## Installing globally
+
+This skill lives in the hypogeum repo (`.claude/skills/hypogeum-vault/`) so it's
+version-controlled with the tool and dogfoods itself against `docs/`. To make it
+fire in *any* repo you work in, symlink (or copy) it into your user skills dir:
+
+```bash
+ln -s "$PWD/.claude/skills/hypogeum-vault" ~/.claude/skills/hypogeum-vault
+```
+
+A symlink keeps it in sync with the repo; a copy pins a snapshot.
