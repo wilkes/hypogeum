@@ -12,7 +12,10 @@ import (
 // mode, which recency-ranks then caps. The capped Search makes which
 // hits survive the cap race-dependent across workers, which SearchAll
 // avoids. An empty query or no paths returns nil. Cancellation returns
-// the hits gathered so far alongside ctx.Err().
+// the hits gathered so far — still sorted — alongside ctx.Err().
+//
+// SearchAll is a thin policy wrapper over scan: it collects every hit
+// (onHit always returns true) under a mutex and sorts before returning.
 func SearchAll(ctx context.Context, paths []string, query string) ([]Hit, error) {
 	if query == "" || len(paths) == 0 {
 		return nil, nil
@@ -21,46 +24,24 @@ func SearchAll(ctx context.Context, paths []string, query string) ([]Hit, error)
 		return nil, ctx.Err()
 	}
 
-	workCh := make(chan string, len(paths))
-	for _, p := range paths {
-		workCh <- p
-	}
-	close(workCh)
-
 	var (
 		mu  sync.Mutex
 		out []Hit
-		wg  sync.WaitGroup
 	)
-	for i := 0; i < numWorkers; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			for path := range workCh {
-				if ctx.Err() != nil {
-					return
-				}
-				hits, err := scanFile(ctx, path, query)
-				if err != nil {
-					continue // skip unreadable file (matches Search)
-				}
-				if len(hits) > 0 {
-					mu.Lock()
-					out = append(out, hits...)
-					mu.Unlock()
-				}
-			}
-		}()
-	}
-	wg.Wait()
-	if ctx.Err() != nil {
-		return out, ctx.Err()
-	}
+	err := scan(ctx, paths, query, func(h Hit) bool {
+		mu.Lock()
+		out = append(out, h)
+		mu.Unlock()
+		return true // never stop early — collect everything
+	})
+
+	// Sort before returning even on cancellation: the doc comment promises
+	// deterministic (path, line) order, so a partial slice must be ordered too.
 	sort.Slice(out, func(i, j int) bool {
 		if out[i].Path != out[j].Path {
 			return out[i].Path < out[j].Path
 		}
 		return out[i].Line < out[j].Line
 	})
-	return out, nil
+	return out, err
 }
