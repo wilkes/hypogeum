@@ -13,8 +13,8 @@ func writeGraphVault(t *testing.T) string {
 	files := map[string]string{
 		// index.md: a resolved wikilink, a broken wikilink, an external URL,
 		// a self anchor, and a resolved relative link.
-		"index.md": "[[arch]] [[ghost]] [site](https://charm.sh) [top](#intro) [a](./arch.md)\n",
-		"arch.md":  "# Arch\n",
+		"index.md":  "[[arch]] [[ghost]] [site](https://charm.sh) [top](#intro) [a](./arch.md)\n",
+		"arch.md":   "# Arch\n",
 		"orphan.md": "# Orphan, no links\n",
 	}
 	for name, content := range files {
