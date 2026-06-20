@@ -46,6 +46,99 @@ func TestRunQueryLinks(t *testing.T) {
 	}
 }
 
+func TestRunQuerySearchFlagAfterPositional(t *testing.T) {
+	dir := t.TempDir()
+	// A single file with multiple lines matching the term, so an
+	// uncapped search would return >1 hit.
+	if err := os.WriteFile(filepath.Join(dir, "note.md"),
+		[]byte("alpha needle\nbeta needle\ngamma needle\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	var out bytes.Buffer
+	// -n placed AFTER the positional term must be honored.
+	err := runQuery([]string{"search", "--vault", dir, "needle", "-n", "1"}, &out)
+	if err != nil {
+		t.Fatalf("runQuery: %v", err)
+	}
+
+	var got []map[string]any
+	if err := json.Unmarshal(out.Bytes(), &got); err != nil {
+		t.Fatalf("output is not valid JSON: %v\n%s", err, out.String())
+	}
+	if len(got) != 1 {
+		t.Errorf("expected exactly 1 hit with -n 1, got %d: %s", len(got), out.String())
+	}
+}
+
+func TestRunQueryLinksVaultAfterFile(t *testing.T) {
+	dir := t.TempDir()
+	foo := filepath.Join(dir, "foo.md")
+	if err := os.WriteFile(foo, []byte("See [[bar]]\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "bar.md"), []byte("# bar\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	var out bytes.Buffer
+	// --vault placed AFTER the file positional must be honored.
+	err := runQuery([]string{"links", foo, "--vault", dir}, &out)
+	if err != nil {
+		t.Fatalf("runQuery: %v", err)
+	}
+
+	var got []map[string]any
+	if err := json.Unmarshal(out.Bytes(), &got); err != nil {
+		t.Fatalf("output is not valid JSON: %v\n%s", err, out.String())
+	}
+	if len(got) != 1 || got[0]["kind"] != "wikilink" {
+		t.Errorf("unexpected links output: %s", out.String())
+	}
+}
+
+func TestRunQueryLinksVaultEqualsForm(t *testing.T) {
+	dir := t.TempDir()
+	foo := filepath.Join(dir, "foo.md")
+	if err := os.WriteFile(foo, []byte("See [[bar]]\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "bar.md"), []byte("# bar\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	var out bytes.Buffer
+	// --vault=dir (equals form) after the positional must survive reordering.
+	err := runQuery([]string{"links", foo, "--vault=" + dir}, &out)
+	if err != nil {
+		t.Fatalf("runQuery: %v", err)
+	}
+
+	var got []map[string]any
+	if err := json.Unmarshal(out.Bytes(), &got); err != nil {
+		t.Fatalf("output is not valid JSON: %v\n%s", err, out.String())
+	}
+	if len(got) != 1 || got[0]["kind"] != "wikilink" {
+		t.Errorf("unexpected links output: %s", out.String())
+	}
+}
+
+func TestRunQueryLinksRejectsNFlag(t *testing.T) {
+	var out bytes.Buffer
+	// -n is not a valid flag for links; it must be a parse error,
+	// not a silent no-op.
+	if err := runQuery([]string{"links", "foo.md", "-n", "5"}, &out); err == nil {
+		t.Error("runQuery links with -n returned nil error, want non-nil")
+	}
+}
+
+func TestRunQueryNeighborsRejectsNFlag(t *testing.T) {
+	var out bytes.Buffer
+	if err := runQuery([]string{"neighbors", "foo.md", "-n", "5"}, &out); err == nil {
+		t.Error("runQuery neighbors with -n returned nil error, want non-nil")
+	}
+}
+
 func TestRunQueryUnknownFlag(t *testing.T) {
 	var out bytes.Buffer
 	if err := runQuery([]string{"links", "--bogus"}, &out); err == nil {
