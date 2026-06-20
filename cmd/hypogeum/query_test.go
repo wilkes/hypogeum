@@ -59,3 +59,17 @@ func TestRunQueryMissingArg(t *testing.T) {
 		t.Error("runQuery links with no file returned nil error, want non-nil")
 	}
 }
+
+func TestRunQueryMissingArgSearch(t *testing.T) {
+	var out bytes.Buffer
+	if err := runQuery([]string{"search"}, &out); err == nil {
+		t.Error("runQuery search with no term returned nil error, want non-nil")
+	}
+}
+
+func TestRunQueryMissingArgNeighbors(t *testing.T) {
+	var out bytes.Buffer
+	if err := runQuery([]string{"neighbors"}, &out); err == nil {
+		t.Error("runQuery neighbors with no file returned nil error, want non-nil")
+	}
+}

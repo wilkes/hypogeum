@@ -49,13 +49,15 @@ type SearchHit struct {
 
 // Search scans every markdown file under root for term, recency-reranks
 // the hits (same ordering as the TUI search modal), and returns at most
-// max of them. A nil store degrades to unranked order.
+// max of them. It uses SearchAll to collect all hits before capping so
+// the result is deterministic across runs. A nil store degrades to
+// unranked order.
 func Search(root, term string, max int) ([]SearchHit, error) {
 	paths, err := tree.MarkdownFiles(root)
 	if err != nil {
 		return nil, err
 	}
-	hits, err := search.Search(context.Background(), paths, term, max)
+	hits, err := search.SearchAll(context.Background(), paths, term)
 	if err != nil {
 		return nil, err
 	}
@@ -72,6 +74,9 @@ func Search(root, term string, max int) ([]SearchHit, error) {
 		}
 	}
 	hits = search.RerankByRecency(order, hits)
+	if max > 0 && len(hits) > max {
+		hits = hits[:max]
+	}
 
 	out := make([]SearchHit, 0, len(hits))
 	for _, h := range hits {
@@ -206,7 +211,7 @@ func mustExist(file string) (string, error) {
 		return "", err
 	}
 	if _, err := os.Stat(abs); err != nil {
-		return "", fmt.Errorf("file not found: %s", file)
+		return "", fmt.Errorf("file not found: %s", abs)
 	}
 	return abs, nil
 }
