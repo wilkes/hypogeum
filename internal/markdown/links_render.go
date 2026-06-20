@@ -30,27 +30,35 @@ func HighlightMarker(selected int) LinkMarker {
 	}
 }
 
-// RenderWithLinks renders src and returns both the rendered string and a
-// list of every followable link in document order. base is the path of
-// the file the source came from; it's used to resolve relative link
-// targets to absolute paths.
-//
-// If marker is non-nil, the open/close strings it returns for each link
-// are spliced around that link's visible text in the rendered output.
-// They flow through downstream styling without changing visible width
-// (caller's responsibility — typically zero-width sentinel sequences).
-//
-// The pipeline: preprocessEmbeds and preprocessWikilinks rewrite the
-// source (see preprocess.go), the instrumented renderer injects sentinels
-// (see style.go), stripSentinels recovers link positions from the ANSI
-// output (see sentinel.go), and the visible-text segmentation that the
-// preprocessors lean on lives in fences.go.
-func (r *Renderer) RenderWithLinks(src, base string, marker LinkMarker) (string, []Link, []string, error) {
+// RenderResult is a completed render plus the sentinel-instrumented Glamour
+// output, so the highlighted link can be changed without re-running Glamour.
+// raw is unexported: only WithHighlight (same package) re-strips it.
+type RenderResult struct {
+	Content   string   // rendered output with the marker passed to RenderDocument applied
+	Links     []Link   // every followable link, document order
+	EmbedDeps []string // absolute source paths sliced in by embeds
+	raw       string   // Glamour output with sentinels intact — input to re-highlight
+}
+
+// WithHighlight re-derives the visible output with only link `selected`
+// reverse-videoed (selected = -1 highlights nothing). Cheap: a single
+// stripSentinels pass over raw, with no Glamour render.
+func (rr *RenderResult) WithHighlight(selected int) string {
+	cleaned, _ := stripSentinels(rr.raw, HighlightMarker(selected))
+	return cleaned
+}
+
+// RenderDocument renders src and returns a reusable RenderResult. base is the
+// path of the file the source came from; it resolves relative link targets.
+// See RenderWithLinks for the marker semantics. The pipeline: preprocessEmbeds
+// and preprocessWikilinks rewrite the source, the instrumented renderer injects
+// sentinels, stripSentinels recovers link positions from the ANSI output.
+func (r *Renderer) RenderDocument(src, base string, marker LinkMarker) (*RenderResult, error) {
 	src, embedDeps, embedLinks := r.preprocessEmbeds(src, base)
 	src = r.preprocessWikilinks(src)
 	raw, err := r.instrumented.Render(src)
 	if err != nil {
-		return "", nil, nil, fmt.Errorf("render markdown: %w", err)
+		return nil, fmt.Errorf("render markdown: %w", err)
 	}
 
 	asts := ExtractLinks(src)
@@ -68,5 +76,27 @@ func (r *Renderer) RenderWithLinks(src, base string, marker LinkMarker) (string,
 		links = append(links, l)
 	}
 	links = append(links, embedLinks...)
-	return cleaned, links, embedDeps, nil
+
+	return &RenderResult{
+		Content:   cleaned,
+		Links:     links,
+		EmbedDeps: embedDeps,
+		raw:       raw,
+	}, nil
+}
+
+// RenderWithLinks renders src and returns the rendered string, the links, and
+// the embed dependency paths. It is a thin wrapper over RenderDocument kept for
+// callers that don't need the reusable handle.
+//
+// If marker is non-nil, the open/close strings it returns for each link are
+// spliced around that link's visible text. They flow through downstream styling
+// without changing visible width (caller's responsibility — typically
+// zero-width sentinel sequences).
+func (r *Renderer) RenderWithLinks(src, base string, marker LinkMarker) (string, []Link, []string, error) {
+	rr, err := r.RenderDocument(src, base, marker)
+	if err != nil {
+		return "", nil, nil, err
+	}
+	return rr.Content, rr.Links, rr.EmbedDeps, nil
 }
