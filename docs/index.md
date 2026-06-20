@@ -57,6 +57,10 @@ Cross-cutting ideas that show up in multiple specs and packages. Each is its own
 - [Scriptable query mode](superpowers/specs/2026-06-20-scriptable-query-mode-design.md) — approved — non-interactive JSON-to-stdout verbs (`search`, `links`, `recent`, `neighbors`) for agent/script consumption; git-style dispatch in `cmd/hypogeum`, new pure `internal/query` package, plus a `Vault.Outbound` accessor. Pointers (path/line/snippet), not content. [Plan](superpowers/plans/2026-06-20-scriptable-query-mode.md).
 - [Benchmarking foundation](superpowers/specs/2026-06-20-benchmarking-foundation-design.md) — approved — measure-only sweep of the five hot paths (`tree.Walk`, `vault.Build`, `markdown.Render`, `search.Search`, `recent.Rank`) over a deterministic scale-parameterized corpus generator (`internal/benchcorpus`). Additive test + doc code only; findings land in `docs/benchmarking.md`.
 
+## Tooling
+
+- [Benchmarking](benchmarking.md) — how to run the hot-path benchmarks (`internal/benchcorpus` corpus + per-package `*_bench_test.go`) and the latest findings.
+
 ## Conventions for adding to this folder
 
 One file per topic. Kebab-case filenames, no date prefix. Update plans in place — strike-through, "Status:" lines, or check-marked steps beat parallel files. Index entries here are one line plus a short hook; the detail lives in the linked file.
