@@ -161,21 +161,71 @@ func scanFile(ctx context.Context, path, query string) ([]Hit, error) {
 				return hits, ctx.Err()
 			}
 		}
-		line := scanner.Text()
-		idx := strings.Index(strings.ToLower(line), loweredQuery)
+		lineB := scanner.Bytes()
+		idx := indexFold(lineB, loweredQuery)
 		if idx < 0 {
 			continue
 		}
 		hits = append(hits, Hit{
-			Path:    path,
-			Line:    lineNum,
-			Snippet: buildSnippet(line, idx, queryLen, snippetBudget),
+			Path: path,
+			Line: lineNum,
+			// string(lineB) allocates only here, on an actual match.
+			Snippet: buildSnippet(string(lineB), idx, queryLen, snippetBudget),
 		})
 	}
 	if err := scanner.Err(); err != nil {
 		return hits, err
 	}
 	return hits, nil
+}
+
+// foldByte lower-cases an ASCII letter; all other bytes pass through.
+func foldByte(c byte) byte {
+	if 'A' <= c && c <= 'Z' {
+		return c + ('a' - 'A')
+	}
+	return c
+}
+
+// indexFold reports the byte index of the first ASCII-case-insensitive match
+// of lowerNeedle in haystack, or -1 if absent. lowerNeedle must already be
+// lower-cased. It allocates nothing — the previous implementation lower-cased
+// a fresh copy of every scanned line via strings.ToLower.
+//
+// Semantics note: folding is ASCII-only (A–Z). Bytes >= 0x80 compare exactly,
+// so a query "café" still matches "café" but an uppercase "CAFÉ" no longer
+// matches a lowercase query the way the old Unicode-aware ToLower did. This is
+// a deliberate narrowing; vault content is overwhelmingly ASCII-cased.
+func indexFold(haystack []byte, lowerNeedle string) int {
+	m := len(lowerNeedle)
+	if m == 0 {
+		return 0
+	}
+	n := len(haystack)
+	if m > n {
+		return -1
+	}
+	first := lowerNeedle[0]
+	last := m - 1
+	for i := 0; i+m <= n; i++ {
+		if foldByte(haystack[i]) != first {
+			continue
+		}
+		if foldByte(haystack[i+last]) != lowerNeedle[last] {
+			continue
+		}
+		ok := true
+		for j := 1; j < last; j++ {
+			if foldByte(haystack[i+j]) != lowerNeedle[j] {
+				ok = false
+				break
+			}
+		}
+		if ok {
+			return i
+		}
+	}
+	return -1
 }
 
 // numWorkers is the goroutine fan-out width. Four is enough to overlap
