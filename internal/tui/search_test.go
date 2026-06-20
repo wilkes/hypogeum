@@ -24,6 +24,33 @@ func TestSearch_SlashOpensModal(t *testing.T) {
 	}
 }
 
+// TestSearch_ModalToggleKeyTypedIntoSearchFilters is the search-modal twin of
+// the picker's printable-keys-grab regression guard: pressing a key that is a
+// global modal toggle (`r` opens the recent modal, `b` the backlinks modal)
+// while the search modal is open must type into the query, NOT swap modals.
+func TestSearch_ModalToggleKeyTypedIntoSearchFilters(t *testing.T) {
+	for _, r := range []rune{'r', 'b'} {
+		t.Run(string(r), func(t *testing.T) {
+			dir := t.TempDir()
+			writePickerFile(t, filepath.Join(dir, "a.md"), "# A\n")
+			m := sized(t, dir, "")
+			m = pressRune(t, m, '/')
+			if m.modals.kind != modalSearch {
+				t.Fatalf("/ should open search, got %v", m.modals.kind)
+			}
+
+			m = pressRune(t, m, r)
+
+			if m.modals.kind != modalSearch {
+				t.Fatalf("typing %q in search swapped to modal kind %v; it must stay in search", r, m.modals.kind)
+			}
+			if got := m.modals.search.input.Value(); got != string(r) {
+				t.Errorf("search query after typing %q: got %q, want %q", r, got, string(r))
+			}
+		})
+	}
+}
+
 func TestSearch_TypingShortQueryDoesNotFire(t *testing.T) {
 	dir := t.TempDir()
 	writePickerFile(t, filepath.Join(dir, "a.md"), "# A\nfoobar\n")
