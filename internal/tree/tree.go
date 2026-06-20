@@ -138,3 +138,30 @@ func sortChildren(n *Node) {
 		return strings.ToLower(a.Name) < strings.ToLower(b.Name)
 	})
 }
+
+// MarkdownFiles walks root and returns every markdown file as an
+// absolute path, in depth-first tree order. The tree is already pruned
+// to markdown-only by Walk, so this just flattens leaf nodes. Returns an
+// empty slice (never nil-with-nil-error) when nothing matches.
+func MarkdownFiles(root string) ([]string, error) {
+	n, err := Walk(root)
+	if err != nil {
+		return nil, err
+	}
+	out := []string{}
+	var walk func(*Node)
+	walk = func(nd *Node) {
+		if nd == nil {
+			return
+		}
+		if !nd.IsDir {
+			out = append(out, nd.Path)
+			return
+		}
+		for _, c := range nd.Children {
+			walk(c)
+		}
+	}
+	walk(n)
+	return out, nil
+}

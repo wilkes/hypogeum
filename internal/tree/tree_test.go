@@ -225,3 +225,39 @@ func TestWalk_CaseInsensitiveExtension(t *testing.T) {
 		t.Errorf("expected 2 markdown files (case-insensitive ext), got %v", got)
 	}
 }
+
+func TestMarkdownFiles(t *testing.T) {
+	dir := t.TempDir()
+	mustWrite(t, filepath.Join(dir, "a.md"), "# a")
+	mustWrite(t, filepath.Join(dir, "sub", "b.md"), "# b")
+	mustWrite(t, filepath.Join(dir, "ignore.txt"), "nope")
+
+	got, err := MarkdownFiles(dir)
+	if err != nil {
+		t.Fatalf("MarkdownFiles: %v", err)
+	}
+
+	want := map[string]bool{
+		filepath.Join(dir, "a.md"):        true,
+		filepath.Join(dir, "sub", "b.md"): true,
+	}
+	if len(got) != len(want) {
+		t.Fatalf("got %d paths %v, want %d", len(got), got, len(want))
+	}
+	for _, p := range got {
+		if !want[p] {
+			t.Errorf("unexpected path %q", p)
+		}
+	}
+}
+
+// mustWrite creates parent dirs and writes content; fail the test on error.
+func mustWrite(t *testing.T, path, content string) {
+	t.Helper()
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
