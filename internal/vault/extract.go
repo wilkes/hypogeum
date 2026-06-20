@@ -78,7 +78,13 @@ func extractReferences(src, fromPath string) []reference {
 
 // lineForNode returns the 1-indexed line of the first segment of n
 // within source. Returns 0 if no segment is found (rare — defensive).
+//
+// Wikilink nodes carry no ast.Text child, so they're handled by their
+// stored byte offset (Pos) instead of by walking for a segment.
 func lineForNode(n ast.Node, source []byte) int {
+	if w, ok := n.(*wikilinkNode); ok {
+		return lineAtOffset(source, w.Pos)
+	}
 	var seg *ast.Text
 	_ = ast.Walk(n, func(c ast.Node, entering bool) (ast.WalkStatus, error) {
 		if !entering {
@@ -93,12 +99,18 @@ func lineForNode(n ast.Node, source []byte) int {
 	if seg == nil {
 		return 0
 	}
-	stop := seg.Segment.Start
-	if stop > len(source) {
-		stop = len(source)
+	return lineAtOffset(source, seg.Segment.Start)
+}
+
+// lineAtOffset returns the 1-indexed line containing byte offset in
+// source (counting the newlines before it). offset is clamped to the
+// source length so out-of-range values degrade to the last line.
+func lineAtOffset(source []byte, offset int) int {
+	if offset > len(source) {
+		offset = len(source)
 	}
 	line := 1
-	for i := 0; i < stop; i++ {
+	for i := 0; i < offset; i++ {
 		if source[i] == '\n' {
 			line++
 		}
