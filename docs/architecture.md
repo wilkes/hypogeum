@@ -11,11 +11,11 @@ cmd/hypogeum               (entrypoint — argv → tui.New → tea.NewProgram)
         │
         ▼
 internal/tui               (Bubble Tea Model, the only package that knows about the UI)
-   │      │      │      │      │
-   ▼      ▼      ▼      ▼      ▼
-   tree   markdown   nav   watch   vault   (lower layers)
-              │                       │
-              └───────► wikilink ◄────┘    (shared parser, no other deps)
+   │     │      │     │     │      │       │      │
+   ▼     ▼      ▼     ▼     ▼      ▼       ▼      ▼
+  tree  markdown  nav  watch  vault  recent  search  (lower layers; query also sits here)
+              │                  │
+              └────► wikilink ◄──┘    (shared parser, no other deps)
 ```
 
 - [`internal/tree`](packages/tree.md) walks the filesystem and produces a `*Node` tree of markdown files.
@@ -31,8 +31,8 @@ The lower layers know nothing about Bubble Tea or terminals; they're testable as
 ## Data flow on a keystroke
 
 1. Bubble Tea delivers a `tea.KeyMsg` to `Model.Update`.
-2. Global bindings (quit, focus toggle, back/forward) match first.
-3. Modal-toggle keys (`t` tree, `^p`/`o` picker, `b` backlinks, `^l` logs, `?` help) route to `openModalWith(kind, prepare)`.
+2. Global bindings (quit, back/forward) match first.
+3. Modal-toggle keys (`t` tree, `^p`/`o` picker, `b` backlinks, `^l` logs, `/` search, `r` recently-opened, `?` help) route to `openModalWith(kind, prepare)`.
 4. If a modal is open, the keystroke is dispatched to that modal's handler — e.g. `modalTree` updates `m.tree.cursor` or calls `openFile` (closing itself on a file Enter). The picker grabs printable rune keys before the global modal-toggle switch sees them so plain-letter toggles (`b`) don't kick the picker out when typed into the query.
 5. Otherwise, dispatch to `handleContentKey` — cycles `m.content.linkCursor`, follows a link, clears selection, or falls through to the viewport's own scrolling bindings.
 6. `openFile(path)` records the visit in `nav.History` and calls `refreshContent`.
@@ -45,7 +45,7 @@ The keystroke path is synchronous — no goroutines, no commands waited on — b
 
 Three trade-offs worth knowing because they look like accidents otherwise:
 
-**Pre-flatten the tree.** `internal/tree` returns a recursive `*Node`, but `internal/tui` flattens it into a `[]treeRow` once in `New`. Cursor moves are then O(1) index updates, not tree walks. Don't add features that re-walk on every keystroke. ([model.go](../internal/tui/model.go), `flatten`)
+**Pre-flatten the tree.** `internal/tree` returns a recursive `*Node`, but `internal/tui` flattens it into a `[]treeRow` once in `New`. Cursor moves are then O(1) index updates, not tree walks. Don't add features that re-walk on every keystroke. ([tree.go](../internal/tui/tree.go), `flattenVisible`)
 
 **Re-render on resize.** Glamour's word-wrap width is baked into the renderer, not the call. `WindowSizeMsg` rebuilds *both* the plain and instrumented renderers at the new width and re-renders the current file. Anything that changes content width must do the same. ([render.go](../internal/markdown/render.go), `NewRenderer`)
 
@@ -70,7 +70,7 @@ If you want to understand the whole codebase, read in dependency order — botto
 2. `internal/wikilink` — single file, the shared `[[...]]` body parser.
 3. [`internal/tree`](packages/tree.md) — filesystem walker, no UI, easy to picture.
 4. [`internal/markdown`](packages/markdown.md) — render + link resolution + the sentinel trick.
-5. `internal/vault` — wikilink/backlink index, split across `vault.go`/`extract.go`/`backlink.go`/`resolver.go`.
+5. `internal/vault` — wikilink/backlink index, split across `vault.go`/`extract.go`/`backlink.go`/`resolver.go`, plus `outbound.go`/`outbound_fast.go` (the `query.Links` fast path that parses one file without a full build).
 6. [`internal/watch`](packages/watch.md) — fsnotify wrapper; `classify.go` is pure, `debounce.go` debounces, `watch.go` runs the loop.
 7. [`internal/tui`](packages/tui.md) — biggest package; `Model` decomposes into four sub-structs, dispatch helpers in `dispatch.go`.
 8. [`cmd/hypogeum/main.go`](../cmd/hypogeum/main.go) — argv parsing and a `tea.NewProgram` call.

@@ -1,22 +1,24 @@
 # modal-geometry
 
-The single-modal invariant and layout rules that govern every overlay: tree (`^b`), backlinks (`b`), file finder (`^p`), log viewer (`^l`), and help (`?`).
+The single-modal invariant and layout rules that govern every overlay: tree (`t`), backlinks (`b`), file finder (`^p` / `o`), log viewer (`^l`), full-text search (`/`), recent (`r`), and help (`?`).
 
 See also: [architecture](../architecture.md), [docs index](../index.md). Used primarily by [`internal/tui`](../packages/tui.md), the [wikilinks-and-backlinks design](../superpowers/specs/2026-05-07-wikilinks-and-backlinks-design.md), and the [backlinks-navigation design](../superpowers/specs/2026-05-07-backlinks-navigation-design.md); press `b` for the full backlinks list.
 
 ## Why it exists
 
-Five surfaces compete for screen space and input focus. Without a coordination rule they'd stack, conflict over `Esc`, and require per-surface geometry calculations. The single-modal invariant and shared modal viewport collapse this to one decision per keypress: open / swap / close.
+Several surfaces compete for screen space and input focus. Without a coordination rule they'd stack, conflict over `Esc`, and require per-surface geometry calculations. The single-modal invariant and shared modal viewport collapse this to one decision per keypress: open / swap / close.
 
 ## How it works
 
-**`m.modals.kind` is a single enum** (`modalNone` / `modalBacklinks` / `modalLogs` / `modalPicker` / `modalHelp` / `modalTree`). At most one is open at a time. Pressing a toggle key for a *different* kind while one is open swaps content under the single-modal-swap rule. Pressing the same toggle key again closes the modal.
+**`m.modals.kind` is a single enum** (`modalNone` / `modalBacklinks` / `modalLogs` / `modalPicker` / `modalHelp` / `modalTree` / `modalSearch` / `modalRecent`, in `internal/tui/modal.go`). At most one is open at a time. Pressing a toggle key for a *different* kind while one is open swaps content under the single-modal-swap rule. Pressing the same toggle key again closes the modal.
 
 **`?` is anchored, not a swap participant.** Help opens only from `modalNone` or toggles itself closed. Pressing `?` while another modal is open is a no-op and surfaces a footer transient explaining why.
 
 **Modal viewport sharing.** Backlinks, logs, and help all render through the shared `m.modals.vp`. The picker has its own (`m.modals.picker.vp`) because it owns a text input. The tree uses `m.tree.vp` so its cursor and expansion state survive modal-close.
 
-**Modal size:** fixed at 60% width × 60% height of the terminal, clamped to min 40×12 and max 120×40. Computed once per `WindowSizeMsg` in `modalGeometry`.
+**Modal size:** fixed at 60% width × 60% height of the terminal, clamped to min 40×12 and max 120×40, then further clamped to the terminal's own width/height so a tiny terminal gets a modal no larger than the screen. Computed in `modalGeometry` (`internal/tui/modal.go`).
+
+**Search modal owns its own state and clears the screen on transition.** `modalSearch` carries `m.modals.search` (a `searchState`); `toggleModal`/`closeModal` cancel any in-flight scan and emit a `tea.ClearScreen` Cmd when opening or closing it, because Bubble Tea's diff renderer otherwise leaves stale prompt rows on screen if the modal frame shifted during a slow scan.
 
 **`Esc` priority chain:**
 

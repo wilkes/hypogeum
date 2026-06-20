@@ -17,6 +17,16 @@ Two related responsibilities:
 type Renderer struct {
     g            *glamour.TermRenderer
     instrumented *glamour.TermRenderer
+
+    resolver Resolver // wikilink resolver; nopResolver{} when unset
+    fromFile string   // set by SetFromFile before each render (wikilink resolution)
+}
+
+type RenderResult struct {
+    Content   string   // rendered output with the requested marker applied
+    Links     []Link   // every followable link, document order
+    EmbedDeps []string // absolute source paths sliced in by embeds
+    raw       string   // unexported: sentinel-intact Glamour output for re-highlight
 }
 
 type Link struct {
@@ -26,10 +36,13 @@ type Link struct {
     Row      int
 }
 
+type LineRange = embed.LineRange // alias; internal/embed is the canonical owner
+
 type ResolvedLink struct {
     Kind   LinkKind   // LinkLocalFile, LinkExternal, LinkAnchor, LinkInvalid
     Target string     // absolute path for local files; raw URL otherwise
     Anchor string     // fragment without the leading '#'
+    Range  *LineRange // non-nil when the fragment was a #L<n>-L<n> form
 }
 
 type ASTLink struct {
@@ -38,15 +51,18 @@ type ASTLink struct {
 }
 ```
 
-`Renderer` holds two underlying Glamour renderers — one plain, one with sentinel-injected styles for `RenderWithLinks`. Both must be rebuilt when the wrap width changes.
+`Renderer` holds two underlying Glamour renderers — one plain, one with sentinel-injected styles for the instrumented render. Both must be rebuilt when the wrap width changes. `resolver` and `fromFile` carry wikilink-resolution state; `fromFile` is per-render and is mutated via `SetFromFile`, so a `Renderer` is **not** safe for concurrent use across files (one per goroutine).
 
 ## Public surface
 
 - `NewRenderer(width int, opts ...Option) (*Renderer, error)` — width below 20 falls back to 80. Options include `WithResolver(Resolver)` for wikilink resolution; the TUI passes its `*vault.Vault` here.
-- `(*Renderer).RenderFile(path) (string, error)` — read + plain render. Used when the link list isn't needed.
+- `(*Renderer).SetFromFile(path string)` — sets the file path used to resolve wikilink targets for the next render. Must be called before rendering each new file.
 - `(*Renderer).Render(src string) (string, error)` — plain render of an already-loaded string.
-- `(*Renderer).RenderWithLinks(src, base string, marker LinkMarker) (string, []Link, error)` — instrumented render. The TUI uses this on every file open. `base` is the path of the file being rendered; it's needed to resolve relative link targets. `marker` is optional (may be `nil`); if non-nil, its open/close strings are spliced around each link's visible text — the TUI uses this to inject BubbleZone Mark/Close pairs for click hit-testing.
+- `(*Renderer).RenderDocument(src, base string, marker LinkMarker) (*RenderResult, error)` — the primary render entry point. Runs `preprocessEmbeds` + `preprocessWikilinks`, the sentinel-instrumented Glamour render, and `stripSentinels` to recover link positions, returning a reusable `*RenderResult`. `base` is the path of the file being rendered; it resolves relative link targets. `marker` is optional (may be `nil`); if non-nil its open/close strings are spliced around each link's visible text — the TUI uses this to inject BubbleZone Mark/Close pairs for click hit-testing.
+- `(*RenderResult).WithHighlight(selected int) string` — cheaply re-derives the visible output with only link `selected` reverse-videoed (`-1` highlights nothing). A single `stripSentinels` pass over the retained `raw`, no Glamour re-render.
+- `(*Renderer).RenderWithLinks(src, base string, marker LinkMarker) (string, []Link, []string, error)` — thin wrapper over `RenderDocument` for callers that don't need the reusable handle. The third return is the embed dependency paths (absolute source paths sliced in by `![[file#L..]]` embeds). The TUI uses this on every file open.
 - `ResolveLink(base, href string) ResolvedLink` — pure path classification. Useful in tests.
+- `IsBrokenLocalLink(absPath string) bool` — reports whether an already-resolved `LinkLocalFile` target is missing on disk (empty path counts as broken). Single source of truth shared by the non-interactive query mode and the TUI's footer broken-link tally; only `LinkLocalFile` targets should be passed.
 - `ExtractLinks(src string) []ASTLink` — goldmark AST walk; returns inline links and autolinks in document order, skips images.
 
 ## Key invariants
@@ -69,7 +85,7 @@ The cleaned output is byte-equivalent to a plain `Render` on the same terminal a
 
 `LinkText` carries an underline (`Underline: &yes` on the Glamour style primitive). Glamour's dark theme puts the underline on `Link` (the URL portion), not `LinkText` — once we hide the URL the visible text loses that cue, so we move it onto `LinkText` explicitly.
 
-OSC 8 hyperlinks were investigated and rejected: BubbleZone's `Scan` measures cell coordinates with `muesli/ansi.PrintableRuneWidth`, which terminates any escape on an ASCII letter. An OSC 8 sequence's URL contains letters, so the scanner exits escape mode mid-URL and counts the rest as visible width. Result: zone bounds shift far to the right of where the link actually rendered, and mouse-click hit-testing breaks. External-URL launching belongs in Phase 3 of [link-following](../link-following.md) via `xdg-open`/`open` on `Enter`.
+OSC 8 hyperlinks were investigated and rejected: BubbleZone's `Scan` measures cell coordinates with `muesli/ansi.PrintableRuneWidth`, which terminates any escape on an ASCII letter. An OSC 8 sequence's URL contains letters, so the scanner exits escape mode mid-URL and counts the rest as visible width. Result: zone bounds shift far to the right of where the link actually rendered, and mouse-click hit-testing breaks. (External-URL launching is handled in the TUI's `external.go`, not here — see [link-following](../link-following.md).)
 
 ## Why goldmark is a direct dependency
 

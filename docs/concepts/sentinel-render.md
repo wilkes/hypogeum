@@ -21,7 +21,9 @@ Both pairs survive Glamour's word-wrap pass because Glamour treats single ASCII 
 
 The instrumented style is a JSON deep clone of whichever environment default Glamour's `WithAutoStyle` would resolve to (NoTTY / dark / light), with sentinels grafted onto the `LinkText` primitive. **Do not** pass a partial config to `WithStyles` — it's replace-only, not merge, and silently drops everything else (headings, code blocks, margins). The first instrumented render came out unstyled because of this; the deep-clone approach restored visual parity.
 
-Order is preserved by AST cross-reference: the Nth sentinel pair corresponds to the Nth `ASTLink` from `markdown.ExtractLinks`. If the two diverge (e.g. Glamour stops rendering some link form), `RenderWithLinks` falls back to a `Link` with empty `Resolved` rather than failing.
+Order is preserved by AST cross-reference: the Nth sentinel pair corresponds to the Nth `ASTLink` from `markdown.ExtractLinks`. If the two diverge (e.g. Glamour stops rendering some link form), `RenderDocument` falls back to a `Link` with empty `Resolved` rather than failing.
+
+**Render / highlight cache split.** `RenderDocument` (`internal/markdown/links_render.go`) is the primary entry. It runs Glamour exactly once and returns a `RenderResult{Content, Links, EmbedDeps, raw}`, where `raw` is the sentinel-intact Glamour output (unexported, retained on the struct). Re-highlighting a *different* link does not re-render: `rr.WithHighlight(i)` replays only `stripSentinels(raw, HighlightMarker(i))`, producing cleaned output with link `i` reverse-videoed and every other link plain. `RenderWithLinks` is now a thin wrapper over `RenderDocument` for callers that don't need the reusable handle. The TUI holds the `*RenderResult` in `m.content.render` and the link cursor calls `WithHighlight` on every `n`/`p` move — the cheap half of this concept, tying back to [[link-cursor]].
 
 ## Invariants / gotchas
 

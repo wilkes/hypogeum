@@ -20,7 +20,7 @@ The TUI owns the diagnostic sink. It implements a `vault.Diagnostics` interface 
 
 **Footer transient:** the latest diagnostic populates `m.status`. A `tea.Tick` clears it after ~3s. Severity is shown via color cue (warn = yellow, error = red, info = dim).
 
-**Log file:** appended to `$XDG_STATE_HOME/hypogeum/hypogeum.log` (Linux) or `~/Library/Logs/hypogeum/hypogeum.log` (macOS). One JSON line per entry: `{ts, severity, source, message}`. Path resolution falls back to `~/.local/state/hypogeum/` if `XDG_STATE_HOME` isn't set. If no path is writable, file logging silently disables — the in-memory buffer and footer still work.
+**Log file:** appended to `$XDG_STATE_HOME/hypogeum/hypogeum.log` (Linux) or `~/Library/Logs/hypogeum/hypogeum.log` (macOS). One JSON line per entry: `{ts, severity, message}` (the `diagEntry` struct in `internal/tui/diagnostics.go` has no `source` field). Path resolution falls back to `~/.local/state/hypogeum/` if `XDG_STATE_HOME` isn't set. If no path is writable, file logging silently disables — the in-memory buffer and footer still work.
 
 **In-app log viewer modal (`^l`):** reuses the modal infrastructure built for backlinks. The 200-entry ring buffer is the source. Severity color cues match the footer. `Esc` closes; `j`/`k` scroll. See [[modal-geometry]] for layout rules.
 
