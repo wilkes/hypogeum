@@ -256,36 +256,24 @@ func (m *Model) handleSearchResults(msg searchResultsMsg) (tea.Model, tea.Cmd) {
 }
 
 // rerankByRecency reorders hits so files visited more recently come
-// first. Hits from the same file keep their (line) order. Hits whose
-// path doesn't appear in any recent.Ranked entry sort last in file-
-// alphabetical order.
+// first. Hits from the same file keep their (line) order. Recency
+// ranking scores every file that still exists on disk, so in practice
+// every hit path is ranked; a path that can't be scored (its file
+// vanished mid-scan) trails in input order rather than being dropped.
 //
-// store may be nil — happens in tests; we degrade to file-then-line
-// order (input order).
+// store may be nil — happens in tests; we degrade to input order.
 func rerankByRecency(store recentStore, hits []search.Hit) []search.Hit {
-	if store == nil || len(hits) == 0 {
+	if store == nil {
 		return hits
 	}
-	// Unique paths in stable input order.
-	seen := map[string]int{}
-	var uniquePaths []string
-	for _, h := range hits {
-		if _, ok := seen[h.Path]; !ok {
-			seen[h.Path] = len(uniquePaths)
-			uniquePaths = append(uniquePaths, h.Path)
+	return search.RerankByRecency(func(paths []string) []string {
+		ranked := store.Rank(paths)
+		out := make([]string, len(ranked))
+		for i, r := range ranked {
+			out[i] = r.Path
 		}
-	}
-	ranked := store.Rank(uniquePaths)
-	// Group hits by path, then emit groups in priority order.
-	byPath := map[string][]search.Hit{}
-	for _, h := range hits {
-		byPath[h.Path] = append(byPath[h.Path], h)
-	}
-	out := make([]search.Hit, 0, len(hits))
-	for _, r := range ranked {
-		out = append(out, byPath[r.Path]...)
-	}
-	return out
+		return out
+	}, hits)
 }
 
 // recentStore is the subset of *recent.Store that rerankByRecency uses.
