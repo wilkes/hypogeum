@@ -145,6 +145,36 @@ func TestRefreshFileUpdatesIndex(t *testing.T) {
 	}
 }
 
+// TestRefreshFileResolvesAddedLink guards the scoped-resolution path:
+// editing an existing file to *add* a wikilink must resolve that link,
+// not just drop removed ones. RefreshFile re-resolves only the edited
+// file's own refs, so this is the direction most at risk if that scoping
+// is ever broken.
+func TestRefreshFileResolvesAddedLink(t *testing.T) {
+	dir := t.TempDir()
+	a := writeFile(t, dir, "a.md", "no links yet.")
+	writeFile(t, dir, "b.md", "i am b")
+
+	v, err := Build(dir, NopDiagnostics{})
+	if err != nil {
+		t.Fatalf("Build: %v", err)
+	}
+	bAbs, _ := filepath.Abs(filepath.Join(dir, "b.md"))
+	if got := len(v.Backlinks(bAbs)); got != 0 {
+		t.Fatalf("initial Backlinks: got %d want 0", got)
+	}
+
+	if err := os.WriteFile(a, []byte("now links to [[b]]."), 0o644); err != nil {
+		t.Fatalf("rewrite a: %v", err)
+	}
+	if err := v.RefreshFile(a); err != nil {
+		t.Fatalf("RefreshFile: %v", err)
+	}
+	if got := len(v.Backlinks(bAbs)); got != 1 {
+		t.Fatalf("post-refresh Backlinks: got %d want 1", got)
+	}
+}
+
 func TestRefreshFileDeletedFileDropsEntry(t *testing.T) {
 	dir := t.TempDir()
 	a := writeFile(t, dir, "a.md", "links to [[b]].")
