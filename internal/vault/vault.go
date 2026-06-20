@@ -4,8 +4,11 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
+
+	"github.com/yuin/goldmark"
 
 	"github.com/wilkes/hypogeum/internal/pathutil"
 	"github.com/wilkes/hypogeum/internal/tree"
@@ -83,7 +86,7 @@ func (v *Vault) RefreshFile(path string) error {
 		return nil
 	}
 
-	v.indexFile(abs)
+	v.indexFile(newMarkdownParser(), abs)
 	// Only the edited file's own refs can change. A FileModified event is
 	// a content write to a file that already existed, so its basename — and
 	// thus the v.names index it lives under — is unchanged (indexFile
@@ -121,8 +124,53 @@ func removePath(s []string, p string) []string {
 // walkAndIndex populates v.files and v.names by walking v.root.
 // Per-file parse failures emit a Warn diagnostic and are skipped.
 // A walk-level error (root unreadable) is fatal.
+//
+// The walk (directory entries only) runs serially; the read+parse of each
+// file fans out across workers, since a profile of Build showed file-open
+// syscalls and goldmark-allocation GC dominating a serial build. Each worker
+// holds its own goldmark parser (not goroutine-safe to share). Map writes are
+// serialized by v.mu inside indexFile, and resolution is order-independent
+// (scoreProximity sorts), so completion order doesn't affect the result.
 func (v *Vault) walkAndIndex() error {
-	return filepath.WalkDir(v.root, func(path string, d os.DirEntry, err error) error {
+	paths, err := v.markdownPaths()
+	if err != nil {
+		return err
+	}
+
+	workers := runtime.GOMAXPROCS(0)
+	if workers > len(paths) {
+		workers = len(paths)
+	}
+	if workers < 1 {
+		workers = 1
+	}
+
+	ch := make(chan string, workers)
+	var wg sync.WaitGroup
+	for i := 0; i < workers; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			md := newMarkdownParser()
+			for p := range ch {
+				v.indexFile(md, p)
+			}
+		}()
+	}
+	for _, p := range paths {
+		ch <- p
+	}
+	close(ch)
+	wg.Wait()
+	return nil
+}
+
+// markdownPaths walks v.root and returns the non-hidden markdown files, in
+// walk order. Hidden directories are pruned; hidden and non-markdown files
+// are skipped — same filtering the serial walk used.
+func (v *Vault) markdownPaths() ([]string, error) {
+	var paths []string
+	err := filepath.WalkDir(v.root, func(path string, d os.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
@@ -135,21 +183,23 @@ func (v *Vault) walkAndIndex() error {
 		if strings.HasPrefix(d.Name(), ".") || !tree.IsMarkdown(d.Name()) {
 			return nil
 		}
-		v.indexFile(path)
+		paths = append(paths, path)
 		return nil
 	})
+	return paths, err
 }
 
 // indexFile parses one file and stores its outgoing references and
 // name-index entry. Errors emit a Warn diagnostic and leave the file
-// out of the index.
-func (v *Vault) indexFile(path string) {
+// out of the index. md is the caller's reusable parser; the v.mu critical
+// section makes indexFile safe to call from multiple goroutines.
+func (v *Vault) indexFile(md goldmark.Markdown, path string) {
 	src, err := os.ReadFile(path)
 	if err != nil {
 		v.diag.Warn("vault: read " + path + ": " + err.Error())
 		return
 	}
-	refs := extractReferences(string(src), path)
+	refs := extractReferences(md, string(src), path)
 
 	v.mu.Lock()
 	defer v.mu.Unlock()

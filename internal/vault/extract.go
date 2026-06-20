@@ -25,13 +25,22 @@ type reference struct {
 	line        int
 }
 
+// newMarkdownParser builds a goldmark instance wired with the wikilink
+// extension. Construction is non-trivial, so callers reuse one parser across
+// many files rather than building per file (see walkAndIndex). A goldmark
+// instance is not shared across goroutines — each indexing worker holds its
+// own.
+func newMarkdownParser() goldmark.Markdown {
+	return goldmark.New(goldmark.WithExtensions(WikilinkExtension))
+}
+
 // extractReferences parses src as markdown (with the wikilink extension)
 // and returns one reference per outgoing link, in document order.
 // Standard ast.Link nodes become refStdLink entries; wikilinkNode
-// instances become refWikilink entries.
-func extractReferences(src, fromPath string) []reference {
+// instances become refWikilink entries. md is supplied by the caller so the
+// parser can be reused across files.
+func extractReferences(md goldmark.Markdown, src, fromPath string) []reference {
 	source := []byte(src)
-	md := goldmark.New(goldmark.WithExtensions(WikilinkExtension))
 	doc := md.Parser().Parse(text.NewReader(source))
 
 	var refs []reference

@@ -9,7 +9,7 @@ import (
 
 func TestSnippet_ParagraphContext(t *testing.T) {
 	src := "before. Here we link to [[Foo]] in a sentence. after."
-	refs := extractReferences(src, "/x.md")
+	refs := extractReferences(newMarkdownParser(), src, "/x.md")
 	if len(refs) != 1 {
 		t.Fatalf("refs: got %d want 1", len(refs))
 	}
@@ -25,7 +25,7 @@ func TestSnippet_ListItemContext(t *testing.T) {
 	src := `- first item
 - item with [[Foo]] inside
 - last item`
-	refs := extractReferences(src, "/x.md")
+	refs := extractReferences(newMarkdownParser(), src, "/x.md")
 	if len(refs) != 1 {
 		t.Fatalf("refs: got %d want 1", len(refs))
 	}
@@ -40,7 +40,7 @@ func TestSnippet_ListItemContext(t *testing.T) {
 
 func TestSnippet_HighlightWrapping(t *testing.T) {
 	src := "see [[Foo]] now."
-	refs := extractReferences(src, "/x.md")
+	refs := extractReferences(newMarkdownParser(), src, "/x.md")
 	if len(refs) != 1 {
 		t.Fatalf("refs: got %d want 1", len(refs))
 	}
