@@ -12,7 +12,6 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
-	"github.com/wilkes/hypogeum/internal/recent"
 	"github.com/wilkes/hypogeum/internal/search"
 )
 
@@ -266,20 +265,13 @@ func rerankByRecency(store recentStore, hits []search.Hit) []search.Hit {
 	if store == nil {
 		return hits
 	}
-	return search.RerankByRecency(func(paths []string) []string {
-		ranked := store.Rank(paths)
-		out := make([]string, len(ranked))
-		for i, r := range ranked {
-			out[i] = r.Path
-		}
-		return out
-	}, hits)
+	return search.RerankByRecency(store.RankPaths, hits)
 }
 
 // recentStore is the subset of *recent.Store that rerankByRecency uses.
 // Defined as an interface so tests can swap in a nil-tolerant fake.
 type recentStore interface {
-	Rank(paths []string) []recent.Ranked
+	RankPaths(paths []string) []string
 }
 
 // formatSearchHits renders each hit as a two-row entry:

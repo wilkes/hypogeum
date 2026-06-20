@@ -123,6 +123,19 @@ func (s *Store) Rank(paths []string) []Ranked {
 	return out
 }
 
+// RankPaths is Rank reduced to just the ordered path slice. It exists so
+// callers that only need recency ordering (the TUI search modal, the
+// non-interactive query mode) don't each hand-roll the Rank → .Path map.
+// Same drop-missing-files semantics as Rank.
+func (s *Store) RankPaths(paths []string) []string {
+	ranked := s.Rank(paths)
+	out := make([]string, len(ranked))
+	for i, r := range ranked {
+		out[i] = r.Path
+	}
+	return out
+}
+
 type fileFormat struct {
 	Version int                  `json:"version"`
 	Visits  map[string]time.Time `json:"visits"`
