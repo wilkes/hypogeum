@@ -36,6 +36,9 @@ func run(args []string) error {
 			return nil
 		}
 	}
+	if len(args) > 0 && isQueryVerb(args[0]) {
+		return runQuery(args, os.Stdout)
+	}
 	root, initialFile, err := resolveTarget(args)
 	if err != nil {
 		return err
