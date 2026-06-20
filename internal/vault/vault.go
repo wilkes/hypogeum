@@ -84,9 +84,14 @@ func (v *Vault) RefreshFile(path string) error {
 	}
 
 	v.indexFile(abs)
-	// Re-resolve all wikilinks in case this file's appearance/change
-	// affects resolution (e.g. it newly satisfies a name lookup).
-	v.resolveAllRefs()
+	// Only the edited file's own refs can change. A FileModified event is
+	// a content write to a file that already existed, so its basename — and
+	// thus the v.names index it lives under — is unchanged (indexFile
+	// dedupes the path back into its existing slot). No other file's
+	// resolution can shift, so re-resolving the whole vault is wasted work.
+	// A file *newly* satisfying a name lookup arrives as StructureChanged →
+	// Rebuild, which repopulates names and calls resolveAllRefs.
+	v.resolveFileRefs(abs)
 	return nil
 }
 
@@ -220,6 +225,28 @@ func (v *Vault) resolveAllRefs() {
 			if ok {
 				entry.refs[i].resolved = path
 			}
+		}
+	}
+}
+
+// resolveFileRefs fills in the `resolved` field for one file's wikilink
+// references, holding the write lock. Used by RefreshFile, where only the
+// edited file's refs can change (see the comment there). A no-op if the
+// path isn't indexed. Build/Rebuild use resolveAllRefs instead because they
+// repopulate the names index from scratch and must re-resolve everything.
+func (v *Vault) resolveFileRefs(path string) {
+	v.mu.Lock()
+	defer v.mu.Unlock()
+	entry, ok := v.files[path]
+	if !ok {
+		return
+	}
+	for i := range entry.refs {
+		if entry.refs[i].kind != refWikilink {
+			continue
+		}
+		if p, ok := v.resolveLocked(entry.path, entry.refs[i].target); ok {
+			entry.refs[i].resolved = p
 		}
 	}
 }
