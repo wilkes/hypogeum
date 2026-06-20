@@ -66,7 +66,7 @@ complexity curves.
 
 **Follow-up candidates (separate branches, justified by benchstat):**
 
-- **`search.Search` allocates proportionally to N** (~667 KB at N=10, ~64 MB at N=1000). Each call
+- **`search.Search` allocates proportionally to N** (~667 KB at N=10, ~63 MB at N=1000). Each call
   reads every file into memory. An index-based approach (pre-read + line table) would reduce
   per-call allocations, at the cost of staleness — measure whether the current latency is
   problematic in the real TUI before optimizing.
