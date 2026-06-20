@@ -141,11 +141,17 @@ a 64× byte increase):
   only the first term, content ops feel both.
 
 So the extreme-scale numbers, run on tiny files, *under*-state the content ops for a
-realistic vault: with ~5–10 KB notes, `search` and `vault.Build` run roughly 2× the
-reported times (the 7.4-min build at 1M → ~12–15 min). `tree.Walk` and `recent.Rank`
-are unchanged. One guard worth knowing: `search` caps per-file reads at
-`maxFileBytes` (1 MiB), so a single giant note can't blow up a scan; `vault.Build`
-and `RefreshFile` have no such cap and read the whole file.
+realistic vault: with ~5–10 KB notes, `vault.Build` runs roughly 2× the reported times
+(the 7.4-min build at 1M → ~12–15 min). `tree.Walk` and `recent.Rank` are unchanged.
+One guard worth knowing: `search` caps per-file reads at `maxFileBytes` (1 MiB), so a
+single giant note can't blow up a scan; `vault.Build` and `RefreshFile` have no such cap
+and read the whole file.
+
+`search`'s share of that 2× has since been removed (PR #80): `scanFile` no longer
+allocates a `Text()` + `ToLower()` copy per line, so its per-line cost — the part that
+grew with file size — dropped ~3.2× on a mixed-case large-file corpus (45 MB/op → 215 KB,
+403k allocs → 3k). `vault.Build` still pays the full per-byte cost (goldmark parses every
+file's prose) and remains the content op most sensitive to note size.
 
 > Method note: at this scale `testing.B`'s regenerate-per-run model is
 > impractical, so these came from a throwaway harness that generates one corpus
@@ -154,11 +160,14 @@ and `RefreshFile` have no such cap and read the whole file.
 
 **Follow-up candidates (separate branches, justified by benchstat):**
 
-- **`search.Search` allocates proportionally to N** (~667 KB at N=10, ~63 MB at N=1000). Each call
-  reads every file into memory. ✅ *Partially addressed (PR #76): pooling the per-file scanner
-  buffers cut full-scan allocations ~98% and time ~2.3×, putting a 10k-file vault back under the
-  150 ms debounce.* A full index-based approach (pre-read + line table) would cut allocations
-  further at the cost of staleness — still YAGNI below ~10k files.
+- **`search.Search` allocation.** ✅ *Largely addressed across two passes.* PR #76 pooled the
+  per-file scanner buffers (full-scan allocations −98%, time ~2.3×, 10k-file vault back under the
+  150 ms debounce). PR #80 then removed the per-line `Text()` + `ToLower()` copies in favour of a
+  no-alloc ASCII-fold scan (large-file search −68% time, −99.5% bytes; small files improved too).
+  Remaining lever — a persisted index (pre-read + line table) — would cut the *remaining* per-scan
+  file reads at the cost of staleness, and only matters past ~10k files (still YAGNI). Note PR #80
+  narrows matching to ASCII case folding; non-ASCII case-insensitive matches (e.g. `É`/`é`) no
+  longer match, a deliberate trade for the allocation win.
 
 - **`markdown.RenderWithLinks` alloc reduction.** The only realistic lever is replacing or
   wrapping Glamour with a renderer that reuses buffers. Profile first (`-cpuprofile`) to confirm
