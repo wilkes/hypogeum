@@ -60,6 +60,7 @@ Cross-cutting ideas that show up in multiple specs and packages. Each is its own
 ## Tooling
 
 - [Benchmarking](benchmarking.md) — how to run the hot-path benchmarks (`internal/benchcorpus` corpus + per-package `*_bench_test.go`) and the latest findings.
+- [Link-cycle render reuse](superpowers/specs/2026-06-20-link-cycle-render-cache-design.md) — approved — split the Glamour render from the highlight pass so `n`/`p` link cycling re-applies the reverse-video via a cheap `stripSentinels` instead of a full re-render (~12.3k allocs → small constant). Adds `markdown.RenderResult` + `WithHighlight`; first follow-up from the benchmarking findings.
 
 ## Conventions for adding to this folder
 
