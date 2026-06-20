@@ -150,13 +150,31 @@ and read the whole file.
 `search`'s share of that 2× has since been removed (PR #80): `scanFile` no longer
 allocates a `Text()` + `ToLower()` copy per line, so its per-line cost — the part that
 grew with file size — dropped ~3.2× on a mixed-case large-file corpus (45 MB/op → 215 KB,
-403k allocs → 3k). `vault.Build` still pays the full per-byte cost (goldmark parses every
-file's prose) and remains the content op most sensitive to note size.
+403k allocs → 3k). `vault.Build` got ~3× faster too (PR #82, see below), though it remains
+the content op most sensitive to note size — its per-byte work is goldmark allocating a
+full prose AST, which the #82 changes overlap but don't eliminate.
 
 > Method note: at this scale `testing.B`'s regenerate-per-run model is
 > impractical, so these came from a throwaway harness that generates one corpus
 > and times each operation a single pass. Not committed — reconstruct from this
 > note if needed.
+
+### What a profile of `vault.Build` showed (PR #82)
+
+`pprof` of a large-file build (300 files × 33 KB) put the cost in surprising places:
+
+- **`os.Open` syscalls — ~44% of CPU.** Reads ran serially, and macOS syscalls are
+  expensive; this is a per-*file* cost (scales with count, not size).
+- **GC — ~25%**, driven by goldmark's allocations (`text.Segments.Append` alone was 38%
+  of bytes; the AST it builds for prose is 82% of all allocations).
+- **goldmark parse *compute* — only ~3%.** The per-byte cost is the *garbage*, not the parsing.
+
+Two low-risk fixes followed (both shipped in #82): fan the read+parse across `GOMAXPROCS`
+workers (overlaps the open syscalls + spreads GC), and reuse one goldmark parser per worker
+instead of constructing one per file. Result (`benchstat`, n=6): `BuildLargeFiles` −70%,
+`Build/N=1000` −68% time / −42% allocs. The remaining per-byte allocation (goldmark's prose
+AST) would need a hand-rolled link scanner to remove — deferred for correctness risk
+(fences, inline code, escaping). `BenchmarkBuildLargeFiles` guards the per-byte regime.
 
 **Follow-up candidates (separate branches, justified by benchstat):**
 
