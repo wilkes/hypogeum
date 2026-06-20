@@ -256,8 +256,10 @@ func (m *Model) handleSearchResults(msg searchResultsMsg) (tea.Model, tea.Cmd) {
 }
 
 // rerankByRecency reorders hits so files visited more recently come
-// first. Hits from the same file keep their (line) order. Hits whose
-// path doesn't appear in any recent.Ranked entry are dropped.
+// first. Hits from the same file keep their (line) order. Recency
+// ranking scores every file that still exists on disk, so in practice
+// every hit path is ranked; a path that can't be scored (its file
+// vanished mid-scan) trails in input order rather than being dropped.
 //
 // store may be nil — happens in tests; we degrade to input order.
 func rerankByRecency(store recentStore, hits []search.Hit) []search.Hit {
