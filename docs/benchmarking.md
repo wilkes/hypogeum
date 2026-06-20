@@ -172,9 +172,34 @@ full prose AST, which the #82 changes overlap but don't eliminate.
 Two low-risk fixes followed (both shipped in #82): fan the read+parse across `GOMAXPROCS`
 workers (overlaps the open syscalls + spreads GC), and reuse one goldmark parser per worker
 instead of constructing one per file. Result (`benchstat`, n=6): `BuildLargeFiles` −70%,
-`Build/N=1000` −68% time / −42% allocs. The remaining per-byte allocation (goldmark's prose
-AST) would need a hand-rolled link scanner to remove — deferred for correctness risk
-(fences, inline code, escaping). `BenchmarkBuildLargeFiles` guards the per-byte regime.
+`Build/N=1000` −68% time / −42% allocs. `BenchmarkBuildLargeFiles` guards the per-byte regime.
+
+#### Rejected: replacing goldmark with a hand-rolled link scanner
+
+The remaining per-byte allocation is goldmark building a full prose AST just to find a few
+links. We prototyped an AST-free scanner (regex-free byte scan for `[[wikilinks]]` and
+`[text](dest)`, fence/inline-code/escape aware, reusing `internal/wikilink.Parse`) and
+**measured it against goldmark before deciding** — then discarded it. The numbers said no:
+
+- **Upside was modest.** Versus `extractReferences` on a 300-link doc: allocations −48%
+  (12.6k → 6.6k), bytes −55%, but **time only −8%** — because parse *compute* was never the
+  cost (it's ~3%; the allocations bite via GC, which #82 already parallelized). On top of
+  #82 the scanner bought little wall-clock.
+- **Correctness cost was real and concrete.** A differential test over 84 files (the `docs/`
+  vault + edge cases) matched goldmark on core fields (kind/target/heading/block/alias/line)
+  **100% where ref counts aligned** — but counts diverged on **2/84 real files**, both from
+  **indented code fences inside list items**. Fence state is global, so one missed fence
+  *cascades* and mis-classifies every link after it in the file. `displayText` matched only
+  80% (formatted link text isn't flattened) and the backlink `snippet` matched **0%** (it
+  needs goldmark's inline→plaintext rendering).
+- **Closing those gaps means reimplementing CommonMark** — list-aware fence tracking, lazy
+  continuation, an inline renderer for snippets — i.e. re-growing the parser we set out to
+  delete, and owning every edge case goldmark already handles.
+
+Conclusion: the safe ~3× from #82 is the right stopping point. The last slice of per-byte
+allocation isn't worth becoming a markdown-parser maintainer. Don't re-prototype this without
+a vault large enough that Build's *allocation* (not its already-parallel wall-clock) is the
+felt bottleneck.
 
 **Follow-up candidates (separate branches, justified by benchstat):**
 
