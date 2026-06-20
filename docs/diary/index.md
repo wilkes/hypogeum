@@ -4,7 +4,7 @@ A chronological log of how `hypogeum` was built, reconstructed from the commit h
 
 For the durable architecture, start at [docs/index.md](../index.md). This diary is the narrative; the package docs are the reference.
 
-- **Span:** 2026-05-05 → 2026-06-13
+- **Span:** 2026-05-05 → 2026-06-20
 - **Released:** v0.1.2, v0.2.0, v0.3.0, v0.4.0 (tag-driven via GoReleaser)
 
 ---
@@ -112,3 +112,22 @@ Four refactors acting on the previous day's review, each its own PR (reason-to-c
 - **Split `links_render.go` by reason-to-change (#57)** — the most recent commit on `main`.
 
 > **Where things stand:** content-first markdown browsing with link following (both phases), wikilinks + backlinks, recency fuzzy finder, full-text search, code-file rendering, source embeds, directory listings, two keybinding dialects, drag-to-copy, and tag-driven releases. Still open per CLAUDE.md: block references (`[[note#^blockid]]`) and a configurable vault root.
+
+---
+
+## 2026-06-20 — The optimization campaign: measure before you build
+
+(This entry jumps ahead of the intervening feature work — keybinding-dialect removal, scriptable query mode, the benchmarking foundation — to cover one self-contained day of profiling-driven optimization.)
+
+Sparked by a single question — *would file indexes speed up search, backlinks, and neighbors?* — and the answer turned out to be **"no index needed."** Backlinks, neighbors, and wikilink resolution were already in-memory indexes; only the read-everything paths had slack. Every win came from eliminating redundant work, and each one was found by a benchmark or profile, never a hunch.
+
+- **Search buffer pool (#76).** `scanFile` allocated a fresh 64 KiB scanner buffer per file; a `sync.Pool` of `*[]byte` cut full-scan time ~2.3× and allocation bytes ~98%. The time win was bigger than "less GC" — Go zero-fills every `make`, so the old path was memset-ing ~640 MB before reading a byte at 10k files.
+- **Scoped vault resolve (#77).** `RefreshFile` re-resolved *every* wikilink in the vault on *every* save. Scoping it to the changed file made per-save cost flat from 1k → 1M files — safe because a content edit can't change the `names` map, so no other file's resolution can shift.
+- **Extreme-scale sweep (#78, #79).** A one-off 100k–1M-file harness exposed *super-linear* per-file cost: the macOS **vnode-cache cliff** (`kern.maxvnodes` ≈ 263k) behind `recent.Rank`'s 256× blow-up, and the **file-size-vs-file-count** two-axis model (content ops scale with bytes; metadata ops don't). Recorded in [benchmarking.md](../benchmarking.md).
+- **No-alloc search scan (#80).** Replaced the per-line `Text()` + `ToLower()` allocations with an in-place ASCII-fold byte scan: realistic-content search 3.2× faster, −99.5% memory. The narrowing to ASCII case folding is irrelevant to markdown vaults.
+- **Parallel `vault.Build` (#82).** A `pprof` reframed the whole question: serial `os.Open` syscalls were ~44% of build CPU and goldmark's parse *compute* only ~3% — the per-byte cost was the *garbage*, not the parsing. Fanning read+parse across `GOMAXPROCS` workers + one parser per worker made `Build` ~3× faster. Invariants recorded in CLAUDE.md (#84).
+- **Rejected: hand-rolled link scanner (#83).** Prototyped an AST-free replacement for goldmark and **measured it before deciding** — a differential test over 84 files. Discarded: ~50% fewer allocations but only −8% time, and it broke on indented code fences (cascading, since fence state is global) with 0% snippet fidelity. A measured *no*, written down so nobody re-prototypes it.
+- **CLI cold-start map (#85, #87).** Timed the query binary: a ~24 ms process floor + a cold rebuild on every call. The first draft accidentally timed an error path (a `--vault` path-doubling gotcha); the correction (#87) re-measured with valid-JSON assertions — *assert success before trusting a timing.*
+- **Links fast path (#86).** `query.Links` ran a full `vault.Build` to answer a one-file question. `vault.OutboundFor` walks filenames only + parses just the target — 10–13× faster (~45× at 100k), with `TestOutboundFor_MatchesFullBuild` proving byte-identical output. Invariant recorded in CLAUDE.md (#88).
+
+> **The through-line:** not one of the six shipped optimizations was the obvious target. "Search is slow" → buffer allocation. "Per-byte build cost" → serial `open()` syscalls. "Replace goldmark" → not worth it. "CLI is slow" → `links` just did unnecessary work. Measure-first didn't *refine* the answer; it *changed* it, every time. The durable artifacts are [benchmarking.md](../benchmarking.md) (what costs what, the cliffs, the roads not taken) and a set of CLAUDE.md gotchas (the invariants that keep the speedups correct).
