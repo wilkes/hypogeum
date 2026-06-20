@@ -101,11 +101,22 @@ body's "When to use / when NOT" section.
    per-file; the skill teaches lifting them with
    `find <vault> -name '*.md'` → relativize each path to the vault root →
    per-file verb, dodging the vault-relative-path gotcha inside the loop. Two
-   flagship recipes:
+   flagship recipes, **each paired with a triage step** — the sweep surfaces
+   *candidates*, not verdicts:
    - **Broken-link sweep** — loop `links` over every file, keep `broken == true`,
-     report `file → target`.
-   - **Orphan finder** — loop `neighbors`, keep files whose `backlinks` is empty
-     (excluding intended roots like `index.md`).
+     report `file → target [kind]`. Triage: a candidate may be a genuine dead
+     link, but also a **literal syntax example** in prose (e.g. a doc *about*
+     wikilinks containing `[[Name]]`), a **cross-vault link** that escapes the
+     vault root (relative path to a file outside the vault — broken from the
+     vault's view but intentional), or a **dated-filename mismatch** (a
+     `[[concept]]` wikilink that can't resolve because the file is
+     `2026-..-concept.md`). The skill teaches separating these, not treating
+     every `broken == true` as a defect.
+   - **Orphan finder** — loop `neighbors`, keep files whose `backlinks` is empty.
+     Triage: the true root (`index.md`) is an expected orphan, and **leaf plans**
+     under `superpowers/plans/` are commonly unreferenced by design (nothing
+     links *to* a plan). The recipe filters those out / flags them as expected,
+     so the signal is "an unexpectedly disconnected note," not the raw list.
 
 8. **Fallback note** — when grep is genuinely better: exact-string hunts across
    non-vault code, tiny folders, or when the binary isn't available.
@@ -131,9 +142,16 @@ agent has a vault question
   own `docs/` vault during implementation. The four verbs are already proven to
   work this session; the skill codifies the exact, correct invocations
   (including the vault-relative path form).
-- **Audit recipes produce expected results on `docs/`:** the broken-link sweep
-  reports zero broken links (the vault was just synced); the orphan finder
-  returns a small, explicable set (intended roots, e.g. `index.md`).
+- **Audit recipes produce expected results on `docs/`:** ground-truth as of
+  authoring — the broken-link sweep surfaces **4 candidates**, which the triage
+  step correctly classifies: two `[[Name]]` literal syntax examples in the
+  wikilink specs (false positives), one intentional cross-vault link in
+  `diary/index.md` (escapes the vault root), and one genuine dated-filename
+  wikilink mismatch (`[[pre-select-inline-link]]` in `concepts/link-cursor.md`,
+  pre-existing). The orphan finder returns `index.md` (the true root) plus the
+  unreferenced leaf plans under `superpowers/plans/`. These exact results are
+  the skill's worked examples — the recipe's value is demonstrably *surfacing
+  candidates for triage*, not a clean pass/fail.
 - **Trigger sanity:** the `description` is checked against the writing-skills
   guidance for trigger clarity — it names the gates, not just the topic.
 - **No code changes:** `go build ./...` / `go test ./...` are untouched by this
