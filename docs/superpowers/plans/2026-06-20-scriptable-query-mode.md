@@ -716,8 +716,8 @@ git commit -m "feat(query): add Search and Recent query functions"
   - `type Link struct { Text, Target, Path, Kind string; Broken bool }` (json: `text`,`target`,`path`,`kind`,`broken`). `Kind` ∈ `"wikilink"|"relative"|"external"`. For wikilinks, `Target` is rendered `[[name]]`; for std links it is the raw href.
   - `type BacklinkEntry struct { Path string; Line int; Snippet, Text string }` (json: `path`,`line`,`snippet`,`text`).
   - `type Neighbors struct { File string; Outbound []Link; Backlinks []BacklinkEntry }` (json: `file`,`outbound`,`backlinks`).
-  - `func Links(root, file string) ([]Link, error)`.
-  - `func Neighbors(root, file string) (Neighbors, error)`.
+  - `func Links(root, file string) ([]Link, error)` — returns a "file not found" error when `file` does not exist on disk (spec: missing file → exit 1).
+  - `func Neighbors(root, file string) (Neighbors, error)` — same missing-file error contract.
   - Unexported `outboundLinks(v *vault.Vault, abs string) []Link` shared by both.
 
 - [ ] **Step 1: Write the failing test**
@@ -799,6 +799,20 @@ func TestNeighbors(t *testing.T) {
 		t.Errorf("backlink line = %d, want 1", n.Backlinks[0].Line)
 	}
 }
+
+func TestLinksFileNotFound(t *testing.T) {
+	dir := t.TempDir()
+	if _, err := Links(dir, filepath.Join(dir, "ghost.md")); err == nil {
+		t.Error("Links on missing file returned nil error, want non-nil")
+	}
+}
+
+func TestNeighborsFileNotFound(t *testing.T) {
+	dir := t.TempDir()
+	if _, err := Neighbors(dir, filepath.Join(dir, "ghost.md")); err == nil {
+		t.Error("Neighbors on missing file returned nil error, want non-nil")
+	}
+}
 ```
 
 - [ ] **Step 2: Run test to verify it fails**
@@ -808,7 +822,7 @@ Expected: FAIL — `undefined: Links` / `undefined: Neighbors`.
 
 - [ ] **Step 3: Implement Links, Neighbors, and the shared helper**
 
-Append to `internal/query/query.go` (and add `"net/url"`, `"path/filepath"`, and `"github.com/wilkes/hypogeum/internal/vault"` to its import block):
+Append to `internal/query/query.go` (and add `"fmt"`, `"net/url"`, `"os"`, `"path/filepath"`, and `"github.com/wilkes/hypogeum/internal/vault"` to its import block):
 
 ```go
 // Link is one outbound edge from a file.
@@ -869,13 +883,27 @@ func outboundLinks(v *vault.Vault, abs string) []Link {
 	return out
 }
 
+// mustExist returns an absolute path for file, or an error if file does
+// not exist on disk. A missing file argument is an operational failure
+// (exit 1), distinct from a file that simply has zero links.
+func mustExist(file string) (string, error) {
+	abs, err := filepath.Abs(file)
+	if err != nil {
+		return "", err
+	}
+	if _, err := os.Stat(abs); err != nil {
+		return "", fmt.Errorf("file not found: %s", file)
+	}
+	return abs, nil
+}
+
 // Links returns the outbound edges from file within the vault at root.
 func Links(root, file string) ([]Link, error) {
-	v, err := vault.Build(root, vault.NopDiagnostics{})
+	abs, err := mustExist(file)
 	if err != nil {
 		return nil, err
 	}
-	abs, err := filepath.Abs(file)
+	v, err := vault.Build(root, vault.NopDiagnostics{})
 	if err != nil {
 		return nil, err
 	}
@@ -884,11 +912,11 @@ func Links(root, file string) ([]Link, error) {
 
 // Neighbors returns file's outbound links and its backlinks.
 func Neighbors(root, file string) (Neighbors, error) {
-	v, err := vault.Build(root, vault.NopDiagnostics{})
+	abs, err := mustExist(file)
 	if err != nil {
 		return Neighbors{}, err
 	}
-	abs, err := filepath.Abs(file)
+	v, err := vault.Build(root, vault.NopDiagnostics{})
 	if err != nil {
 		return Neighbors{}, err
 	}
@@ -1214,6 +1242,7 @@ git commit -m "docs: document scriptable query mode"
 - cwd-default root + `--vault` → Task 6. ✓
 - JSON-by-default, snippet sanitizing → Tasks 4–6. ✓
 - Exit codes (stdout JSON-only, stderr errors, 1 on failure) → Task 6 (`runQuery` returns error) + existing `main` error path (prints to stderr, `os.Exit(1)`). ✓
+- Missing-file → exit 1 (spec lists "file not found" as a failure): `Links`/`Neighbors` guard with `mustExist` (Task 5), covered by `TestLinksFileNotFound`/`TestNeighborsFileNotFound`. `vault.Outbound` returning empty for an *indexed-but-linkless* file remains a valid zero-result (exit 0). ✓
 - Stable ordering → search recency (Task 3), backlinks source+line (existing `Backlinks`). ✓
 - Tests without a TTY → Tasks 4–6 all use plain function/`io.Writer` tests. ✓
 
