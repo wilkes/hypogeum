@@ -2,11 +2,48 @@ package vault_test
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/wilkes/hypogeum/internal/benchcorpus"
 	"github.com/wilkes/hypogeum/internal/vault"
 )
+
+// BenchmarkBuildLargeFiles isolates the per-BYTE cost of Build: fewer files,
+// each a large prose document with a constant link count. With big files the
+// fixed per-file overhead (os.Open) amortizes and goldmark parsing dominates,
+// the opposite of BenchmarkBuild's small-file regime where open() syscalls do.
+func BenchmarkBuildLargeFiles(b *testing.B) {
+	const files = 300
+	const paras = 300 // ~110 B/para ⇒ ~33 KB/file
+	dir := b.TempDir()
+	makeLargeDocs(b, dir, files, paras)
+	for b.Loop() {
+		if _, err := vault.Build(dir, vault.NopDiagnostics{}); err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
+func makeLargeDocs(b *testing.B, dir string, files, paras int) {
+	b.Helper()
+	const para = "The vault renders cursor modals with glamour sentinels, backlinks, and wikilinks in terminal markdown viewports.\n\n"
+	for i := 0; i < files; i++ {
+		var sb strings.Builder
+		fmt.Fprintf(&sb, "# note-%04d\n\n", i)
+		for p := 0; p < paras; p++ {
+			sb.WriteString(para)
+		}
+		for l := 0; l < 5; l++ {
+			fmt.Fprintf(&sb, "See [[note-%04d]].\n", (i*7+l)%files)
+		}
+		if err := os.WriteFile(filepath.Join(dir, fmt.Sprintf("doc-%04d.md", i)), []byte(sb.String()), 0o644); err != nil {
+			b.Fatal(err)
+		}
+	}
+}
 
 func BenchmarkBuild(b *testing.B) {
 	for _, n := range []int{10, 100, 1000} {
