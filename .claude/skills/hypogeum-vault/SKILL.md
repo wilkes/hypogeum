@@ -103,3 +103,49 @@ hypogeum search --vault docs "proximity tiebreaker" | jq -r '.[].path' | sort -u
   ```bash
   hypogeum neighbors --vault docs packages/recent.md | jq -r '.backlinks[].path'
   ```
+
+## Audit recipes — whole-vault sweeps
+
+The verbs are per-file. To audit the whole vault, lift them with a loop:
+`find <vault> -name '*.md'` → strip the vault prefix so the path is
+vault-relative → run the verb. **A sweep surfaces candidates, not verdicts —
+always triage the output.**
+
+### Broken-link sweep
+
+```bash
+find docs -name '*.md' | while read -r f; do rel="${f#docs/}"
+  hypogeum links --vault docs "$rel" \
+    | jq -r --arg F "$rel" '.[] | select(.broken) | "\($F) -> \(.target) [\(.kind)]"'
+done
+```
+
+Triage each candidate — not every `broken == true` is a defect:
+- **Syntax example.** A doc *about* linking that contains a literal `[[Name]]`
+  or `[text](path.md)` as an illustration. False positive — leave it.
+- **Cross-vault link.** A relative link whose target lives *outside* the vault
+  root (e.g. `../../.claude/.../memory/note.md`). Broken from the vault's view
+  but intentional — the file exists, just not in this vault.
+- **Dated-filename mismatch.** A `[[concept]]` wikilink that can't resolve
+  because the file is `2026-..-concept.md` (the basename stem includes the date
+  prefix). A genuine dead link — fix the wikilink or rename.
+- **Real dead link.** Target was moved/deleted. Fix it.
+
+### Orphan finder (notes nothing links to)
+
+```bash
+find docs -name '*.md' | while read -r f; do rel="${f#docs/}"
+  hypogeum neighbors --vault docs "$rel" \
+    | jq -r 'select((.backlinks|length)==0) | .file'
+done | sed 's|.*/docs/||' | sort
+```
+
+Triage: **leaf plans** (`superpowers/plans/*.md`) are commonly unreferenced by
+design — nothing links *to* a plan. The vault root (`index.md`) will appear
+here if nothing links to it yet, but typically accumulates backlinks as the
+vault matures. Filter out the expected cases; what's left ("an unexpectedly
+disconnected note") is the real signal. To exclude plan leaves:
+
+```bash
+... | grep -vE '^index\.md$|^superpowers/plans/'
+```
