@@ -1,12 +1,20 @@
 # hypogeum
 
-A terminal browser for markdown directories. Point it at a folder of `.md` files and wander through them — the rendered file fills the screen, `^p` opens a fuzzy file finder, `t` opens the directory tree in a modal, and links between files navigate with `Enter`. `h` and `l` go back and forward through your history, like a browser.
+A terminal browser for markdown directories. Point it at a folder of `.md` files and wander through them — the rendered file fills the screen, `^p` opens a fuzzy file finder, `/` opens full-text search, `t` opens the directory tree in a modal, and links between files navigate with `Enter`. `h` and `l` go back and forward through your history, like a browser. `y` copies the current file's path, and a visual-mode caret (`v`) or a mouse drag selects text to the clipboard.
 
 The name is the Greek word for an underground chamber or network of chambers (*hupó* "under" + *gê* "earth"). It shares a root with *hyperlink* (*hupér* "above") — the references float above the text, the chambers wait below.
 
 ## Status
 
-Renders GitHub Flavored Markdown via [Glamour](https://github.com/charmbracelet/glamour), walks directory trees, navigates file-to-file. Wikilinks (`[[note]]`) and standard markdown links resolve across the whole vault; press `b` to see what links to the current file (and `B` for the same view as a centered modal). The selected inline link is highlighted in reverse-video on the page; following a backlink, going back, or going forward leaves the link you came from pre-selected, so `n`/`p` cycling resumes from a meaningful position.
+Actively developed and usable day-to-day. The core:
+
+- **Rendering.** GitHub Flavored Markdown via [Glamour](https://github.com/charmbracelet/glamour). Non-markdown files (code, config) render with syntax highlighting and a line-number gutter; pointing at a directory shows a navigable listing.
+- **Navigation.** Walks directory trees, navigates file-to-file, with browser-style back/forward history (`h`/`l`). Wikilinks (`[[note]]`) and standard markdown links resolve across the whole vault; press `b` to see what links to the current file. The selected inline link is highlighted in reverse-video, and following a backlink or moving through history leaves the link you came from pre-selected, so `n`/`p` cycling resumes from a meaningful position. Broken links are tallied in the footer.
+- **Finding things.** A recency-ranked fuzzy finder (`^p` / `o`), full-text search across the vault (`/`), a recently-opened list (`r`), and the directory tree (`t`) all open as modals.
+- **Embeds.** Source embeds (`![[file.go#L10-L20]]`) inline a slice of another file as a fenced code block; range links scroll to and highlight the target lines.
+- **Selection.** Copy the current file's path with `y`, or select text — keyboard visual mode (`v`) or mouse drag — to the system clipboard (and OSC 52 for SSH/tmux).
+- **Live reload.** An fsnotify watcher re-renders the open file and re-walks the tree as files change on disk.
+- **Scripting.** Non-interactive JSON query mode (`search`, `links`, `recent`, `neighbors`, `graph`) for piping the link graph into other tools — see below.
 
 ## Install
 
@@ -40,6 +48,7 @@ hypogeum --help           # usage, query verbs, and global flags
 | `y` | Copy current file path / yank selection (in visual mode) |
 | `Esc` | Clear link selection / cancel visual mode |
 | `b` | Open backlinks (modal) |
+| `r` | Open recently-opened files (modal) |
 | `t` | Open directory tree (modal) |
 | `^p` / `o` | Open file finder (type to fuzzy-filter; `^j`/`^k` cursor) |
 | `/` | Full-text search across vault markdown (type to search; `^j`/`^k` cursor) |
@@ -62,10 +71,6 @@ The binary also works in non-interactive mode: pass a reserved verb as the first
 The `--vault` flag defaults to the current directory. Use `./` prefix to refer to a file literally named `search`, `links`, `recent`, `neighbors`, or `graph` in the TUI.
 
 - **Agent skill:** [`.claude/skills/hypogeum-vault/`](.claude/skills/hypogeum-vault/SKILL.md) teaches Claude Code (or any skill-aware agent) to explore and audit a markdown vault with the query CLI. Symlink it into `~/.claude/skills/` to use it in any repo.
-
-## Inspiration
-
-The design owes an obvious debt to [Frogmouth](https://github.com/Textualize/frogmouth), which does the same job in Python on top of Textual. hypogeum is a clean-room reimplementation in Go with no shared code, written to feel native in environments where a single static binary beats a Python install.
 
 ## License
 
