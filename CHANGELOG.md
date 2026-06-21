@@ -9,6 +9,13 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 <!-- next-release-here -->
 
+## [v0.6.0] - 2026-06-21
+
+### Features
+* 14eb8cb0ba9d0740ff076032a65595123bb47420: feat(cli): add --help / -h usage output (@wilkes)
+### Docs
+* a48eaeaf2b45f851a6000dbaef3370465d3fda3e: docs(changelog): v0.5.1 (@github-actions[bot])
+
 ## [v0.5.1] - 2026-06-20
 
 ### Features
