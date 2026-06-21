@@ -71,6 +71,37 @@ complexity curves.
   A naive reading of the alloc count would suggest a pure in-memory cost — the real bottleneck
   is the `os.Stat` fan-out.
 
+## Findings (run on 2026-06-21 / darwin/arm64 Apple M1 Max)
+
+A re-run on Apple Silicon. **Wall-clock (`ns/op`) is not comparable to the Intel
+table above** — different CPU, different ISA — but `allocs/op` and `B/op` are
+hardware-independent, so any change there is a real code change, not a faster
+chip. Two paths have been meaningfully optimized since the 2026-06-20 baseline.
+
+| Benchmark | N=10 | N=100 | N=1000 | allocs/op @ N=1000 | Note |
+|-----------|------|-------|--------|--------------------|------|
+| tree.Walk | 26,391 ns/op | 110,652 ns/op | 945,742 ns/op | 4,031 | allocs identical to Intel run — unchanged path |
+| vault.Build | 398,468 ns/op | 2,631,549 ns/op | 20,634,007 ns/op | 159,295 | **allocs down ~43% vs Intel run's 278,068** — real reduction since baseline |
+| search.Search | 146,567 ns/op | 1,334,284 ns/op | 17,163,570 ns/op | 6,024 | **allocs down ~62% (was 16,037); B/op down ~99% (~0.44 MB vs 63 MB)** — the `bufPool` win (CLAUDE.md gotcha); baseline predates it |
+| recent.RankByMTime | 19,656 ns/op | 209,784 ns/op | 2,193,467 ns/op | 2,004 | allocs match Intel run (2,009) — unchanged path |
+| markdown.RenderWithLinks | 903,903 ns/op | — | — | 12,270 | allocs match Intel run (12,269) — unchanged Glamour path |
+
+**Comparison notes (hardware-independent metrics only):**
+
+- **`tree.Walk`, `recent.RankByMTime`, and `markdown.RenderWithLinks` are byte-for-byte
+  unchanged** in allocation behavior — the Intel table is still accurate for these.
+- **`search.Search` shed ~99% of its bytes** (63 MB/op → ~0.44 MB/op at N=1000) and ~62%
+  of its allocations. The Intel table's "63 MB/op" note predates the `bufPool` scanner-buffer
+  recycling (see the `internal/search` gotcha in CLAUDE.md), so treat that figure as stale.
+- **`vault.Build` allocates ~43% fewer objects** (278,068 → 159,295 at N=1000). The scaling
+  shape still holds — near-linear (~6.6× / ~7.8× here), not quadratic.
+- **Scaling conclusions all reproduce:** `search` linear in N, `vault.Build` near-linear (not
+  O(n²)), `recent.RankByMTime` `os.Stat`-dominated. Only the constants moved.
+
+> Method note: `go test -run=^$ -bench=. -benchmem` across the five hot-path
+> packages, single `-count`. Re-stamp this section (not the Intel one) when
+> re-running on Apple Silicon.
+
 ## Extreme-scale findings (100k–1M files)
 
 A one-off sweep at 100k and 1M files (flat directory — a filesystem worst case;
