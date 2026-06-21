@@ -35,6 +35,10 @@ func run(args []string) error {
 			fmt.Println(versionLine())
 			return nil
 		}
+		if a == "--help" || a == "-h" {
+			fmt.Println(helpText())
+			return nil
+		}
 	}
 	if len(args) > 0 && isQueryVerb(args[0]) {
 		return runQuery(args, os.Stdout)

@@ -24,6 +24,7 @@ Run `hypogeum --version` to confirm which build you're on.
 hypogeum                  # browse the current directory
 hypogeum ~/notes          # browse a specific directory
 hypogeum ~/notes/index.md # open a specific file; tree roots at its directory
+hypogeum --help           # usage, query verbs, and global flags
 ```
 
 ## Keys
