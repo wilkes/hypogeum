@@ -7,11 +7,46 @@ import (
 	"strings"
 	"testing"
 	"time"
+	"unicode/utf8"
 
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/wilkes/hypogeum/internal/search"
 )
+
+// TestRenderBar pins the proportional-bar math: it must always emit exactly
+// `width` visible runes (no overflow / off-by-one), zero out an empty result,
+// floor any nonzero count to at least one eighth, and fill solid at the max.
+func TestRenderBar(t *testing.T) {
+	const w = 8
+	cases := []struct {
+		count, max int
+		want       string
+	}{
+		{100, 100, "████████"},  // count == max → solid
+		{1, 4, "████    "},      // sqrt(1/4)=0.5 → 4 full cells
+		{0, 5, "        "},      // zero count → empty
+		{5, 0, "        "},      // zero max → empty
+		{1, 100000, "▏       "}, // sqrt rounds to 0 → floored to one eighth (▏)
+	}
+	for _, c := range cases {
+		got := renderBar(c.count, c.max, w)
+		if n := utf8.RuneCountInString(got); n != w {
+			t.Errorf("renderBar(%d,%d,%d) = %q has %d runes, want %d", c.count, c.max, w, got, n, w)
+		}
+		if got != c.want {
+			t.Errorf("renderBar(%d,%d,%d) = %q, want %q", c.count, c.max, w, got, c.want)
+		}
+	}
+	// Property: across the whole count range the bar is always exactly w runes
+	// — never overflows or under-fills, even when count > max.
+	for n := 0; n <= 250; n++ {
+		got := renderBar(n, 200, w)
+		if rc := utf8.RuneCountInString(got); rc != w {
+			t.Fatalf("renderBar(%d,200,%d) = %q has %d runes, want %d", n, w, got, rc, w)
+		}
+	}
+}
 
 // minimal smoke test that / opens the modal. Fuller behavior covered in later tasks.
 func TestSearch_SlashOpensModal(t *testing.T) {
