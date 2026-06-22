@@ -1,8 +1,18 @@
 # MCP Server — Design
 
-**Status:** Draft, awaiting review.
+**Status:** Implemented (this branch).
 **Date:** 2026-06-22
 **Branch:** `claude/hypogeum-rpc-server-5u4ksg`
+
+> **Implementation note (2026-06-22).** Shipped as designed: the `mcp` verb
+> (`cmd/hypogeum/mcp.go`), the `internal/mcp` package (warm `index` +
+> watcher-wired `Server` + five tools), and `query.NeighborsFromVault` /
+> `query.GraphFromVault` so the warm index reuses a built vault. The official Go
+> MCP SDK (`github.com/modelcontextprotocol/go-sdk` v1.6.1) was reachable and
+> pinned — its one cost is a **Go toolchain bump to 1.25** (the module requires
+> `go >= 1.25.0`), which CI picks up automatically via `go-version-file: go.mod`.
+> End-to-end verified by driving the built binary with a real MCP client over
+> stdio. `recent`/visit-state and health tools remain deferred as planned.
 
 ## Goal
 
