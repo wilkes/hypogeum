@@ -37,6 +37,7 @@ type keyMap struct {
 	OpenSearch       key.Binding
 	SearchCursorDown key.Binding
 	SearchCursorUp   key.Binding
+	SearchFoldToggle key.Binding
 
 	Top          key.Binding
 	Bottom       key.Binding
@@ -76,6 +77,7 @@ func defaultKeys() keyMap {
 		OpenSearch:       key.NewBinding(key.WithKeys("/"), key.WithHelp("/", "search…")),
 		SearchCursorDown: key.NewBinding(key.WithKeys("ctrl+j"), key.WithHelp("^j", "search: next")),
 		SearchCursorUp:   key.NewBinding(key.WithKeys("ctrl+k"), key.WithHelp("^k", "search: prev")),
+		SearchFoldToggle: key.NewBinding(key.WithKeys("tab"), key.WithHelp("tab", "search: expand/collapse file")),
 
 		Top:          key.NewBinding(key.WithKeys("g"), key.WithHelp("g", "top")),
 		Bottom:       key.NewBinding(key.WithKeys("G"), key.WithHelp("G", "bottom")),

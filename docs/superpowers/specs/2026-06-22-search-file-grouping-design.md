@@ -1,8 +1,17 @@
 # Search Modal — File Grouping — Design
 
-**Status:** Draft, awaiting review.
+**Status:** Implemented (this branch).
 **Date:** 2026-06-22
 **Branch:** `claude/search-file-grouping`
+
+> **Implementation note (2026-06-22).** Shipped as designed. `search` gained
+> `FileMatches`/`Line`, `SearchGrouped`, and `RenderSnippet`, with `scanFile`
+> refactored into a shared `scanFileLines` + `scanFiles` so the hit-oriented and
+> grouped paths share one match-finding pass (`TestRenderSnippet_MatchesEagerHitSnippet`
+> guards snippet identity). The TUI modal moved to a flattened `[]searchRow` with
+> a fold map, count-desc/`mtime` sort, the sqrt bar, and `Tab` fold toggle. Two
+> open questions resolved to the proposed defaults: bar width **8**, expanded-match
+> inline cap **50**. `Enter`-on-file = jump-to-first kept (not expand).
 
 ## Goal
 

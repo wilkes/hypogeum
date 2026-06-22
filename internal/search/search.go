@@ -127,13 +127,17 @@ var bufPool = sync.Pool{
 	},
 }
 
-// scanFile reads path and returns one Hit per line containing
-// case-insensitive substring matches of query. The query is assumed
-// non-empty (caller's responsibility — Search filters short queries).
+// scanFileLines reads path and returns one Line per line containing
+// case-insensitive substring matches of query, in ascending line order.
+// The query is assumed non-empty (caller's responsibility). Snippet
+// construction is deferred — a Line carries only the raw text plus the
+// match offset/length, so both the hit-oriented scan (which builds a
+// Hit's snippet per line) and the grouped scan (which builds snippets
+// lazily, only for displayed matches) share this single match-finding pass.
 //
 // Returns an error only for I/O failures opening the file. Cancellation
-// returns (nil, ctx.Err()).
-func scanFile(ctx context.Context, path, query string) ([]Hit, error) {
+// returns the lines gathered so far alongside ctx.Err().
+func scanFileLines(ctx context.Context, path, query string) ([]Line, error) {
 	if ctx.Err() != nil {
 		return nil, ctx.Err()
 	}
@@ -145,7 +149,7 @@ func scanFile(ctx context.Context, path, query string) ([]Hit, error) {
 
 	loweredQuery := strings.ToLower(query)
 	queryLen := len(query)
-	var hits []Hit
+	var lines []Line
 
 	bufp := bufPool.Get().(*[]byte)
 	defer bufPool.Put(bufp)
@@ -158,7 +162,7 @@ func scanFile(ctx context.Context, path, query string) ([]Hit, error) {
 		lineNum++
 		if lineNum&0xFF == 0 { // check ctx every 256 lines
 			if ctx.Err() != nil {
-				return hits, ctx.Err()
+				return lines, ctx.Err()
 			}
 		}
 		lineB := scanner.Bytes()
@@ -166,17 +170,18 @@ func scanFile(ctx context.Context, path, query string) ([]Hit, error) {
 		if idx < 0 {
 			continue
 		}
-		hits = append(hits, Hit{
-			Path: path,
-			Line: lineNum,
+		lines = append(lines, Line{
+			Num: lineNum,
 			// string(lineB) allocates only here, on an actual match.
-			Snippet: buildSnippet(string(lineB), idx, queryLen, snippetBudget),
+			Text: string(lineB),
+			At:   idx,
+			Len:  queryLen,
 		})
 	}
 	if err := scanner.Err(); err != nil {
-		return hits, err
+		return lines, err
 	}
-	return hits, nil
+	return lines, nil
 }
 
 // foldByte lower-cases an ASCII letter; all other bytes pass through.

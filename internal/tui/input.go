@@ -9,7 +9,6 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	zone "github.com/lrstanley/bubblezone"
 
-	"github.com/wilkes/hypogeum/internal/markdown"
 	"github.com/wilkes/hypogeum/internal/recent"
 	"github.com/wilkes/hypogeum/internal/tree"
 )
@@ -315,8 +314,7 @@ func (m *Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			case key.Matches(msg, m.keys.ClearLink): // Esc
 				if m.modals.search.input.Value() != "" {
 					m.modals.search.input.SetValue("")
-					m.modals.search.hits = nil
-					m.modals.search.cursor = 0
+					m.clearSearchResults()
 					if m.modals.search.scanStop != nil {
 						m.modals.search.scanStop()
 						m.modals.search.scanStop = nil
@@ -326,26 +324,27 @@ func (m *Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 					return *m, nil
 				}
 				return *m, m.closeModal()
+			case key.Matches(msg, m.keys.SearchFoldToggle): // Tab — expand/collapse file
+				m.toggleSearchFold()
+				return *m, nil
 			case key.Matches(msg, m.keys.Open): // Enter
-				var cmd tea.Cmd
-				if 0 <= m.modals.search.cursor && m.modals.search.cursor < len(m.modals.search.hits) {
-					h := m.modals.search.hits[m.modals.search.cursor]
-					cmd = m.closeModal()
-					m.pending.preselectRange = &markdown.LineRange{Start: h.Line, End: h.Line}
-					m.navigateTo(h.Path)
-				}
+				cmd := m.followSearchRow()
 				return *m, cmd
 			case key.Matches(msg, m.keys.SearchCursorDown):
-				cursorMoveAndRefresh(&m.modals.search.cursor, len(m.modals.search.hits), 1, m.refreshSearchVP)
+				m.modals.search.moveCursor(1)
+				m.refreshSearchVP()
 				return *m, nil
 			case key.Matches(msg, m.keys.SearchCursorUp):
-				cursorMoveAndRefresh(&m.modals.search.cursor, len(m.modals.search.hits), -1, m.refreshSearchVP)
+				m.modals.search.moveCursor(-1)
+				m.refreshSearchVP()
 				return *m, nil
 			case key.Matches(msg, m.keys.Up):
-				cursorMoveAndRefresh(&m.modals.search.cursor, len(m.modals.search.hits), -1, m.refreshSearchVP)
+				m.modals.search.moveCursor(-1)
+				m.refreshSearchVP()
 				return *m, nil
 			case key.Matches(msg, m.keys.Down):
-				cursorMoveAndRefresh(&m.modals.search.cursor, len(m.modals.search.hits), 1, m.refreshSearchVP)
+				m.modals.search.moveCursor(1)
+				m.refreshSearchVP()
 				return *m, nil
 			}
 			// Forward unhandled keys (Backspace, Delete, ←/→) to the

@@ -96,10 +96,10 @@ func TestSearch_TypingTwoCharsSchedulesTick(t *testing.T) {
 	}
 }
 
-func TestSearch_HitsRenderAsPathPlusSnippet(t *testing.T) {
+func TestSearch_FilesRenderWithCountThenSnippetOnExpand(t *testing.T) {
 	dir := t.TempDir()
 	p := filepath.Join(dir, "note.md")
-	if err := os.WriteFile(p, []byte("line one\nline with foo here\n"), 0o644); err != nil {
+	if err := os.WriteFile(p, []byte("line one\nline with foo here\nanother foo line\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	m, err := New(dir, "")
@@ -112,18 +112,33 @@ func TestSearch_HitsRenderAsPathPlusSnippet(t *testing.T) {
 	m.modals.kind = modalSearch
 	m.modals.search.input.SetValue("foo")
 	m.modals.search.paths = []string{p}
-	m.modals.search.hits = []search.Hit{
-		{Path: p, Line: 2, Snippet: "line with \x11foo\x12 here"},
+	m.modals.search.files = []search.FileMatches{
+		{Path: p, Count: 2, Lines: []search.Line{
+			{Num: 2, Text: "line with foo here", At: 10, Len: 3},
+			{Num: 3, Text: "another foo line", At: 8, Len: 3},
+		}},
 	}
+	m.modals.search.expanded = map[string]bool{}
+	m.modals.search.flatten()
 	m.modals.search.cursor = 0
 	m.resizeSearch()
 
+	// Collapsed: one row showing the file path and its match count, but no
+	// snippet text yet (snippets are lazy).
 	out := m.renderSearchRows()
-	if !strings.Contains(out, "note.md:2") {
-		t.Errorf("expected path:line in output, got: %q", out)
+	if !strings.Contains(out, "note.md") {
+		t.Errorf("expected file path in collapsed output, got: %q", out)
 	}
-	if !strings.Contains(out, "foo") {
-		t.Errorf("expected snippet text in output, got: %q", out)
+	if strings.Contains(out, "here") {
+		t.Errorf("collapsed file should not render a snippet, got: %q", out)
+	}
+
+	// Expand → the matches' snippets appear.
+	m.modals.search.expanded[p] = true
+	m.modals.search.flatten()
+	out = m.renderSearchRows()
+	if !strings.Contains(out, "here") {
+		t.Errorf("expanded file should render snippet text, got: %q", out)
 	}
 }
 
@@ -134,11 +149,13 @@ func TestSearch_CursorDownAndUp(t *testing.T) {
 		t.Fatalf("New: %v", err)
 	}
 	m.modals.kind = modalSearch
-	m.modals.search.hits = []search.Hit{
-		{Path: "/x/a.md", Line: 1, Snippet: "a"},
-		{Path: "/x/b.md", Line: 1, Snippet: "b"},
-		{Path: "/x/c.md", Line: 1, Snippet: "c"},
+	m.modals.search.files = []search.FileMatches{
+		{Path: "/x/a.md", Count: 1, Lines: []search.Line{{Num: 1}}},
+		{Path: "/x/b.md", Count: 1, Lines: []search.Line{{Num: 1}}},
+		{Path: "/x/c.md", Count: 1, Lines: []search.Line{{Num: 1}}},
 	}
+	m.modals.search.expanded = map[string]bool{}
+	m.modals.search.flatten()
 
 	// ^j moves down
 	updated, _ := m.handleKey(tea.KeyMsg{Type: tea.KeyCtrlJ})
@@ -157,6 +174,136 @@ func TestSearch_CursorDownAndUp(t *testing.T) {
 	mm = updated.(Model)
 	if mm.modals.search.cursor != 0 {
 		t.Errorf("cursor = %d after ^k at top, want 0", mm.modals.search.cursor)
+	}
+}
+
+// helper: a search modal seeded with one file of n matches, all collapsed.
+func searchModelWithFile(t *testing.T, dir, path string, n int) Model {
+	t.Helper()
+	m, err := New(dir, "")
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	updated, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
+	m = updated.(Model)
+	m.modals.kind = modalSearch
+	lines := make([]search.Line, n)
+	for i := range lines {
+		lines[i] = search.Line{Num: i + 1, Text: fmt.Sprintf("match %d", i+1), At: 0, Len: 5}
+	}
+	m.modals.search.files = []search.FileMatches{{Path: path, Count: n, Lines: lines}}
+	m.modals.search.expanded = map[string]bool{}
+	m.modals.search.flatten()
+	return m
+}
+
+func TestSearch_TabExpandsAndCollapses(t *testing.T) {
+	dir := t.TempDir()
+	p := filepath.Join(dir, "note.md")
+	m := searchModelWithFile(t, dir, p, 3)
+
+	if len(m.modals.search.rows) != 1 {
+		t.Fatalf("collapsed: want 1 row, got %d", len(m.modals.search.rows))
+	}
+	// Tab expands → 1 file row + 3 match rows.
+	updated, _ := m.handleKey(tea.KeyMsg{Type: tea.KeyTab})
+	m = updated.(Model)
+	if got := len(m.modals.search.rows); got != 4 {
+		t.Fatalf("expanded: want 4 rows, got %d", got)
+	}
+	if !m.modals.search.expanded[p] {
+		t.Errorf("expanded[%q] = false, want true", p)
+	}
+	// Cursor stays on the file header (row 0).
+	if m.modals.search.cursor != 0 {
+		t.Errorf("cursor = %d after expand, want 0 (stays on file)", m.modals.search.cursor)
+	}
+	// Tab again collapses.
+	updated, _ = m.handleKey(tea.KeyMsg{Type: tea.KeyTab})
+	m = updated.(Model)
+	if len(m.modals.search.rows) != 1 {
+		t.Errorf("re-collapsed: want 1 row, got %d", len(m.modals.search.rows))
+	}
+}
+
+func TestSearch_EnterOnMatchRowNavigatesToThatLine(t *testing.T) {
+	dir := t.TempDir()
+	p := filepath.Join(dir, "note.md")
+	var sb strings.Builder
+	for i := 1; i <= 60; i++ {
+		fmt.Fprintf(&sb, "line %d\n\n", i) // blank-separated so each is its own paragraph
+	}
+	if err := os.WriteFile(p, []byte(sb.String()), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	m, err := New(dir, "")
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	updated, _ := m.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
+	m = updated.(Model)
+	m.modals.kind = modalSearch
+	// Two matches: a shallow one (line 2) and a deep one (line 50). Selecting
+	// the deep match row must scroll the destination there, proving Enter
+	// follows the specific match — not just the file's first hit.
+	m.modals.search.files = []search.FileMatches{
+		{Path: p, Count: 2, Lines: []search.Line{
+			{Num: 2, Text: "line 2", At: 0, Len: 4},
+			{Num: 50, Text: "line 50", At: 0, Len: 4},
+		}},
+	}
+	m.modals.search.expanded = map[string]bool{}
+	m.modals.search.flatten()
+
+	updated, _ = m.handleKey(tea.KeyMsg{Type: tea.KeyTab}) // expand
+	m = updated.(Model)
+	m.modals.search.moveCursor(1) // -> first match (line 2)
+	m.modals.search.moveCursor(1) // -> second match (line 50)
+	r := m.modals.search.rows[m.modals.search.cursor]
+	if r.kind != rowMatch || m.modals.search.files[0].Lines[r.line].Num != 50 {
+		t.Fatalf("cursor not on the line-50 match: %+v", r)
+	}
+
+	updated, _ = m.handleKey(tea.KeyMsg{Type: tea.KeyEnter})
+	m = updated.(Model)
+	if m.modals.kind != modalNone {
+		t.Errorf("Enter should close modal, kind = %v", m.modals.kind)
+	}
+	if m.history.Current() != p {
+		t.Errorf("Current = %q, want %q", m.history.Current(), p)
+	}
+	if m.content.viewport.YOffset == 0 {
+		t.Errorf("expected viewport scrolled to the deep match, YOffset = 0")
+	}
+}
+
+func TestSearch_OverflowRowNotSelectable(t *testing.T) {
+	dir := t.TempDir()
+	p := filepath.Join(dir, "note.md")
+	n := searchExpandedMatchCap + 5 // forces an overflow rowMore
+	m := searchModelWithFile(t, dir, p, n)
+
+	updated, _ := m.handleKey(tea.KeyMsg{Type: tea.KeyTab}) // expand
+	m = updated.(Model)
+	// rows: 1 file + searchExpandedMatchCap matches + 1 overflow.
+	wantRows := 1 + searchExpandedMatchCap + 1
+	if got := len(m.modals.search.rows); got != wantRows {
+		t.Fatalf("rows = %d, want %d", got, wantRows)
+	}
+	last := m.modals.search.rows[len(m.modals.search.rows)-1]
+	if last.kind != rowMore || last.more != 5 {
+		t.Fatalf("last row = %+v, want rowMore with more=5", last)
+	}
+	// Drive the cursor to the bottom; it must never land on the rowMore.
+	for i := 0; i < wantRows+2; i++ {
+		m.modals.search.moveCursor(1)
+		if m.modals.search.rows[m.modals.search.cursor].kind == rowMore {
+			t.Fatalf("cursor landed on a non-navigable overflow row at index %d", m.modals.search.cursor)
+		}
+	}
+	// It should rest on the last match row (index wantRows-2).
+	if m.modals.search.cursor != wantRows-2 {
+		t.Errorf("cursor = %d, want %d (last match row)", m.modals.search.cursor, wantRows-2)
 	}
 }
 
@@ -203,9 +350,11 @@ func TestSearch_EnterNavigatesAndScrolls(t *testing.T) {
 	m = updated.(Model)
 
 	m.modals.kind = modalSearch
-	m.modals.search.hits = []search.Hit{
-		{Path: p, Line: 50, Snippet: "line 50"},
+	m.modals.search.files = []search.FileMatches{
+		{Path: p, Count: 1, Lines: []search.Line{{Num: 50, Text: "line 50", At: 0, Len: 4}}},
 	}
+	m.modals.search.expanded = map[string]bool{}
+	m.modals.search.flatten()
 	m.modals.search.cursor = 0
 
 	updated, _ = m.handleKey(tea.KeyMsg{Type: tea.KeyEnter})
@@ -221,37 +370,41 @@ func TestSearch_EnterNavigatesAndScrolls(t *testing.T) {
 	}
 }
 
-func TestSearch_MTimeRerank(t *testing.T) {
+func TestSearch_SortByCountThenMTime(t *testing.T) {
 	dir := t.TempDir()
 	a := filepath.Join(dir, "a.md")
 	b := filepath.Join(dir, "b.md")
-	if err := os.WriteFile(a, []byte("alpha needle\n"), 0o644); err != nil {
-		t.Fatal(err)
+	c := filepath.Join(dir, "c.md")
+	for _, p := range []string{a, b, c} {
+		if err := os.WriteFile(p, []byte("x\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
 	}
-	if err := os.WriteFile(b, []byte("bravo needle\n"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	// Search re-rank is now edit-recency (mtime), not visit history: make a
-	// the most recently edited file so it ranks first regardless of visits.
+	// a and c tie on count; the tie-break is edit recency, so make a more
+	// recently edited than c. b has the most matches, so it must lead.
 	base := time.Now()
-	if err := os.Chtimes(b, base.Add(-2*time.Hour), base.Add(-2*time.Hour)); err != nil {
+	if err := os.Chtimes(b, base.Add(-3*time.Hour), base.Add(-3*time.Hour)); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chtimes(c, base.Add(-2*time.Hour), base.Add(-2*time.Hour)); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.Chtimes(a, base.Add(-1*time.Hour), base.Add(-1*time.Hour)); err != nil {
 		t.Fatal(err)
 	}
 
-	// Synthesize search results in input order b, a to prove re-rank sorts.
-	hits := []search.Hit{
-		{Path: b, Line: 1, Snippet: "bravo \x11needle\x12"},
-		{Path: a, Line: 1, Snippet: "alpha \x11needle\x12"},
+	// Input order deliberately not the wanted order, to prove the sort.
+	files := []search.FileMatches{
+		{Path: c, Count: 2, Lines: make([]search.Line, 2)},
+		{Path: a, Count: 2, Lines: make([]search.Line, 2)},
+		{Path: b, Count: 5, Lines: make([]search.Line, 5)},
 	}
-	reranked := rerankByMTime(hits)
-	if len(reranked) != 2 {
-		t.Fatalf("got %d hits, want 2", len(reranked))
-	}
-	if reranked[0].Path != a {
-		t.Errorf("reranked[0].Path = %q, want %q (most recently edited)", reranked[0].Path, a)
+	got := sortSearchFiles(files)
+	want := []string{b, a, c} // count desc (b), then recency tie-break (a before c)
+	for i, p := range want {
+		if got[i].Path != p {
+			t.Errorf("sorted[%d].Path = %q, want %q (full order want %v)", i, got[i].Path, p, want)
+		}
 	}
 }
 
@@ -394,15 +547,15 @@ func TestSearch_QueryChangeClearsStaleHits(t *testing.T) {
 	// Inject a result for "fo".
 	updated, _ := m.Update(searchResultsMsg{
 		query: "fo",
-		hits:  []search.Hit{{Path: p, Line: 2, Snippet: "foobar"}},
+		files: []search.FileMatches{{Path: p, Count: 1, Lines: []search.Line{{Num: 2, Text: "foobar", At: 0, Len: 2}}}},
 	})
 	m = updated.(Model)
-	if len(m.modals.search.hits) != 1 {
-		t.Fatalf("setup: want 1 hit, got %d", len(m.modals.search.hits))
+	if len(m.modals.search.files) != 1 {
+		t.Fatalf("setup: want 1 file, got %d", len(m.modals.search.files))
 	}
-	// Now type more characters — hits must clear immediately.
+	// Now type more characters — results must clear immediately.
 	m = pressKey(t, m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("ol")})
-	if got := len(m.modals.search.hits); got != 0 {
-		t.Errorf("after query change: hits=%d want 0 (stale hits not cleared)", got)
+	if got := len(m.modals.search.files); got != 0 {
+		t.Errorf("after query change: files=%d want 0 (stale results not cleared)", got)
 	}
 }

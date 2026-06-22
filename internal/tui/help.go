@@ -31,6 +31,7 @@ func formatHelp(k keyMap) string {
 		{"Selection", []key.Binding{k.EnterVisual, k.BeginSelect}},
 		{"Clipboard", []key.Binding{k.CopyPath}},
 		{"Modals", []key.Binding{k.OpenPicker, k.OpenSearch, k.OpenBacklinksModal, k.OpenRecentModal, k.OpenLogsModal, k.OpenHelpModal, k.ClearLink}},
+		{"Search", []key.Binding{k.SearchFoldToggle, k.SearchCursorUp, k.SearchCursorDown}},
 	}
 
 	titleStyle := lipgloss.NewStyle().Bold(true).Underline(true)
