@@ -139,6 +139,29 @@ func TestHandleReadNote(t *testing.T) {
 	}
 }
 
+// TestHandleReadNote_RefusesSymlinkEscape covers a symlink that lives inside
+// the vault but points outside it: a purely lexical containment check passes
+// it, so resolveUnderRoot must also resolve symlinks. The secret file must
+// exist (the escape only reads when the resolved target exists), so we create
+// one outside the root and link to its directory from within.
+func TestHandleReadNote_RefusesSymlinkEscape(t *testing.T) {
+	s := newTestServer(t)
+
+	outside := t.TempDir()
+	secret := filepath.Join(outside, "secret.txt")
+	if err := os.WriteFile(secret, []byte("top secret\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	link := filepath.Join(s.root, "escape") // s.root/escape -> outside
+	if err := os.Symlink(outside, link); err != nil {
+		t.Skipf("symlinks unsupported here: %v", err)
+	}
+
+	if _, err := s.handleReadNote(fileArgs{File: "escape/secret.txt"}); err == nil {
+		t.Error("read_note followed an in-vault symlink out of the root, want refusal")
+	}
+}
+
 // TestWarmIndexConcurrentRefresh exercises the one piece of genuinely new
 // concurrency: tool-call readers (RLock) racing the watcher's refresh path
 // (Lock). Run under -race; it asserts no data race and that reads keep

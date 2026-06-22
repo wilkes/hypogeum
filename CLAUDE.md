@@ -17,6 +17,8 @@ go run ./cmd/hypogeum [path]            # run against a directory or .md file
 go install ./cmd/hypogeum               # install to $GOBIN
 ```
 
+Requires **Go 1.25+** (the MCP SDK pulled in by `internal/mcp` needs it; `go.mod`'s `go` directive is `1.25.0`). On an older toolchain `go build` fails with a version error — upgrade rather than downgrade the directive.
+
 The TUI requires a real terminal — `go run` from inside a non-TTY harness will produce nothing useful. Use the model-level tests in `internal/tui/model_test.go` to exercise behavior without a terminal.
 
 ## Releases

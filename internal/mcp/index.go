@@ -12,12 +12,16 @@ import (
 // query — the amortization that justifies a long-lived server over the
 // per-call CLI verbs.
 //
-// Concurrency: tool-call readers take RLock via get(); the watcher refresh path
-// takes Lock via rebuild()/refreshFile(). This is the one piece of genuinely
-// new concurrency in the MCP layer. The vault's own build-time invariants (map
-// writes serialized by its internal mutex, order-independent results) are
-// unchanged — we only guard the swap of the whole *vault.Vault pointer and the
-// in-place RefreshFile mutation against concurrent readers.
+// Concurrency: this mutex guards only the i.v *pointer* — get() takes RLock to
+// read it, rebuild()/refreshFile() take Lock to swap or mutate it. A reader
+// copies the *vault.Vault under RLock and then releases it before calling
+// v.Outbound()/v.Backlinks()/v.Files(), so the index lock does NOT serialize a
+// reader's vault access against a concurrent refreshFile. What makes that
+// race-free is the vault's *own* internal RWMutex: every vault read method
+// takes v.mu.RLock and RefreshFile takes v.mu.Lock (see internal/vault). So
+// there are two independent locks doing two jobs — this one orders pointer
+// swaps/reads, the vault's orders in-place graph mutation against graph reads.
+// TestWarmIndexConcurrentRefresh exercises both under -race.
 type index struct {
 	mu   sync.RWMutex
 	root string       // absolute vault root

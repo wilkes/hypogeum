@@ -183,20 +183,44 @@ func (s *Server) handleReadNote(a fileArgs) (readNoteResult, error) {
 }
 
 // resolveUnderRoot resolves file (relative to the vault root, or absolute) and
-// rejects any target that escapes the root via "..". This is the containment
-// guard for read_note — the query verbs don't need it because they only ever
-// surface paths the vault already indexed.
+// rejects any target that escapes the root. This is the containment guard for
+// read_note — the query verbs don't need it because they only ever surface
+// paths the vault already indexed.
+//
+// It applies two checks: a lexical one (no "../" escape), then a symlink-aware
+// one. The lexical check alone would let a symlink *inside* the vault that
+// points outside it pass — ReadFile would then follow the link off the vault.
+// So when the real on-disk path is knowable, we resolve symlinks on both the
+// root and the target and re-verify containment against the resolved root.
 func (s *Server) resolveUnderRoot(file string) (string, error) {
 	abs := file
 	if !filepath.IsAbs(abs) {
 		abs = filepath.Join(s.root, file)
 	}
 	abs = filepath.Clean(abs)
-	rel, err := filepath.Rel(s.root, abs)
-	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+	if !underRoot(s.root, abs) {
+		return "", fmt.Errorf("path escapes vault root: %s", file)
+	}
+	// EvalSymlinks errors on a not-yet-existing path; that's fine — the lexical
+	// check already held and ReadFile will surface the missing file. We only
+	// tighten when both real paths are knowable (the escape only reads a file
+	// when the resolved target actually exists, and then EvalSymlinks succeeds).
+	realRoot, errR := filepath.EvalSymlinks(s.root)
+	realAbs, errA := filepath.EvalSymlinks(abs)
+	if errR == nil && errA == nil && !underRoot(realRoot, realAbs) {
 		return "", fmt.Errorf("path escapes vault root: %s", file)
 	}
 	return abs, nil
+}
+
+// underRoot reports whether abs is root itself or lies within it, by pure path
+// math (no filesystem access). Both arguments must be absolute and clean.
+func underRoot(root, abs string) bool {
+	rel, err := filepath.Rel(root, abs)
+	if err != nil {
+		return false
+	}
+	return rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
 }
 
 // mcpServer builds the SDK server with every tool registered. Split from Run so
