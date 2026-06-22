@@ -1,9 +1,9 @@
 package main
 
 // helpText is the usage shown by `hypogeum --help` / `-h`. It documents the
-// three CLI modes — launching the TUI on a path, the non-interactive query
-// verbs, and the global flags — but deliberately omits the in-app keybindings,
-// which the running TUI lists under `?`.
+// four CLI modes — launching the TUI on a path, the non-interactive query
+// verbs, the MCP server, and the global flags — but deliberately omits the
+// in-app keybindings, which the running TUI lists under `?`.
 func helpText() string {
 	return `hypogeum — a terminal browser for markdown vaults
 
