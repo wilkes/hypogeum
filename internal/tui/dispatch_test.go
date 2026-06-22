@@ -228,11 +228,11 @@ func TestSearch_EndToEnd(t *testing.T) {
 		mm = updated.(Model)
 	}
 
-	if len(mm.modals.search.hits) == 0 {
-		t.Fatalf("expected hits for 'magic', got 0")
+	if len(mm.modals.search.files) == 0 {
+		t.Fatalf("expected matching files for 'magic', got 0")
 	}
 
-	// Enter on the hit
+	// Enter on the file row (jumps to its first match)
 	updated, _ = mm.handleKey(tea.KeyMsg{Type: tea.KeyEnter})
 	mm = updated.(Model)
 

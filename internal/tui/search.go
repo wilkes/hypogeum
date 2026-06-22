@@ -3,6 +3,8 @@ package tui
 import (
 	"context"
 	"fmt"
+	"math"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -12,14 +14,22 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
+	"github.com/wilkes/hypogeum/internal/markdown"
 	"github.com/wilkes/hypogeum/internal/recent"
 	"github.com/wilkes/hypogeum/internal/search"
 )
 
-// searchMaxHits caps how many full-text hits the modal will hold.
-// Matches pickerMaxVisible's choice for the same reason: a runaway
-// short-query result list shouldn't lag rendering.
-const searchMaxHits = 200
+// searchMaxFiles caps how many matching files the grouped modal will hold.
+// The cap is on files, not hits — far more coverage than the old per-hit
+// cap, since one row per file is cheap. A runaway short-query result list
+// still shouldn't lag rendering, so we bound it.
+const searchMaxFiles = 200
+
+// searchExpandedMatchCap bounds how many match rows an expanded file shows
+// inline, so expanding a file with hundreds of matches doesn't reflood the
+// modal. The remainder is summarized by a faint "… N more in this file" row;
+// read the rest by opening the file.
+const searchExpandedMatchCap = 50
 
 // searchDebounce is how long after the latest keystroke the scan fires.
 // 150ms is the established UX threshold for "the system feels responsive
@@ -27,34 +37,61 @@ const searchMaxHits = 200
 const searchDebounce = 150 * time.Millisecond
 
 // searchMinQuery is the minimum query length below which no scan fires.
-// 1 char is too noisy on a multi-hundred-file vault; 3 is frustrating
-// on short words like "go". 2 is the established sweet spot.
 const searchMinQuery = 2
 
-// searchSnippetWindow is the displayed budget per snippet, after which
-// the row gets truncated by the renderer.
-const searchSnippetWindow = 60
+// searchBarWidth is the fixed column width of the per-file match-count bar.
+const searchBarWidth = 8
+
+// barRunes are the Unicode left-block partials, index 0 = 1/8 (▏) … 7 = 8/8 (█).
+var barRunes = []rune("▏▎▍▌▋▊▉█")
+
+// searchRowKind distinguishes the flattened row variants the grouped modal
+// renders: a file header, one of a file's matches (only when expanded), or a
+// non-navigable "… N more" overflow summary.
+type searchRowKind int
+
+const (
+	rowFile searchRowKind = iota
+	rowMatch
+	rowMore
+)
+
+// searchRow is one visible, flattened row. file indexes searchState.files;
+// for rowMatch, line indexes that file's Lines; for rowMore, more is the
+// count of hidden matches. The cursor is an index into the flattened slice —
+// the same pattern the tree modal uses.
+type searchRow struct {
+	kind searchRowKind
+	file int
+	line int
+	more int
+}
 
 // searchState bundles full-text search modal state.
 //
-// paths is a snapshot taken at modal-open time so a mid-search watcher
-// event doesn't yank files out from under in-flight workers. New files
-// appear only on the next ^s open — this is deliberate; rescanning on
-// every fsnotify event would be expensive AND yank cursor focus.
+// paths is a snapshot taken at modal-open time so a mid-search watcher event
+// doesn't yank files out from under in-flight workers. New files appear only
+// on the next open — deliberate; rescanning on every fsnotify event would be
+// expensive AND yank cursor focus.
+//
+// files holds the grouped, sorted (count desc, then recency) results. expanded
+// is the per-file fold state (path → open), defaulting to collapsed and reset
+// on every new scan — it is a render cache, not user state to preserve. rows is
+// the flattened view of files+expanded that the cursor and renderer index into.
 //
 // scanStop is the CancelFunc for the currently-running (or most-recently
-// scheduled) scan. Each keystroke that fires a new tick calls scanStop
-// first so workers from the prior scan return early.
+// scheduled) scan; each keystroke that fires a new tick calls it first.
 type searchState struct {
 	input    textinput.Model
 	paths    []string
-	hits     []search.Hit
+	files    []search.FileMatches
+	expanded map[string]bool
+	rows     []searchRow
 	cursor   int
 	vp       viewport.Model
 	scanStop context.CancelFunc
-	// inFlight is true between the moment a scan is dispatched and the
-	// moment its searchResultsMsg lands (or is discarded as stale).
-	// Drives the "(searching…)" placeholder.
+	// inFlight is true between dispatch of a scan and the landing (or stale
+	// discard) of its searchResultsMsg. Drives the "(searching…)" placeholder.
 	inFlight bool
 }
 
@@ -65,20 +102,22 @@ func newSearch() searchState {
 	ti.Placeholder = ""
 	ti.CharLimit = 256
 	return searchState{
-		vp:    viewport.New(0, 0),
-		input: ti,
+		vp:       viewport.New(0, 0),
+		input:    ti,
+		expanded: map[string]bool{},
 	}
 }
 
-// reset clears every transient field and re-focuses the textinput.
-// Called on every modal-open. paths is the snapshot of vault files
-// captured at open time.
+// reset clears every transient field and re-focuses the textinput. Called on
+// every modal-open. paths is the snapshot of vault files captured at open time.
 func (s *searchState) reset(paths []string) {
 	if s.scanStop != nil {
 		s.scanStop()
 	}
 	s.paths = paths
-	s.hits = nil
+	s.files = nil
+	s.rows = nil
+	s.expanded = map[string]bool{}
 	s.cursor = 0
 	s.scanStop = nil
 	s.inFlight = false
@@ -86,64 +125,150 @@ func (s *searchState) reset(paths []string) {
 	s.input.Focus()
 }
 
-// searchTickMsg is delivered searchDebounce after each keystroke.
-// query is the input value at the moment the tick was scheduled; the
-// handler compares it to the current input to decide whether to honor
-// or drop the tick (later keystrokes mean this one is stale).
+// flatten rebuilds rows from files + expanded. Called whenever results or
+// fold state change. One rendered viewport line corresponds to one row.
+func (s *searchState) flatten() {
+	s.rows = s.rows[:0]
+	for fi := range s.files {
+		f := s.files[fi]
+		s.rows = append(s.rows, searchRow{kind: rowFile, file: fi})
+		if !s.expanded[f.Path] {
+			continue
+		}
+		shown := len(f.Lines)
+		if shown > searchExpandedMatchCap {
+			shown = searchExpandedMatchCap
+		}
+		for li := 0; li < shown; li++ {
+			s.rows = append(s.rows, searchRow{kind: rowMatch, file: fi, line: li})
+		}
+		if rest := len(f.Lines) - shown; rest > 0 {
+			s.rows = append(s.rows, searchRow{kind: rowMore, file: fi, more: rest})
+		}
+	}
+}
+
+// moveCursor advances the cursor by delta over navigable rows, skipping the
+// non-navigable rowMore overflow summaries. It clamps at the ends.
+func (s *searchState) moveCursor(delta int) {
+	if len(s.rows) == 0 || delta == 0 {
+		return
+	}
+	i := s.cursor
+	for {
+		i += delta
+		if i < 0 || i >= len(s.rows) {
+			return // off the end — leave the cursor where it was
+		}
+		if s.rows[i].kind != rowMore {
+			s.cursor = i
+			return
+		}
+	}
+}
+
+// toggleSearchFold flips the fold state of the file under the cursor (or the
+// parent file, if the cursor is on a match row), re-flattens, and re-parks the
+// cursor on that file's header so expanding/collapsing never scrolls the cursor
+// off the file you toggled.
+func (m *Model) toggleSearchFold() {
+	s := &m.modals.search
+	if s.cursor < 0 || s.cursor >= len(s.rows) {
+		return
+	}
+	fi := s.rows[s.cursor].file
+	if fi < 0 || fi >= len(s.files) {
+		return
+	}
+	path := s.files[fi].Path
+	s.expanded[path] = !s.expanded[path]
+	s.flatten()
+	for i, r := range s.rows {
+		if r.kind == rowFile && r.file == fi {
+			s.cursor = i
+			break
+		}
+	}
+	m.refreshSearchVP()
+}
+
+// followSearchRow navigates on Enter: a file row jumps to that file's first
+// match; a match row jumps to that match. Both reuse the existing scroll-to-line
+// plumbing (pendingPreselectRange + navigateTo). A rowMore (or out-of-range
+// cursor) is a no-op. Returns the closeModal Cmd, or nil if nothing was opened.
+func (m *Model) followSearchRow() tea.Cmd {
+	s := &m.modals.search
+	if s.cursor < 0 || s.cursor >= len(s.rows) {
+		return nil
+	}
+	r := s.rows[s.cursor]
+	if r.file < 0 || r.file >= len(s.files) {
+		return nil
+	}
+	f := s.files[r.file]
+	var line int
+	switch r.kind {
+	case rowFile:
+		if len(f.Lines) == 0 {
+			return nil
+		}
+		line = f.Lines[0].Num // first match
+	case rowMatch:
+		line = f.Lines[r.line].Num
+	default: // rowMore — not navigable
+		return nil
+	}
+	cmd := m.closeModal()
+	m.pending.preselectRange = &markdown.LineRange{Start: line, End: line}
+	m.navigateTo(f.Path)
+	return cmd
+}
+
+// searchTickMsg is delivered searchDebounce after each keystroke. query is the
+// input value when the tick was scheduled; the handler drops it if newer.
 type searchTickMsg struct {
 	query string
 }
 
-// searchResultsMsg carries the output of a scan back into Update.
-// query lets the handler discard results from a stale scan.
+// searchResultsMsg carries a grouped scan's output back into Update. query lets
+// the handler discard results from a stale scan.
 type searchResultsMsg struct {
 	query string
-	hits  []search.Hit
+	files []search.FileMatches
 	err   error
 }
 
-// scheduleSearchTick returns a Cmd that fires a searchTickMsg with
-// query after searchDebounce.
+// scheduleSearchTick returns a Cmd that fires a searchTickMsg after the debounce.
 func scheduleSearchTick(query string) tea.Cmd {
 	return tea.Tick(searchDebounce, func(time.Time) tea.Msg {
 		return searchTickMsg{query: query}
 	})
 }
 
-// runSearchCmd returns a Cmd that runs the scan in a goroutine and
-// emits searchResultsMsg with the result. paths is captured by value;
-// the scan reads it without further synchronization.
+// runSearchCmd returns a Cmd that runs the grouped scan in a goroutine and
+// emits searchResultsMsg. paths is captured by value.
 func runSearchCmd(ctx context.Context, paths []string, query string) tea.Cmd {
 	return func() tea.Msg {
-		hits, err := search.Search(ctx, paths, query, searchMaxHits)
-		return searchResultsMsg{query: query, hits: hits, err: err}
+		files, err := search.SearchGrouped(ctx, paths, query, searchMaxFiles)
+		return searchResultsMsg{query: query, files: files, err: err}
 	}
 }
 
-// handleSearchKey forwards a key to the textinput, then decides whether
-// to schedule a debounced scan tick. Called for printable runes via the
-// top-level KeyRunes gate and for editing keys (Backspace, Delete,
-// ←/→) via the modal-mode fallthrough.
+// handleSearchKey forwards a key to the textinput, then decides whether to
+// schedule a debounced scan tick.
 func (m *Model) handleSearchKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	before := m.modals.search.input.Value()
 	var cmd tea.Cmd
 	m.modals.search.input, cmd = m.modals.search.input.Update(msg)
 	query := m.modals.search.input.Value()
 	if query == before {
-		// Cursor/selection keystroke that didn't change the query;
-		// nothing to do except forward the textinput's cmd.
+		// Cursor/selection keystroke that didn't change the query.
 		return *m, cmd
 	}
-	// Query changed — drop the previous hits so the user doesn't see
-	// stale results until the new scan returns.
-	m.modals.search.hits = nil
-	m.modals.search.cursor = 0
+	// Query changed — drop prior results so the user doesn't see stale rows
+	// until the new scan returns.
+	m.clearSearchResults()
 	if len(query) < searchMinQuery {
-		// Below the minimum — clear and don't fire a scan. A previous
-		// tick may still be in flight from a longer query; its result
-		// will be discarded by the stale-query check. Discard the
-		// textinput's cursor-blink cmd: no async work should be
-		// scheduled when the query is too short.
 		if m.modals.search.scanStop != nil {
 			m.modals.search.scanStop()
 			m.modals.search.scanStop = nil
@@ -152,37 +277,37 @@ func (m *Model) handleSearchKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.refreshSearchVP()
 		return *m, nil
 	}
-	// Cancel any prior in-flight scan immediately. The tick may not
-	// have fired yet, but if a scan is mid-flight cancelling now lets
-	// workers return early.
+	// Cancel any prior in-flight scan immediately.
 	if m.modals.search.scanStop != nil {
 		m.modals.search.scanStop()
 		m.modals.search.scanStop = nil
 	}
 	m.refreshSearchVP()
 	tick := scheduleSearchTick(query)
-	// ClearScreen on every keystroke that changes the query: under
-	// rapid typing with slow scans, Bubble Tea's diff renderer can
-	// leave stale prompt rows on screen. A full repaint is cheap
-	// inside a debounced 150ms window and visually crisp.
+	// ClearScreen on every query-changing keystroke: under rapid typing with
+	// slow scans, the diff renderer can leave stale prompt rows on screen.
 	if cmd != nil {
 		return *m, tea.Batch(cmd, tick, tea.ClearScreen)
 	}
 	return *m, tea.Batch(tick, tea.ClearScreen)
 }
 
-// refreshSearchVP regenerates the search modal's viewport content
-// from the current hits / cursor / input value. Called whenever any
-// of those change.
+// clearSearchResults drops the current results, fold state, and flattened rows.
+func (m *Model) clearSearchResults() {
+	m.modals.search.files = nil
+	m.modals.search.rows = nil
+	m.modals.search.expanded = map[string]bool{}
+	m.modals.search.cursor = 0
+}
+
+// refreshSearchVP regenerates the modal's viewport from current rows/cursor/query.
 func (m *Model) refreshSearchVP() {
 	m.modals.search.vp.SetContent(m.renderSearchRows())
 	viewportClamp(&m.modals.search.vp, m.modals.search.cursor, 2)
 }
 
-// renderSearchRows produces the viewport body: the empty-state /
-// loading / no-match placeholders when no hits should display, or the
-// hit list otherwise. Each branch returns faint-styled text via lipgloss
-// so the visual hierarchy stays consistent with the picker.
+// renderSearchRows produces the viewport body: placeholders when nothing should
+// display, or the grouped file list otherwise.
 func (m *Model) renderSearchRows() string {
 	q := m.modals.search.input.Value()
 	faint := lipgloss.NewStyle().Faint(true)
@@ -191,20 +316,16 @@ func (m *Model) renderSearchRows() string {
 		return faint.Render("(no markdown files in vault)")
 	case len(q) < searchMinQuery:
 		return faint.Render("(type 2+ chars to search)")
-	case m.modals.search.inFlight && len(m.modals.search.hits) == 0:
+	case m.modals.search.inFlight && len(m.modals.search.files) == 0:
 		return faint.Render("(searching…)")
-	case !m.modals.search.inFlight && len(m.modals.search.hits) == 0:
+	case !m.modals.search.inFlight && len(m.modals.search.files) == 0:
 		return faint.Render(`(no match for "` + q + `")`)
 	default:
-		return formatSearchHits(m.modals.search.hits, m.root, m.modals.search.vp.Width, m.modals.search.cursor)
+		return m.formatSearchFiles()
 	}
 }
 
-// handleSearchTick fires when a debounce tick lands. If the modal has
-// closed, the tick is dropped. If the user has typed more characters
-// since this tick was scheduled, the tick's query won't match the
-// current input value and we drop it (the latest keystroke scheduled
-// its own tick).
+// handleSearchTick fires when a debounce tick lands.
 func (m *Model) handleSearchTick(msg searchTickMsg) (tea.Model, tea.Cmd) {
 	if m.modals.kind != modalSearch {
 		return *m, nil
@@ -215,8 +336,6 @@ func (m *Model) handleSearchTick(msg searchTickMsg) (tea.Model, tea.Cmd) {
 	if len(msg.query) < searchMinQuery {
 		return *m, nil
 	}
-	// Allocate a new ctx for this scan. Previous ctxs (if any) have
-	// been cancelled by handleSearchKey.
 	ctx, cancel := context.WithCancel(context.Background())
 	m.modals.search.scanStop = cancel
 	m.modals.search.inFlight = true
@@ -224,9 +343,8 @@ func (m *Model) handleSearchTick(msg searchTickMsg) (tea.Model, tea.Cmd) {
 	return *m, runSearchCmd(ctx, m.modals.search.paths, msg.query)
 }
 
-// handleSearchResults consumes the scan's output. Stale results — from
-// a cancelled scan whose query no longer matches the input — are
-// discarded. Otherwise hits are recency-ranked and stored.
+// handleSearchResults consumes a grouped scan's output. Stale results — from a
+// cancelled scan whose query no longer matches the input — are discarded.
 func (m *Model) handleSearchResults(msg searchResultsMsg) (tea.Model, tea.Cmd) {
 	if m.modals.kind != modalSearch {
 		return *m, nil
@@ -234,7 +352,6 @@ func (m *Model) handleSearchResults(msg searchResultsMsg) (tea.Model, tea.Cmd) {
 	m.modals.search.inFlight = false
 	m.modals.search.scanStop = nil
 	if msg.query != m.modals.search.input.Value() {
-		// Stale: user has typed more since this scan started.
 		m.refreshSearchVP()
 		return *m, nil
 	}
@@ -243,64 +360,124 @@ func (m *Model) handleSearchResults(msg searchResultsMsg) (tea.Model, tea.Cmd) {
 			m.diag.Info(fmt.Sprintf("search %q: %v", msg.query, msg.err))
 		}
 	}
-	m.modals.search.hits = rerankByMTime(msg.hits)
+	m.modals.search.files = sortSearchFiles(msg.files)
+	m.modals.search.expanded = map[string]bool{} // fresh scan starts all-collapsed
 	m.modals.search.cursor = 0
+	m.modals.search.flatten()
 	m.refreshSearchVP()
 	if m.diag != nil {
-		m.diag.Info(fmt.Sprintf("search %q: %d hits", msg.query, len(msg.hits)))
+		m.diag.Info(fmt.Sprintf("search %q: %d files", msg.query, len(msg.files)))
 	}
-	// Force a full repaint when results arrive: the modal frame may have
-	// shifted rows since the scan started, and Bubble Tea's diff
-	// renderer doesn't always clear the stale ones.
+	// Full repaint when results arrive: the modal frame may have shifted rows
+	// since the scan started, and the diff renderer doesn't always clear them.
 	return *m, tea.ClearScreen
 }
 
-// rerankByMTime reorders hits so files edited more recently come first
-// (edit-recency), matching the file finder. Hits from the same file keep
-// their (line) order. mtime ranking scores every file that still exists on
-// disk, so in practice every hit path is ranked; a path that can't be stat'd
-// (its file vanished mid-scan) trails in input order rather than being
-// dropped. Stateless — no recent.Store needed.
-func rerankByMTime(hits []search.Hit) []search.Hit {
-	return search.RerankByRecency(recent.RankPathsByMTime, hits)
+// sortSearchFiles orders files by match count descending, tie-broken by edit
+// recency (mtime, newest first) — so the densest files surface first and ties
+// fall back to the same recency signal the finder uses. Within a file, Lines
+// stay ascending (the scan produces them in line order). Stateless.
+func sortSearchFiles(files []search.FileMatches) []search.FileMatches {
+	if len(files) < 2 {
+		return files
+	}
+	paths := make([]string, len(files))
+	for i, f := range files {
+		paths[i] = f.Path
+	}
+	rank := map[string]int{}
+	for i, p := range recent.RankPathsByMTime(paths) {
+		rank[p] = i // 0 = most recently edited
+	}
+	sort.SliceStable(files, func(a, b int) bool {
+		if files[a].Count != files[b].Count {
+			return files[a].Count > files[b].Count
+		}
+		return rank[files[a].Path] < rank[files[b].Path]
+	})
+	return files
 }
 
-// formatSearchHits renders each hit as a two-row entry:
-//
-//	▌ <relative-path>:<line>
-//	  <snippet with \x11/\x12 → bold yellow>
-//
-// The cursor marker appears only on the selected hit. width is the
-// viewport's visible width; snippets are truncated to width-4.
-//
-// applyHighlight (internal/tui/backlinks.go) handles the \x11/\x12 →
-// SGR conversion; this function delegates to it for the snippet row.
-func formatSearchHits(hits []search.Hit, root string, width, cursor int) string {
-	if len(hits) == 0 {
+// formatSearchFiles renders the flattened rows: file headers (cursor marker,
+// count, proportional bar, relative path, fold caret) and, for expanded files,
+// indented match rows (line number + highlighted snippet) plus an overflow tail.
+func (m *Model) formatSearchFiles() string {
+	s := &m.modals.search
+	if len(s.files) == 0 {
 		return ""
 	}
-	var b strings.Builder
-	for i, h := range hits {
-		marker := "  "
-		if i == cursor {
-			marker = cursorMarkerStyle.Render("▌") + " "
+	maxCount := s.files[0].Count // files are sorted count-descending
+	countW := len(strconv.Itoa(maxCount))
+	width := s.vp.Width
+	rev := lipgloss.NewStyle().Reverse(true)
+	faint := lipgloss.NewStyle().Faint(true)
+
+	lines := make([]string, 0, len(s.rows))
+	for i, r := range s.rows {
+		var line string
+		switch r.kind {
+		case rowFile:
+			f := s.files[r.file]
+			caret := "▸"
+			if s.expanded[f.Path] {
+				caret = "▾"
+			}
+			count := fmt.Sprintf("%*d", countW, f.Count)
+			bar := renderBar(f.Count, maxCount, searchBarWidth)
+			path := relativeTo(m.root, f.Path)
+			line = truncateOneLine(caret+" "+count+" "+bar+"  "+path, width)
+		case rowMatch:
+			ln := s.files[r.file].Lines[r.line]
+			num := fmt.Sprintf("%*d", countW+2, ln.Num)
+			snip := applyHighlight(search.RenderSnippet(ln, search.SnippetBudget))
+			line = truncateOneLine("    "+num+"  "+snip, width)
+		case rowMore:
+			line = faint.Render(truncateOneLine("    … "+strconv.Itoa(r.more)+" more in this file", width))
 		}
-		header := marker + relativeTo(root, h.Path) + ":" + strconv.Itoa(h.Line)
-		snippet := "  " + truncateOneLine(applyHighlight(h.Snippet), width-4)
-		if i == cursor {
-			header = lipgloss.NewStyle().Reverse(true).Render(header)
-			snippet = lipgloss.NewStyle().Reverse(true).Render(snippet)
+		if i == s.cursor {
+			line = rev.Render(line)
 		}
-		b.WriteString(header)
-		b.WriteByte('\n')
-		b.WriteString(snippet)
-		b.WriteByte('\n')
+		lines = append(lines, line)
 	}
-	return strings.TrimRight(b.String(), "\n")
+	return strings.Join(lines, "\n")
 }
 
-// resizeSearch fits the search modal's viewport into the modal interior,
-// reserving rows for the query prompt and separator on top.
+// renderBar draws a fixed-width bar whose filled length encodes count relative
+// to max. The scale is sqrt (so a single-match file isn't invisible next to a
+// dominant one) with a one-eighth floor for any nonzero count — the numeric
+// count remains the precise source of truth; the bar is a scannability aid.
+func renderBar(count, max, width int) string {
+	if max <= 0 || count <= 0 {
+		return strings.Repeat(" ", width)
+	}
+	total := width * 8 // capacity in eighths
+	frac := math.Sqrt(float64(count)) / math.Sqrt(float64(max))
+	eighths := int(math.Round(frac * float64(total)))
+	if eighths < 1 {
+		eighths = 1 // floor: any match shows ▏
+	}
+	if eighths > total {
+		eighths = total
+	}
+	full := eighths / 8
+	rem := eighths % 8
+	var b strings.Builder
+	used := 0
+	for ; used < full; used++ {
+		b.WriteRune('█')
+	}
+	if rem > 0 && used < width {
+		b.WriteRune(barRunes[rem-1])
+		used++
+	}
+	for ; used < width; used++ {
+		b.WriteByte(' ')
+	}
+	return b.String()
+}
+
+// resizeSearch fits the modal's viewport into the modal interior, reserving
+// rows for the query prompt and separator on top.
 func (m *Model) resizeSearch() {
 	_, _, w, h := modalGeometry(m.width, m.height)
 	pw := w - 2
@@ -313,36 +490,31 @@ func (m *Model) resizeSearch() {
 	}
 	m.modals.search.vp.Width = pw
 	m.modals.search.vp.Height = ph
-	// Reserve 2 cols for the "> " prefix AND 1 col for the textinput's
-	// cursor block which renders past the value's end. Without that extra
-	// column the prompt line is one char wider than the modal interior
-	// (96 vs 95 at 162×40), and the wrap pushes a duplicate prompt onto
-	// the next row under slow-search refresh cycles.
+	// Reserve 2 cols for "> " AND 1 for the textinput's cursor block, which
+	// renders past the value's end (see the prompt-fit regression tests).
 	m.modals.search.input.Width = pw - 3
 	m.refreshSearchVP()
 }
 
-// searchView returns the modal's renderable body — prompt, separator,
-// viewport, and an optional overflow footer.
+// searchView returns the modal's renderable body — prompt, separator, viewport,
+// and an optional file-overflow footer.
 func (m *Model) searchView() string {
 	p := &m.modals.search
 	sepW := p.vp.Width
 	if sepW < 1 {
 		sepW = 1
 	}
-	// Force the prompt to exactly one row of width sepW so any cursor
-	// overhang or width-miscount from the textinput View cannot wrap
-	// onto a second row. Without MaxHeight(1), a wrapped prompt under
-	// rapid keystrokes leaves stale prompts stacked in the modal.
+	// Force the prompt to exactly one row of width sepW so cursor overhang or a
+	// width miscount can't wrap it onto a second row (the stacked-prompts bug).
 	prompt := lipgloss.NewStyle().
 		Width(sepW).
 		MaxHeight(1).
 		Render("> " + p.input.View())
 	sep := strings.Repeat("─", sepW)
 	body := prompt + "\n" + sep + "\n" + p.vp.View()
-	if len(p.hits) >= searchMaxHits {
+	if len(p.files) >= searchMaxFiles {
 		body += "\n" + lipgloss.NewStyle().Faint(true).
-			Render("… results truncated at "+strconv.Itoa(searchMaxHits)+", refine the query")
+			Render("… results truncated at "+strconv.Itoa(searchMaxFiles)+" files, refine the query")
 	}
 	return body
 }
