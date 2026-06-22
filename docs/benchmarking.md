@@ -263,8 +263,8 @@ median, valid-JSON-asserted) against `docs/` (68 small files):
 Two things define CLI latency, and neither is a package-benchmark target:
 
 - **A ~24 ms fixed floor** — process spawn + Go runtime init, paid by every invocation. You can't
-  beat it from a cold binary; the only escape is not spawning per query (a warm `serve` daemon —
-  big architectural step, only worth it under a tight query loop).
+  beat it from a cold binary; the only escape is not spawning per query (a warm `serve` daemon).
+  That daemon now exists as `hypogeum mcp` — see [the MCP-vs-CLI section below](#mcp-server-vs-cli-the-warm-index-payoff-2026-06-22--linuxamd64) for what it buys (67–89× on `neighbors`) and where it doesn't (whole-vault `graph`).
 - **Cold rebuild on every call** — but *how much* rebuild differs sharply by verb, because each
   needs a different slice of the vault (this is why `links` got its own fast path in #86):
   - **`links`** needs only the target file's parse + the name index (a filename-only walk) →
@@ -300,3 +300,55 @@ can't, because no process is alive between invocations to receive the events. St
 - **`tree.Walk` sublinear 10→100 transition.** The 3.9× ratio for a 10× N increase suggests
   per-call fixed overhead dominates at small N. Harmless — even 1,000-file walks take 1.4 ms —
   but worth noting if the corpus is ever extended to N=10,000+.
+
+## MCP server vs CLI: the warm-index payoff (2026-06-22 / linux/amd64)
+
+The "warm `serve` daemon" floated above as the escape from per-call rebuild
+shipped as `hypogeum mcp` (the MCP server — `internal/mcp`, over stdio). It
+keeps a single `vault.Build` warm and refreshes it from fs events, so repeated
+queries skip the cold rebuild the CLI pays every invocation. This measures the
+two `vault.Build`-heavy verbs both ways over the same `benchcorpus` vault:
+**CLI** = a fresh process (cold build) per call; **MCP** = connect once, reuse
+the warm index. Mean per-query latency, `iters` calls each:
+
+| Verb | corpus | CLI (cold) | MCP (warm) | speedup |
+|------|--------|-----------|-----------|---------|
+| `neighbors` | 3,000 files | 95.8 ms | **1.4 ms** | **67×** |
+| `neighbors` | 8,000 files | 208.8 ms | **2.4 ms** | **89×** |
+| `vault_graph` | 3,000 files | 135.7 ms | 186.6 ms | 0.7× |
+| `vault_graph` | 8,000 files | 400.2 ms | 585.6 ms | 0.7× |
+
+> Wall-clock here is linux/amd64 in the dev container — **not comparable to the
+> darwin tables above**; read the *ratios*, which are platform-independent. The
+> MCP first call pays the lazy build once (≈ one cold CLI call: 199 ms at 8k),
+> then amortizes it across every subsequent query.
+
+- **Point queries are the big win, and it grows with the vault.** `neighbors`
+  needs the full forward graph (backlinks are global → a `vault.Build`). Cold,
+  the CLI rebuilds it every call; warm, the server reads a tiny slice — 1–2 ms,
+  roughly flat in N. So the speedup *widens* as the vault grows (67× → 89×
+  from 3k → 8k) because the cold build scales up while the warm read does not.
+  This is the regime the MCP server is for: an agent traversing a vault across
+  many turns. The same applies to any repeated full-build query.
+
+- **Whole-vault `vault_graph` is the exception — MCP is ~30% *slower*, and it
+  doesn't cross over with scale** (steady 0.7× at both sizes). The cost there is
+  the *payload*, not the build: `graph` dumps every node and every edge (~64k
+  edges at 8k files), and over MCP that large JSON is escaped into the JSON-RPC
+  envelope, piped to the client, and decoded there — overhead the CLI's
+  "write JSON to stdout" doesn't pay, and which outweighs the `vault.Build` the
+  warm index saves. This matches the design intent (the query tools return
+  *pointers, not bulk content*; `graph` is the one bulk-dump verb) and is the
+  one case to keep on the CLI: a one-shot whole-vault export is as fast or
+  faster cold.
+
+- **`search` / `links` are a wash (not tabled).** Both transports use the same
+  fast paths — `search` = file scan, `links` = `OutboundFor` single-file parse —
+  so neither touches the warm index. Over MCP they'd save only the ~24 ms
+  process-spawn floor per call (see the cold-start table); the *work* is
+  identical.
+
+> Method note: a throwaway in-module harness generated the corpus via
+> `benchcorpus.Generate`, timed the built binary for the CLI rows, and drove the
+> server with an MCP `CommandTransport` client (connect once) for the MCP rows.
+> Not committed — reconstruct from this note if needed.
