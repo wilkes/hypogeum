@@ -42,6 +42,30 @@ If it prints a path, use it. If not:
 - If Go isn't available or the user declines, **fall back to `grep`/ripgrep** —
   don't block work on the binary.
 
+## If the MCP server is registered, prefer its tools
+
+`hypogeum` can also run as an MCP server (`hypogeum mcp [vault]`) exposing the
+same query surface as tools. **If those tools are present in your session, use
+them instead of the CLI** — they answer the identical questions over a warm,
+watcher-refreshed vault index (no per-call rebuild), and you skip the shell +
+`jq` plumbing. The mapping is 1:1:
+
+| MCP tool | CLI equivalent |
+|----------|----------------|
+| `search_vault(term, max?)` | `search "<term>" [-n N]` |
+| `outbound_links(file)` | `links <file>` |
+| `neighbors(file)` | `neighbors <file>` |
+| `vault_graph()` | `graph` |
+| `read_note(file)` | (read the file directly) |
+
+The tools' JSON output is identical to the verbs' (so the audit/triage logic
+below applies unchanged), and `file` arguments are still vault-relative — the
+server is launched with a fixed vault root, so pass `index.md`, not the verb's
+`--vault` flag. There is no MCP equivalent of `recent` (visit history is
+TUI/CLI-only). **The CLI is the fallback** whenever the tools aren't registered
+in your session — a skill can't add them mid-session, so everything below stays
+the primary, zero-config path.
+
 ## The one gotcha that bites: `--vault` paths are vault-relative
 
 With `--vault <root>`, every file argument resolves **relative to the vault
