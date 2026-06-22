@@ -11,6 +11,7 @@ Usage:
   hypogeum [path]            Browse a directory, or open a single .md file
                              (the tree roots at its parent). No path = cwd.
   hypogeum <verb> [args]     Run a non-interactive query, printing JSON.
+  hypogeum mcp [vault]       Serve the vault to agents over MCP (stdio).
   hypogeum --version | -v    Print build version, commit, and date.
   hypogeum --help | -h       Show this help.
 
@@ -22,14 +23,21 @@ Query verbs (JSON to stdout; errors to stderr):
   graph                     The whole-vault link graph as {nodes, edges}.
 
   All verbs accept -vault <dir> to set the vault root (default: cwd). A first
-  arg matching a verb always routes to query mode — pass ./search to open a
-  file literally named "search" in the TUI instead.
+  arg matching a verb (or "mcp") always routes out of TUI mode — pass ./search
+  to open a file literally named "search" in the TUI instead.
+
+MCP server:
+  hypogeum mcp [vault]       Serve search_vault, outbound_links, neighbors,
+                             vault_graph, and read_note over stdio for Claude
+                             and other agents. Keeps a warm, watcher-refreshed
+                             vault index. vault defaults to cwd.
 
 Examples:
   hypogeum ~/notes
   hypogeum search "elm architecture" -n 10
   hypogeum neighbors -vault ~/notes ~/notes/index.md
   hypogeum graph | jq '.edges | length'
+  hypogeum mcp ~/notes
 
 Press ? inside the browser for the full list of keybindings.`
 }

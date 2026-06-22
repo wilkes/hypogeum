@@ -40,6 +40,9 @@ func run(args []string) error {
 			return nil
 		}
 	}
+	if len(args) > 0 && args[0] == "mcp" {
+		return runMCP(args[1:], version)
+	}
 	if len(args) > 0 && isQueryVerb(args[0]) {
 		return runQuery(args, os.Stdout)
 	}

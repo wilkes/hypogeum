@@ -242,7 +242,9 @@ func Links(root, file string) ([]Link, error) {
 	return outboundLinks(refs, abs), nil
 }
 
-// Neighbors returns file's outbound links and its backlinks.
+// Neighbors returns file's outbound links and its backlinks. It builds the
+// full forward graph (vault.Build) from cold — a long-lived caller holding a
+// warm *vault.Vault should call NeighborsFromVault to skip the rebuild.
 func Neighbors(root, file string) (Neighborhood, error) {
 	abs, err := mustExist(root, file)
 	if err != nil {
@@ -252,9 +254,29 @@ func Neighbors(root, file string) (Neighborhood, error) {
 	if err != nil {
 		return Neighborhood{}, err
 	}
-	// Outbound is always non-nil (outboundLinks returns a made slice);
-	// Backlinks is init'd up-front so JSON emits [] not null even with
-	// zero backlinks (matching tree.MarkdownFiles' init-then-append style).
+	return neighborhoodFromVault(v, abs), nil
+}
+
+// NeighborsFromVault assembles file's neighborhood from an already-built vault,
+// skipping the vault.Build that a cold Neighbors call pays. root is the vault
+// root v was built from; file resolves against it (relative to root, not cwd —
+// matching Neighbors). The output is identical to Neighbors(root, file) for the
+// same vault: this is the warm-cache fast path the MCP server uses for repeated
+// queries, and the CLI Neighbors above now shares its assembly via
+// neighborhoodFromVault so the two paths can't drift.
+func NeighborsFromVault(v *vault.Vault, root, file string) (Neighborhood, error) {
+	abs, err := mustExist(root, file)
+	if err != nil {
+		return Neighborhood{}, err
+	}
+	return neighborhoodFromVault(v, abs), nil
+}
+
+// neighborhoodFromVault is the shared assembly for Neighbors / NeighborsFromVault.
+// Outbound is always non-nil (outboundLinks returns a made slice); Backlinks is
+// init'd up-front so JSON emits [] not null even with zero backlinks (matching
+// tree.MarkdownFiles' init-then-append style).
+func neighborhoodFromVault(v *vault.Vault, abs string) Neighborhood {
 	n := Neighborhood{
 		File:      abs,
 		Outbound:  outboundLinks(v.Outbound(abs), abs),
@@ -268,7 +290,7 @@ func Neighbors(root, file string) (Neighborhood, error) {
 			Text:    b.DisplayText,
 		})
 	}
-	return n, nil
+	return n
 }
 
 // GraphNode is one document in the vault graph.
@@ -317,6 +339,14 @@ func GraphFor(root string) (Graph, error) {
 	if err != nil {
 		return Graph{}, err
 	}
+	return GraphFromVault(v), nil
+}
+
+// GraphFromVault builds the whole-vault graph from an already-built vault,
+// skipping the vault.Build that GraphFor pays from cold. The output is identical
+// to GraphFor for the same vault — it's the warm-cache fast path used by the MCP
+// server, with GraphFor delegating here so the two paths stay in lockstep.
+func GraphFromVault(v *vault.Vault) Graph {
 	files := v.Files() // already sorted ascending
 	g := Graph{
 		Nodes: make([]GraphNode, 0, len(files)),
@@ -328,5 +358,5 @@ func GraphFor(root string) (Graph, error) {
 			g.Edges = append(g.Edges, linkToEdge(f, l))
 		}
 	}
-	return g, nil
+	return g
 }

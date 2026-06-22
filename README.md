@@ -72,6 +72,20 @@ The `--vault` flag defaults to the current directory. Use `./` prefix to refer t
 
 - **Agent skill:** [`.claude/skills/hypogeum-vault/`](.claude/skills/hypogeum-vault/SKILL.md) teaches Claude Code (or any skill-aware agent) to explore and audit a markdown vault with the query CLI. Symlink it into `~/.claude/skills/` to use it in any repo.
 
+## MCP server
+
+`hypogeum mcp [vault]` serves the same vault to Claude and other agents over the [Model Context Protocol](https://modelcontextprotocol.io) on stdio, exposing five tools: `search_vault`, `outbound_links`, `neighbors`, `vault_graph`, and `read_note`. Their JSON output is identical to the matching query verbs; the server adds a warm, watcher-refreshed vault index so repeated `neighbors`/`vault_graph` calls don't rebuild the graph from cold. Read-only — no write tools. `vault` defaults to the current directory.
+
+Register it with Claude (e.g. in `~/.claude.json` or a project `.mcp.json`):
+
+```json
+{
+  "mcpServers": {
+    "hypogeum": { "command": "hypogeum", "args": ["mcp", "/path/to/vault"] }
+  }
+}
+```
+
 ## License
 
 MIT.
