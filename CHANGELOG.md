@@ -9,6 +9,23 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 <!-- next-release-here -->
 
+## [v0.7.0] - 2026-06-30
+
+### Features
+* d51c85bde49a8a62c81d987a408cccffe24a9958: feat(mcp): serve the vault to agents over MCP (stdio) (@claude)
+* dd9c921c3453f195c867651f4738ec5010c922ca: feat(search): file-grouped search modal with counts, bars, and inline expand (@claude)
+### Fixes
+* d9168e22aaa931e60400ee0cecd0512a090f837d: fix(mcp): harden read_note against in-vault symlink escape (@claude)
+### Docs
+* 098b0db3e048c8fde137912c318d5b7fc932501a: docs(benchmarking): add Apple M1 Max findings alongside Intel baseline (@wilkes)
+* dd31038c64b629dfee27fdfc2afd8e9eb67986a3: docs(benchmarking): add MCP-vs-CLI warm-index findings (@claude)
+* 2410d3f862a375fe12ac9ab924a315d6d25e16bb: docs(changelog): v0.6.0 (@github-actions[bot])
+* dffabf47787e26432411ac7f0e3c7efc35da7b2b: docs(mcp): design spec for MCP server over the vault (@claude)
+* fcfb65bd9ef2bb222b479979c271467961b97648: docs(readme): refresh status to current feature set, drop Frogmouth note (@wilkes)
+* b815683123626ff5ae3a3230db989f9d95bc5067: docs(search): design spec for file-grouped search modal (@claude)
+* c4757912c20ebdd53acf244a8444db85b07af01e: docs(skill): point hypogeum-vault skill at the MCP server (@claude)
+* 4a0cd33ca91ad9d481e7accfdaeb8e8c2e006436: docs: correct helpText comment to four CLI modes (@claude)
+
 ## [v0.6.0] - 2026-06-21
 
 ### Features
